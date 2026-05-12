@@ -1,0 +1,339 @@
+// MCP server definition — exposes Unicorn Studio's web app as tools for Claude.
+// Reuses all existing query/mutation code; doesn't duplicate logic.
+//
+// 12 tools total:
+//   READ: briefing, list_contacts, get_contact, hot_leads, needs_follow_up,
+//         engagement_queue, cadences_due, lead_score, analytics
+//   WRITE: create_activity, sync_notion, recompute_lead_score
+
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
+
+import {
+  getDashboardStats,
+  getHotLeads,
+  getNeedsFollowUp,
+  getStageGroupCounts,
+  getContactById,
+  getContactActivities,
+  listContacts,
+  getTodayKpi,
+  getYesterdayKpi,
+} from "@/lib/db/queries";
+import { listEngagementQueue, getTodayCounts, DAILY_TARGETS } from "@/lib/db/engagement";
+import { computeCadence, dueToday, dueSoon } from "@/lib/cadences";
+import { db, schema } from "@/lib/db/client";
+import { eq } from "drizzle-orm";
+import { recomputeOne, recomputeAll, getScoresMap } from "@/lib/db/lead-scores";
+import { funnelCounts, scoreHistogram, activityTrend30d } from "@/lib/db/analytics";
+import { syncNotion, syncStatus } from "@/lib/notion/sync";
+import { STAGES } from "@/lib/stages";
+
+// JSON-serialize a result wrapping it as MCP text content.
+function ok(data: unknown) {
+  return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+}
+
+export function buildMcpServer(): McpServer {
+  const server = new McpServer({
+    name: "unicorn-studio-business-manager",
+    version: "1.0.0",
+  });
+
+  // ─────────── READ TOOLS ───────────
+
+  server.registerTool(
+    "briefing",
+    {
+      title: "Daily Briefing",
+      description:
+        "Aggregated daily briefing: total contacts, hot leads, active clients, needs follow-up, " +
+        "stage counts, top hot leads, follow-ups due, today/yesterday KPIs, sync status. " +
+        "Use this for morning summaries.",
+      inputSchema: {},
+    },
+    async () => {
+      const [stats, groups, hot, followUps, today, yesterday, sync] = await Promise.all([
+        getDashboardStats(),
+        getStageGroupCounts(),
+        getHotLeads(10),
+        getNeedsFollowUp(11, 10),
+        getTodayKpi(),
+        getYesterdayKpi(),
+        syncStatus(),
+      ]);
+      const yesterdayMissing =
+        !yesterday || (!yesterday.coldDmsSent && !yesterday.coldEmailsSent &&
+          !yesterday.followUpsSent && !yesterday.inboundLeads);
+      return ok({
+        timestamp: new Date().toISOString(),
+        stats,
+        stageGroups: groups,
+        hotLeads: hot,
+        needsFollowUp: followUps,
+        todayKpi: today,
+        yesterdayKpi: yesterday,
+        yesterdayMissing,
+        sync,
+      });
+    }
+  );
+
+  server.registerTool(
+    "list_contacts",
+    {
+      title: "List Contacts",
+      description: "List contacts filtered by stage, country, platform, or search. Sorted by status date desc.",
+      inputSchema: {
+        status: z.string().optional().describe("One of the 18 pipeline stages (see lib/stages.ts)"),
+        country: z.string().optional(),
+        platform: z.string().optional().describe("Linkedin, X, Facebook, Whatsapp, Slack, Reddit"),
+        search: z.string().optional().describe("Substring match on name or email"),
+        limit: z.number().int().min(1).max(200).optional().default(50),
+        offset: z.number().int().min(0).optional().default(0),
+      },
+    },
+    async (args) => {
+      const rows = await listContacts({
+        status: args.status,
+        country: args.country,
+        platform: args.platform,
+        search: args.search,
+        limit: args.limit ?? 50,
+        offset: args.offset ?? 0,
+      });
+      return ok({ count: rows.length, contacts: rows });
+    }
+  );
+
+  server.registerTool(
+    "get_contact",
+    {
+      title: "Get Contact",
+      description: "Get one contact's full record + their last 50 activities (post observations, comment drafts, DMs, etc.).",
+      inputSchema: {
+        id: z.string().describe("Contact id (ULID)"),
+      },
+    },
+    async ({ id }) => {
+      const contact = await getContactById(id);
+      if (!contact) return ok({ error: "Contact not found", id });
+      const activities = await getContactActivities(id);
+      return ok({ contact, activities });
+    }
+  );
+
+  server.registerTool(
+    "hot_leads",
+    {
+      title: "Hot Leads",
+      description:
+        "Contacts in 'hot' stages (Lead, 1st/2nd Lead Follow up, Qualified, Proposal Sent, Post Proposal Follow-up-1/2, Booking, First call) — ordered by status date desc.",
+      inputSchema: {
+        limit: z.number().int().min(1).max(50).optional().default(20),
+      },
+    },
+    async ({ limit }) => {
+      const rows = await getHotLeads(limit ?? 20);
+      return ok({ count: rows.length, hot_leads: rows });
+    }
+  );
+
+  server.registerTool(
+    "needs_follow_up",
+    {
+      title: "Contacts Needing Follow-up",
+      description: "Contacts with no movement for N+ days (default 11) and not in a terminal stage.",
+      inputSchema: {
+        days: z.number().int().min(1).optional().default(11),
+        limit: z.number().int().min(1).max(50).optional().default(20),
+      },
+    },
+    async ({ days, limit }) => {
+      const rows = await getNeedsFollowUp(days ?? 11, limit ?? 20);
+      return ok({ count: rows.length, contacts: rows });
+    }
+  );
+
+  server.registerTool(
+    "engagement_queue",
+    {
+      title: "Engagement Queue",
+      description:
+        "Cross-contact daily queue ranked by lead score. Each entry has the contact, their score, " +
+        "and their most recent activity. Use this to identify who to engage with today.",
+      inputSchema: {
+        onlyHot: z
+          .boolean()
+          .optional()
+          .default(true)
+          .describe("If true (default), only contacts in hot stages. If false, all contacts."),
+        limit: z.number().int().min(1).max(100).optional().default(50),
+      },
+    },
+    async ({ onlyHot, limit }) => {
+      const queue = await listEngagementQueue({
+        onlyHot: onlyHot ?? true,
+        limit: limit ?? 50,
+      });
+      const todayCounts = await getTodayCounts();
+      return ok({
+        queue,
+        today_counts: todayCounts,
+        daily_targets: DAILY_TARGETS,
+      });
+    }
+  );
+
+  server.registerTool(
+    "cadences_due",
+    {
+      title: "Cadences Due",
+      description:
+        "Contacts whose next DM-sequence step is due. Returns 'due_today' (overdue first) and 'due_soon' (next N days). " +
+        "Uses the 7-step LinkedIn / 8-step Facebook templates in lib/sequences.ts.",
+      inputSchema: {
+        withinDays: z.number().int().min(0).optional().default(3),
+      },
+    },
+    async ({ withinDays }) => {
+      const contacts = await db.select().from(schema.contacts);
+      const items = contacts
+        .map((c) => computeCadence(c))
+        .filter((x): x is NonNullable<typeof x> => x !== null);
+      return ok({
+        due_today: dueToday(items),
+        due_soon: dueSoon(items, withinDays ?? 3),
+      });
+    }
+  );
+
+  server.registerTool(
+    "lead_score",
+    {
+      title: "Lead Score",
+      description:
+        "Get the lead score (0–100) for a specific contact, with breakdown by component " +
+        "(stage_weight, recency, engagement, reply_ratio).",
+      inputSchema: {
+        contact_id: z.string().describe("Contact id (ULID)"),
+      },
+    },
+    async ({ contact_id }) => {
+      const scoresMap = await getScoresMap();
+      const score = scoresMap.get(contact_id);
+      const row = (
+        await db.select().from(schema.leadScores).where(eq(schema.leadScores.contactId, contact_id)).limit(1)
+      )[0];
+      return ok({ contact_id, score, breakdown: row ?? null });
+    }
+  );
+
+  server.registerTool(
+    "analytics",
+    {
+      title: "Pipeline Analytics",
+      description: "Pipeline funnel counts (Cold→Won), lead score distribution histogram, and 30-day activity trend.",
+      inputSchema: {},
+    },
+    async () => {
+      const [funnel, histogram, trend] = await Promise.all([
+        funnelCounts(),
+        scoreHistogram(),
+        activityTrend30d(),
+      ]);
+      return ok({ funnel, score_histogram: histogram, activity_trend_30d: trend });
+    }
+  );
+
+  server.registerTool(
+    "stage_definitions",
+    {
+      title: "Stage Definitions",
+      description:
+        "Returns the canonical list of all 18 pipeline stages in order, and their dashboard-group mapping (Cold/Engaged/Qualified/Proposal/Call/Won/Archive).",
+      inputSchema: {},
+    },
+    async () => {
+      const { STAGE_GROUPS } = await import("@/lib/stages");
+      return ok({ stages: STAGES, stage_groups: STAGE_GROUPS });
+    }
+  );
+
+  // ─────────── WRITE TOOLS ───────────
+
+  server.registerTool(
+    "create_activity",
+    {
+      title: "Create Activity (Draft)",
+      description:
+        "Write a draft (comment, email, DM, follow-up, note, audit, post observation) to a contact's Activities feed. " +
+        "Saidur reviews drafts in /contacts/[id]. Drafts auto-trigger a lead score recompute.",
+      inputSchema: {
+        contact_id: z.string().describe("Contact id (ULID)"),
+        type: z.enum([
+          "post_observed",
+          "comment_drafted",
+          "email_drafted",
+          "audit_run",
+          "follow_up_sent",
+          "dm_sent",
+          "note",
+        ]),
+        content: z.string().min(1).describe("Markdown body of the draft / observation / note"),
+        source_url: z.string().optional(),
+      },
+    },
+    async ({ contact_id, type, content, source_url }) => {
+      const [row] = await db
+        .insert(schema.activities)
+        .values({ contactId: contact_id, type, content, sourceUrl: source_url })
+        .returning();
+      // Fire-and-forget recompute
+      recomputeOne(contact_id).catch((e) =>
+        console.error("Lead score recompute failed:", e?.message)
+      );
+      return ok({ ok: true, activity: row });
+    }
+  );
+
+  server.registerTool(
+    "sync_notion",
+    {
+      title: "Sync Notion",
+      description:
+        "Trigger a Notion sync. Per-entity to fit Vercel Hobby's 10s function limit. " +
+        "Call with entity='contacts' | 'content_items' | 'tracker_entries' to scope. " +
+        "Without an entity, runs all three sequentially.",
+      inputSchema: {
+        entity: z.enum(["contacts", "content_items", "tracker_entries"]).optional(),
+      },
+    },
+    async ({ entity }) => {
+      const results = await syncNotion(entity);
+      return ok({ ok: true, results });
+    }
+  );
+
+  server.registerTool(
+    "recompute_lead_score",
+    {
+      title: "Recompute Lead Score",
+      description:
+        "Force-recompute the lead score for a specific contact (passing contact_id) or all contacts (omit contact_id).",
+      inputSchema: {
+        contact_id: z.string().optional(),
+      },
+    },
+    async ({ contact_id }) => {
+      if (contact_id) {
+        const result = await recomputeOne(contact_id);
+        return ok({ contact_id, result });
+      }
+      const count = await recomputeAll();
+      return ok({ recomputed: count });
+    }
+  );
+
+  return server;
+}
