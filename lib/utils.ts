@@ -11,14 +11,18 @@ export function daysAgo(d: Date | null | undefined): number | null {
   return Math.floor(ms / 86400000);
 }
 
-export function fmtDate(d: Date | null | undefined): string {
+export function fmtDate(d: Date | string | null | undefined): string {
   if (!d) return "—";
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const date = typeof d === "string" ? new Date(d) : d;
+  if (isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-export function fmtDateTime(d: Date | null | undefined): string {
+export function fmtDateTime(d: Date | string | null | undefined): string {
   if (!d) return "—";
-  return d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  const date = typeof d === "string" ? new Date(d) : d;
+  if (isNaN(date.getTime())) return "—";
+  return date.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
 export function parseJson<T>(s: string | null | undefined, fallback: T): T {
