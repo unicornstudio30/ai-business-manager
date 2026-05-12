@@ -1,7 +1,7 @@
 // Maps Notion CRM page rows ↔ local `contacts` table rows.
 // Notion property names match the "Unicorn Studio's Sales CRM" schema exactly.
 
-import type { PageObjectResponse } from "@notionhq/client/build/src/api-endpoints";
+import type { PageObjectResponse } from "@notionhq/client";
 import type { NewContact } from "../db/schema";
 import { trackForPlatform } from "../sequences";
 

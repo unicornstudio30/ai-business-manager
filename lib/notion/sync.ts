@@ -5,11 +5,11 @@
 
 import { db, schema } from "../db/client";
 import { eq, sql } from "drizzle-orm";
-import { notion, NOTION_DBS, isNotionConfigured } from "./client";
+import { notion, NOTION_DATA_SOURCES, isNotionConfigured } from "./client";
 import { notionToContact, contactToNotionProperties } from "./contacts-mapper";
 import { notionToContentItem, contentToNotionProperties } from "./content-mapper";
 import { notionToTrackerEntry } from "./tracker-mapper";
-import type { PageObjectResponse } from "@notionhq/client/build/src/api-endpoints";
+import type { PageObjectResponse } from "@notionhq/client";
 
 type SyncResult = { entity: string; pulled: number; pushed: number; error?: string };
 
@@ -39,7 +39,7 @@ async function logRun(
   return { rows, error: errorMsg };
 }
 
-async function* paginatedQuery(databaseId: string, pageSize = 100, deadlineMs?: number) {
+async function* paginatedQuery(dataSourceId: string, pageSize = 100, deadlineMs?: number) {
   const n = notion();
   let cursor: string | undefined = undefined;
   do {
@@ -47,8 +47,8 @@ async function* paginatedQuery(databaseId: string, pageSize = 100, deadlineMs?: 
       // Soft deadline reached — stop yielding so caller can return mid-pagination.
       return;
     }
-    const res: any = await n.databases.query({
-      database_id: databaseId,
+    const res: any = await n.dataSources.query({
+      data_source_id: dataSourceId,
       page_size: pageSize,
       start_cursor: cursor,
     });
@@ -70,7 +70,7 @@ function getDeadline(): number {
 
 async function pullContacts(deadlineMs?: number): Promise<number> {
   let count = 0;
-  for await (const page of paginatedQuery(NOTION_DBS.contacts, 100, deadlineMs)) {
+  for await (const page of paginatedQuery(NOTION_DATA_SOURCES.contacts, 100, deadlineMs)) {
     const row = notionToContact(page);
     const existing = await db
       .select({ id: schema.contacts.id, lastEdited: schema.contacts.notionLastEditedAt })
@@ -98,7 +98,7 @@ async function pullContacts(deadlineMs?: number): Promise<number> {
 
 async function pullContent(deadlineMs?: number): Promise<number> {
   let count = 0;
-  for await (const page of paginatedQuery(NOTION_DBS.content, 100, deadlineMs)) {
+  for await (const page of paginatedQuery(NOTION_DATA_SOURCES.content, 100, deadlineMs)) {
     const row = notionToContentItem(page);
     const existing = await db
       .select({ id: schema.contentItems.id, lastEdited: schema.contentItems.notionLastEditedAt })
@@ -126,7 +126,7 @@ async function pullContent(deadlineMs?: number): Promise<number> {
 
 async function pullTracker(deadlineMs?: number): Promise<number> {
   let count = 0;
-  for await (const page of paginatedQuery(NOTION_DBS.tracker, 100, deadlineMs)) {
+  for await (const page of paginatedQuery(NOTION_DATA_SOURCES.tracker, 100, deadlineMs)) {
     const row = notionToTrackerEntry(page);
     const existing = await db
       .select({ id: schema.trackerEntries.id, lastEdited: schema.trackerEntries.notionLastEditedAt })
@@ -166,9 +166,9 @@ async function pushContacts(): Promise<number> {
         await n.pages.update({ page_id: c.notionPageId, properties: props });
       } else {
         const created = await n.pages.create({
-          parent: { database_id: NOTION_DBS.contacts },
+          parent: { type: "data_source_id", data_source_id: NOTION_DATA_SOURCES.contacts },
           properties: props,
-        });
+        } as any);
         await db
           .update(schema.contacts)
           .set({ notionPageId: created.id })
@@ -199,9 +199,9 @@ async function pushContent(): Promise<number> {
         await n.pages.update({ page_id: c.notionPageId, properties: props });
       } else {
         const created = await n.pages.create({
-          parent: { database_id: NOTION_DBS.content },
+          parent: { type: "data_source_id", data_source_id: NOTION_DATA_SOURCES.content },
           properties: props,
-        });
+        } as any);
         await db
           .update(schema.contentItems)
           .set({ notionPageId: created.id })

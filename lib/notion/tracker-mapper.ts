@@ -1,4 +1,4 @@
-import type { PageObjectResponse } from "@notionhq/client/build/src/api-endpoints";
+import type { PageObjectResponse } from "@notionhq/client";
 import type { TrackerEntry } from "../db/schema";
 
 const text = (p: any): string | null => {
