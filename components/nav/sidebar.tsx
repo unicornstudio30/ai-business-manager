@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   Home,
   Users,
+  Flame,
   NotebookPen,
   Calendar,
   Briefcase,
@@ -17,6 +18,7 @@ import {
 const items = [
   { href: "/", label: "Dashboard", icon: Home },
   { href: "/contacts", label: "Contacts", icon: Users },
+  { href: "/engagement", label: "Engagement", icon: Flame },
   { href: "/tracker", label: "Sales Tracker", icon: NotebookPen },
   { href: "/content", label: "Content Calendar", icon: Calendar },
   { href: "/projects", label: "Projects", icon: Briefcase },
