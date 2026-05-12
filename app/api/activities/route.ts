@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@/lib/db/client";
 import { and, desc, eq, gte } from "drizzle-orm";
 import { z } from "zod";
+import { recomputeOne } from "@/lib/db/lead-scores";
 
 const ActivityType = z.enum([
   "post_observed",
@@ -63,5 +64,12 @@ export async function POST(req: NextRequest) {
       claudeRunId: parsed.data.claude_run_id,
     })
     .returning();
+
+  // Fire-and-forget recompute of lead score for this contact.
+  // Cheap enough to run inline; never blocks the response.
+  recomputeOne(parsed.data.contact_id).catch((e) =>
+    console.error("Lead score recompute failed:", e?.message)
+  );
+
   return NextResponse.json(row, { status: 201 });
 }

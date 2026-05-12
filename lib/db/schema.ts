@@ -259,6 +259,18 @@ export const claudeRuns = sqliteTable("claude_runs", {
   args: text("args"),  // JSON
 });
 
+// Lead score per contact, recomputed on activity insert + nightly.
+// Score = stage_weight + recency + engagement_count + reply_ratio (0..100).
+export const leadScores = sqliteTable("lead_scores", {
+  contactId: text("contact_id").primaryKey().references(() => contacts.id, { onDelete: "cascade" }),
+  score: integer("score").notNull().default(0),
+  stageWeight: integer("stage_weight").notNull().default(0),
+  recencyScore: integer("recency_score").notNull().default(0),
+  engagementScore: integer("engagement_score").notNull().default(0),
+  replyScore: integer("reply_score").notNull().default(0),
+  updatedAt: ts("updated_at").notNull().$defaultFn(() => new Date()),
+});
+
 export const syncLog = sqliteTable("sync_log", {
   id: id(),
   entity: text("entity").notNull(), // contacts | tracker_entries | content_items

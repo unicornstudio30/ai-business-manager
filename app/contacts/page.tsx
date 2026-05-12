@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { listContacts } from "@/lib/db/queries";
+import { getScoresMap } from "@/lib/db/lead-scores";
+import { scoreColor } from "@/lib/lead-scoring";
 import { STAGES, STAGE_COLORS, type Stage } from "@/lib/stages";
 import { fmtDate, daysAgo, parseJson } from "@/lib/utils";
 
@@ -8,16 +10,24 @@ export const dynamic = "force-dynamic";
 export default async function ContactsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; search?: string; country?: string; platform?: string }>;
+  searchParams: Promise<{ status?: string; search?: string; country?: string; platform?: string; sort?: string }>;
 }) {
   const sp = await searchParams;
-  const rows = await listContacts({ ...sp, limit: 200 });
+  const rowsRaw = await listContacts({ ...sp, limit: 200 });
+  const scores = await getScoresMap();
+  // Default sort: lead score descending. Override with ?sort=name|status|date
+  const rows = [...rowsRaw].sort((a, b) => {
+    if (sp.sort === "name") return (a.name || "").localeCompare(b.name || "");
+    if (sp.sort === "status") return (a.status || "").localeCompare(b.status || "");
+    if (sp.sort === "date") return (b.statusDate?.getTime() ?? 0) - (a.statusDate?.getTime() ?? 0);
+    return (scores.get(b.id) ?? 0) - (scores.get(a.id) ?? 0);
+  });
 
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-stone-900">Contacts</h1>
-        <div className="text-sm text-stone-500">{rows.length} shown</div>
+        <div className="text-sm text-stone-500">{rows.length} shown · sorted by {sp.sort || "lead score"}</div>
       </div>
 
       <form className="flex flex-wrap items-end gap-3 rounded-xl border border-stone-200 bg-white p-4">
@@ -65,11 +75,20 @@ export default async function ContactsPage({
         <table className="w-full text-sm">
           <thead className="bg-stone-50 text-xs uppercase tracking-wide text-stone-500">
             <tr>
-              <th className="text-left px-4 py-2.5">Name</th>
-              <th className="text-left px-4 py-2.5">Stage</th>
+              <th className="text-left px-4 py-2.5">
+                <Link href="/contacts" className="hover:text-stone-900">Score</Link>
+              </th>
+              <th className="text-left px-4 py-2.5">
+                <Link href="/contacts?sort=name" className="hover:text-stone-900">Name</Link>
+              </th>
+              <th className="text-left px-4 py-2.5">
+                <Link href="/contacts?sort=status" className="hover:text-stone-900">Stage</Link>
+              </th>
               <th className="text-left px-4 py-2.5">Platform</th>
               <th className="text-left px-4 py-2.5">Country</th>
-              <th className="text-left px-4 py-2.5">Status Date</th>
+              <th className="text-left px-4 py-2.5">
+                <Link href="/contacts?sort=date" className="hover:text-stone-900">Status Date</Link>
+              </th>
               <th className="text-left px-4 py-2.5">Age</th>
               <th className="text-left px-4 py-2.5">Profession</th>
             </tr>
@@ -77,7 +96,7 @@ export default async function ContactsPage({
           <tbody className="divide-y divide-stone-100">
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-12 text-center text-sm text-stone-500">
+                <td colSpan={8} className="px-4 py-12 text-center text-sm text-stone-500">
                   No contacts yet. Click <span className="font-medium">Sync Notion</span> to pull from your Sales CRM.
                 </td>
               </tr>
@@ -85,8 +104,14 @@ export default async function ContactsPage({
               rows.map((c) => {
                 const professions = parseJson<string[]>(c.profession, []);
                 const age = daysAgo(c.statusDate);
+                const score = scores.get(c.id) ?? 0;
                 return (
                   <tr key={c.id} className="hover:bg-stone-50">
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center justify-center w-10 rounded-md border px-1.5 py-0.5 text-xs font-semibold tabular-nums ${scoreColor(score)}`}>
+                        {score}
+                      </span>
+                    </td>
                     <td className="px-4 py-3">
                       <Link href={`/contacts/${c.id}`} className="text-stone-900 font-medium hover:underline">
                         {c.name || "(no name)"}
