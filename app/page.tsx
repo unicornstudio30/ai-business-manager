@@ -2,23 +2,30 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { StageBreakdown } from "@/components/dashboard/stage-breakdown";
 import { HotLeadsList } from "@/components/dashboard/hot-leads-list";
 import { FollowUpList } from "@/components/dashboard/follow-up-list";
+import { FunnelChart } from "@/components/dashboard/funnel-chart";
+import { ScoreHistogram } from "@/components/dashboard/score-histogram";
+import { ActivityTrend } from "@/components/dashboard/activity-trend";
 import {
   getDashboardStats,
   getHotLeads,
   getNeedsFollowUp,
   getStageGroupCounts,
 } from "@/lib/db/queries";
+import { funnelCounts, scoreHistogram, activityTrend30d } from "@/lib/db/analytics";
 import { syncStatus } from "@/lib/notion/sync";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const [stats, groups, hot, followUps, sync] = await Promise.all([
+  const [stats, groups, hot, followUps, sync, funnel, scoreHist, trend] = await Promise.all([
     getDashboardStats(),
     getStageGroupCounts(),
     getHotLeads(6),
     getNeedsFollowUp(11, 6),
     syncStatus(),
+    funnelCounts(),
+    scoreHistogram(),
+    activityTrend30d(),
   ]);
 
   const notConfigured = !sync.configured;
@@ -44,6 +51,13 @@ export default async function Home() {
         <StatCard label="Hot leads" value={stats.hotLeads} tone="red" />
         <StatCard label="Active clients" value={stats.activeClients} tone="green" />
         <StatCard label="Need follow-up" value={stats.needFollowUp} tone="amber" />
+      </div>
+
+      <FunnelChart data={funnel} />
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <ActivityTrend data={trend} />
+        <ScoreHistogram data={scoreHist} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
