@@ -1,5 +1,9 @@
 import type { Config } from "drizzle-kit";
-import "dotenv/config";
+import { config } from "dotenv";
+
+// Load .env.local first (gitignored, has real secrets), then .env as fallback.
+config({ path: ".env.local" });
+config({ path: ".env" });
 
 const TURSO_URL = process.env.TURSO_DATABASE_URL;
 const TURSO_TOKEN = process.env.TURSO_AUTH_TOKEN;
