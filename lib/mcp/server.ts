@@ -33,6 +33,7 @@ import { INBOX_CHANNELS } from "@/lib/inbox";
 import { stuckDeals, stuckByStage } from "@/lib/db/stuck-deals";
 import { listClosedDeals, winLossSummary } from "@/lib/db/wins-losses";
 import { buildPrepBrief } from "@/lib/prep-brief";
+import { computeIcpScore, compositeScore } from "@/lib/icp-scoring";
 import { syncNotion, syncStatus } from "@/lib/notion/sync";
 import { STAGES } from "@/lib/stages";
 
@@ -304,6 +305,53 @@ export function buildMcpServer(): McpServer {
     async ({ channel }) => {
       const [items, counts] = await Promise.all([inboxView({ channel }), inboxCounts()]);
       return ok({ items, counts });
+    }
+  );
+
+  server.registerTool(
+    "icp_score",
+    {
+      title: "ICP Fit Score",
+      description:
+        "Compute ICP fit score (0-100) for one or more contacts based on their profession, " +
+        "position, country, platform, and contactability. Independent from lead score. " +
+        "Pass contact_id for one, or omit for the top 20 by composite (lead + ICP).",
+      inputSchema: {
+        contact_id: z.string().optional(),
+      },
+    },
+    async ({ contact_id }) => {
+      if (contact_id) {
+        const c = (await db.select().from(schema.contacts).where(eq(schema.contacts.id, contact_id)).limit(1))[0];
+        if (!c) return ok({ error: "Contact not found", contact_id });
+        const icp = computeIcpScore(c);
+        const leadRow = (await db.select().from(schema.leadScores).where(eq(schema.leadScores.contactId, contact_id)).limit(1))[0];
+        const leadScoreVal = leadRow?.score ?? 0;
+        return ok({
+          contact_id,
+          icp,
+          lead_score: leadScoreVal,
+          composite: compositeScore(leadScoreVal, icp.score),
+        });
+      }
+      // Top 20 by composite
+      const contacts = await db.select().from(schema.contacts);
+      const leadRows = await db.select().from(schema.leadScores);
+      const leadMap = new Map(leadRows.map((r) => [r.contactId, r.score]));
+      const ranked = contacts
+        .map((c) => {
+          const icp = computeIcpScore(c);
+          const lead = leadMap.get(c.id) ?? 0;
+          return {
+            contact: c,
+            icp_score: icp.score,
+            lead_score: lead,
+            composite: compositeScore(lead, icp.score),
+          };
+        })
+        .sort((a, b) => b.composite - a.composite)
+        .slice(0, 20);
+      return ok({ ranked });
     }
   );
 

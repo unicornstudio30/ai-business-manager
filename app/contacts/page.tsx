@@ -2,6 +2,7 @@ import Link from "next/link";
 import { listContacts } from "@/lib/db/queries";
 import { getScoresMap } from "@/lib/db/lead-scores";
 import { scoreColor } from "@/lib/lead-scoring";
+import { computeIcpScore, icpColor, compositeScore } from "@/lib/icp-scoring";
 import { STAGES, STAGE_COLORS, type Stage } from "@/lib/stages";
 import { fmtDate, daysAgo, parseJson } from "@/lib/utils";
 
@@ -14,20 +15,27 @@ export default async function ContactsPage({
 }) {
   const sp = await searchParams;
   const rowsRaw = await listContacts({ ...sp, limit: 200 });
-  const scores = await getScoresMap();
-  // Default sort: lead score descending. Override with ?sort=name|status|date
+  const leadScores = await getScoresMap();
+  // Compute ICP fit on read — cheap pure function, no DB cache needed
+  const icpScores = new Map(rowsRaw.map((c) => [c.id, computeIcpScore(c).score]));
+  const composites = new Map(
+    rowsRaw.map((c) => [c.id, compositeScore(leadScores.get(c.id) ?? 0, icpScores.get(c.id) ?? 0)])
+  );
+  // Default sort: composite (lead+ICP). Overrides: ?sort=lead|icp|name|status|date
   const rows = [...rowsRaw].sort((a, b) => {
     if (sp.sort === "name") return (a.name || "").localeCompare(b.name || "");
     if (sp.sort === "status") return (a.status || "").localeCompare(b.status || "");
     if (sp.sort === "date") return (b.statusDate?.getTime() ?? 0) - (a.statusDate?.getTime() ?? 0);
-    return (scores.get(b.id) ?? 0) - (scores.get(a.id) ?? 0);
+    if (sp.sort === "lead") return (leadScores.get(b.id) ?? 0) - (leadScores.get(a.id) ?? 0);
+    if (sp.sort === "icp") return (icpScores.get(b.id) ?? 0) - (icpScores.get(a.id) ?? 0);
+    return (composites.get(b.id) ?? 0) - (composites.get(a.id) ?? 0);
   });
 
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-stone-900">Contacts</h1>
-        <div className="text-sm text-stone-500">{rows.length} shown · sorted by {sp.sort || "lead score"}</div>
+        <div className="text-sm text-stone-500">{rows.length} shown · sorted by {sp.sort || "lead+ICP composite"}</div>
       </div>
 
       <form className="flex flex-wrap items-end gap-3 rounded-xl border border-stone-200 bg-white p-4">
@@ -75,8 +83,14 @@ export default async function ContactsPage({
         <table className="w-full text-sm">
           <thead className="bg-stone-50 text-xs uppercase tracking-wide text-stone-500">
             <tr>
-              <th className="text-left px-4 py-2.5">
+              <th className="text-left px-4 py-2.5" title="Composite of Lead + ICP fit">
                 <Link href="/contacts" className="hover:text-stone-900">Score</Link>
+              </th>
+              <th className="text-left px-4 py-2.5" title="Lead score: how hot/active">
+                <Link href="/contacts?sort=lead" className="hover:text-stone-900">Lead</Link>
+              </th>
+              <th className="text-left px-4 py-2.5" title="ICP fit: how ideal a customer">
+                <Link href="/contacts?sort=icp" className="hover:text-stone-900">ICP</Link>
               </th>
               <th className="text-left px-4 py-2.5">
                 <Link href="/contacts?sort=name" className="hover:text-stone-900">Name</Link>
@@ -96,7 +110,7 @@ export default async function ContactsPage({
           <tbody className="divide-y divide-stone-100">
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-12 text-center text-sm text-stone-500">
+                <td colSpan={10} className="px-4 py-12 text-center text-sm text-stone-500">
                   No contacts yet. Click <span className="font-medium">Sync Notion</span> to pull from your Sales CRM.
                 </td>
               </tr>
@@ -104,12 +118,24 @@ export default async function ContactsPage({
               rows.map((c) => {
                 const professions = parseJson<string[]>(c.profession, []);
                 const age = daysAgo(c.statusDate);
-                const score = scores.get(c.id) ?? 0;
+                const lead = leadScores.get(c.id) ?? 0;
+                const icp = icpScores.get(c.id) ?? 0;
+                const composite = composites.get(c.id) ?? 0;
                 return (
                   <tr key={c.id} className="hover:bg-stone-50">
                     <td className="px-4 py-3">
-                      <span className={`inline-flex items-center justify-center w-10 rounded-md border px-1.5 py-0.5 text-xs font-semibold tabular-nums ${scoreColor(score)}`}>
-                        {score}
+                      <span className={`inline-flex items-center justify-center w-10 rounded-md border px-1.5 py-0.5 text-xs font-semibold tabular-nums ${scoreColor(composite)}`}>
+                        {composite}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center justify-center w-10 rounded-md border px-1.5 py-0.5 text-xs font-medium tabular-nums ${scoreColor(lead)}`}>
+                        {lead}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center justify-center w-10 rounded-md border px-1.5 py-0.5 text-xs font-medium tabular-nums ${icpColor(icp)}`}>
+                        {icp}
                       </span>
                     </td>
                     <td className="px-4 py-3">
