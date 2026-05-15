@@ -38,9 +38,10 @@ export function notionToContentItem(page: PageObjectResponse): Omit<ContentItem,
     framework: text(props["Framework"]),
     url: text(props["URL"]),
     type: select(props["Type"]),
-    status: select(props["Status "]),
+    status: JSON.stringify(multiSelect(props["Status "])),
     contentMethod: select(props["Content Method"]),
     readyToPostPlatform: JSON.stringify(multiSelect(props["Ready to Post Platform"])),
+    publishedPlatform: JSON.stringify(multiSelect(props["Published Platform"])),
     reusePlatform: JSON.stringify(multiSelect(props["Reuse Platform"])),
     repurposePlatform: JSON.stringify(multiSelect(props["Repurpose Platform"])),
     publishDate: date(props["Publish Date"]),
@@ -60,7 +61,11 @@ export function contentToNotionProperties(c: Partial<ContentItem>): Record<strin
   if (c.framework !== undefined) out["Framework"] = { rich_text: [{ text: { content: c.framework || "" } }] };
   if (c.engagement !== undefined) out["Engagement"] = { rich_text: [{ text: { content: c.engagement || "" } }] };
   if (c.type !== undefined && c.type !== null) out["Type"] = { select: { name: c.type } };
-  if (c.status !== undefined && c.status !== null) out["Status "] = { status: { name: c.status } };
+  if (c.status !== undefined && c.status !== null) {
+    let statuses: string[] = [];
+    try { statuses = JSON.parse(c.status); } catch { statuses = c.status ? [c.status] : []; }
+    out["Status "] = { multi_select: statuses.map((name) => ({ name })) };
+  }
   if (c.contentMethod !== undefined && c.contentMethod !== null)
     out["Content Method"] = { select: { name: c.contentMethod } };
   if (c.publishDate !== undefined) {

@@ -93,9 +93,10 @@ export const contentItems = sqliteTable(
     framework: text("framework"),
     url: text("url"),
     type: text("type"),                          // 15 options (see lib/content-types.ts)
-    status: text("status"),                      // Idea, In Progress, In Review, Done, Published
+    status: text("status"),                      // JSON array of statuses: Idea 💡, In Progress, In Review, Done, Scheduled, Published ✨
     contentMethod: text("content_method"),
     readyToPostPlatform: text("ready_to_post_platform"),  // JSON
+    publishedPlatform: text("published_platform"),        // JSON — which platforms have actually been published on
     reusePlatform: text("reuse_platform"),                // JSON
     repurposePlatform: text("repurpose_platform"),        // JSON
     publishDate: ts("publish_date"),

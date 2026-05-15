@@ -50,6 +50,13 @@
       "when": 1778875943921,
       "tag": "0006_mysterious_tarot",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1778877718997,
+      "tag": "0007_great_jack_power",
+      "breakpoints": true
     }
   ]
 }

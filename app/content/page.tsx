@@ -14,8 +14,26 @@ const STATUS_COLORS: Record<string, string> = {
   "In Progress": "bg-blue-100 text-blue-800",
   "In Review": "bg-purple-100 text-purple-800",
   "Done": "bg-green-100 text-green-800",
+  "Scheduled": "bg-amber-100 text-amber-800",
   "Published ✨": "bg-emerald-100 text-emerald-800",
 };
+
+const PLATFORM_COLORS: Record<string, string> = {
+  Linkedin: "bg-blue-100 text-blue-800",
+  X: "bg-stone-200 text-stone-800",
+  Facebook: "bg-indigo-100 text-indigo-800",
+  Instagram: "bg-pink-100 text-pink-800",
+};
+
+function parseList(s: string | null | undefined): string[] {
+  if (!s) return [];
+  try {
+    const parsed = JSON.parse(s);
+    return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+  } catch {
+    return s ? [s] : [];
+  }
+}
 
 export default async function ContentPage({
   searchParams,
@@ -91,6 +109,7 @@ export default async function ContentPage({
                 <th className="text-left px-4 py-2.5">Title</th>
                 <th className="text-left px-4 py-2.5">Type</th>
                 <th className="text-left px-4 py-2.5">Status</th>
+                <th className="text-left px-4 py-2.5">Published On</th>
                 <th className="text-left px-4 py-2.5">Publish</th>
                 <th className="text-left px-4 py-2.5">Framework</th>
                 <th className="text-left px-4 py-2.5">Engagement</th>
@@ -101,7 +120,7 @@ export default async function ContentPage({
             <tbody className="divide-y divide-stone-100">
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-sm text-stone-500">
+                  <td colSpan={9} className="px-4 py-12 text-center text-sm text-stone-500">
                     No content items yet. Click <span className="font-medium">Sync Notion</span> to pull.
                   </td>
                 </tr>
@@ -110,15 +129,42 @@ export default async function ContentPage({
                   const engagedFiles = c.engagedPeopleList
                     ? c.engagedPeopleList.split(",").filter(Boolean)
                     : [];
+                  const statuses = parseList(c.status);
+                  const publishedOn = parseList(c.publishedPlatform);
                   return (
                     <tr key={c.id} className="hover:bg-stone-50">
                       <td className="px-4 py-3 font-medium text-stone-900">{c.title}</td>
                       <td className="px-4 py-3 text-stone-700">{c.type || "—"}</td>
                       <td className="px-4 py-3">
-                        {c.status && (
-                          <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[c.status] ?? "bg-stone-100"}`}>
-                            {c.status}
-                          </span>
+                        {statuses.length === 0 ? (
+                          <span className="text-stone-300">—</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            {statuses.map((s) => (
+                              <span
+                                key={s}
+                                className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[s] ?? "bg-stone-100"}`}
+                              >
+                                {s}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {publishedOn.length === 0 ? (
+                          <span className="text-stone-300">—</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            {publishedOn.map((p) => (
+                              <span
+                                key={p}
+                                className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${PLATFORM_COLORS[p] ?? "bg-stone-100 text-stone-700"}`}
+                              >
+                                {p}
+                              </span>
+                            ))}
+                          </div>
                         )}
                       </td>
                       <td className="px-4 py-3 text-stone-500">{fmtDate(c.publishDate)}</td>
