@@ -13,14 +13,16 @@ import {
 } from "@/lib/db/queries";
 import { funnelCounts, scoreHistogram, activityTrend30d } from "@/lib/db/analytics";
 import { nextMeetings } from "@/lib/db/meetings";
+import { inboxView, inboxCounts } from "@/lib/db/inbox-view";
 import { NextMeetings } from "@/components/dashboard/next-meetings";
+import { InboxWidget } from "@/components/dashboard/inbox-widget";
 import { db, schema } from "@/lib/db/client";
 import { syncStatus } from "@/lib/notion/sync";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const [stats, groups, hot, followUps, sync, funnel, scoreHist, trend, meetings, contacts] = await Promise.all([
+  const [stats, groups, hot, followUps, sync, funnel, scoreHist, trend, meetings, contacts, inbox, inboxC] = await Promise.all([
     getDashboardStats(),
     getStageGroupCounts(),
     getHotLeads(6),
@@ -31,6 +33,8 @@ export default async function Home() {
     activityTrend30d(),
     nextMeetings(3),
     db.select({ id: schema.contacts.id, name: schema.contacts.name }).from(schema.contacts),
+    inboxView(),
+    inboxCounts(),
   ]);
   const contactName = new Map(contacts.map((c) => [c.id, c.name]));
 
@@ -59,7 +63,8 @@ export default async function Home() {
         <StatCard label="Need follow-up" value={stats.needFollowUp} tone="amber" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <InboxWidget items={inbox} total={inboxC.total} byChannel={inboxC.byChannel} />
         <NextMeetings meetings={meetings} contactName={contactName} />
         <FunnelChart data={funnel} />
       </div>

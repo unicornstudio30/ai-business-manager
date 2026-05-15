@@ -28,6 +28,8 @@ import { recomputeOne, recomputeAll, getScoresMap } from "@/lib/db/lead-scores";
 import { funnelCounts, scoreHistogram, activityTrend30d } from "@/lib/db/analytics";
 import { upcomingMeetings, recentMeetings } from "@/lib/db/meetings";
 import { syncGoogleCalendar } from "@/lib/gcal/sync";
+import { inboxView, inboxCounts } from "@/lib/db/inbox-view";
+import { INBOX_CHANNELS } from "@/lib/inbox";
 import { syncNotion, syncStatus } from "@/lib/notion/sync";
 import { STAGES } from "@/lib/stages";
 
@@ -281,6 +283,24 @@ export function buildMcpServer(): McpServer {
         recentMeetings(recentDays ?? 7, 20),
       ]);
       return ok({ upcoming, recent });
+    }
+  );
+
+  server.registerTool(
+    "inbox",
+    {
+      title: "Inbox (needs your move)",
+      description:
+        "Returns contacts who need a response — derived from Notion CRM. " +
+        "A contact appears here if their Follow-up Date is past, or they're in a waiting stage and last touched 3+ days ago. " +
+        "Optionally filter by channel (linkedin, x, facebook, whatsapp, slack, reddit, email).",
+      inputSchema: {
+        channel: z.enum(INBOX_CHANNELS).optional(),
+      },
+    },
+    async ({ channel }) => {
+      const [items, counts] = await Promise.all([inboxView({ channel }), inboxCounts()]);
+      return ok({ items, counts });
     }
   );
 

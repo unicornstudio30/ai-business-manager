@@ -118,14 +118,26 @@ export const activities = sqliteTable(
   {
     id: id(),
     contactId: text("contact_id").references(() => contacts.id, { onDelete: "cascade" }),
-    type: text("type").notNull(), // post_observed | comment_drafted | email_drafted | audit_run | follow_up_sent | dm_sent | note
+    // type: post_observed | comment_drafted | email_drafted | audit_run | follow_up_sent
+    //     | dm_sent | reply_received | note
+    type: text("type").notNull(),
     content: text("content").notNull().default(""),
     sourceUrl: text("source_url"),
     claudeRunId: text("claude_run_id"),
+    // Inbox features:
+    // - channel: which platform the message arrived on (linkedin | x | facebook
+    //   | whatsapp | slack | reddit | email | comment | other). Defaults to
+    //   the contact's primary platform if not set.
+    channel: text("channel"),
+    // - needs_reply: 1 = inbox item needing your response. Set on reply_received.
+    //   Cleared (and replied_at stamped) when you mark replied.
+    needsReply: integer("needs_reply").notNull().default(0),
+    repliedAt: ts("replied_at"),
     createdAt: now(),
   },
   (t) => ({
     contactCreatedIdx: index("activities_contact_created_idx").on(t.contactId, t.createdAt),
+    needsReplyIdx: index("activities_needs_reply_idx").on(t.needsReply),
   })
 );
 

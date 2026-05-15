@@ -3,6 +3,7 @@ import {
   Home,
   Users,
   Flame,
+  Inbox,
   Repeat2,
   CalendarClock,
   NotebookPen,
@@ -20,6 +21,7 @@ import {
 const items = [
   { href: "/", label: "Dashboard", icon: Home },
   { href: "/contacts", label: "Contacts", icon: Users },
+  { href: "/inbox", label: "Inbox", icon: Inbox },
   { href: "/engagement", label: "Engagement", icon: Flame },
   { href: "/cadences", label: "Cadences", icon: Repeat2 },
   { href: "/meetings", label: "Meetings", icon: CalendarClock },
