@@ -61,30 +61,44 @@ export type BufferPost = {
   status: string;
 };
 
-// Create a draft post in Buffer's queue. Uses customScheduled mode + the given dueAt
-// so the post sits in Buffer until that time. User can edit/cancel/approve in Buffer's UI.
+// Create a post in Buffer's queue.
+//   With dueAt: mode=customScheduled — sits at that exact time, editable until it sends.
+//   Without dueAt: mode=addToQueue — uses Buffer's saved schedule slots for that channel.
+// In both cases the post is editable/skippable in Buffer's UI before it sends.
 // Returns the created post id so we can track which content_items have been pushed.
 export async function createDraftPost(opts: {
   channelId: string;
   text: string;
-  dueAt: Date;
+  dueAt?: Date | null;
 }): Promise<string> {
-  const data = await gql<{ createPost: { id: string } }>(
+  const input: Record<string, any> = {
+    channelId: opts.channelId,
+    text: opts.text,
+    schedulingType: "automatic",
+    assets: [],
+  };
+  if (opts.dueAt) {
+    input.mode = "customScheduled";
+    input.dueAt = opts.dueAt.toISOString();
+  } else {
+    input.mode = "addToQueue";
+  }
+  const data = await gql<{ createPost: any }>(
     `mutation CreatePost($input: CreatePostInput!) {
-       createPost(input: $input) { id }
+       createPost(input: $input) {
+         __typename
+         ... on PostActionSuccess { post { id } }
+         ... on NotFoundError { message }
+         ... on UnauthorizedError { message }
+         ... on UnexpectedError { message }
+         ... on RestProxyError { message code link }
+       }
      }`,
-    {
-      input: {
-        channelId: opts.channelId,
-        text: opts.text,
-        dueAt: opts.dueAt.toISOString(),
-        mode: "customScheduled",
-        schedulingType: "automatic",
-        assets: [],
-      },
-    }
+    { input }
   );
-  return data.createPost.id;
+  const result = data.createPost;
+  if (result.__typename === "PostActionSuccess") return result.post.id;
+  throw new Error(`Buffer createPost failed (${result.__typename}): ${result.message ?? "unknown"}`);
 }
 
 // Pull "sent" posts with pagination. Buffer paginates with cursor-based first/after.

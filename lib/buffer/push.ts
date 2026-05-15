@@ -59,8 +59,7 @@ export async function pushDraftsForContent(): Promise<PushResult> {
     for (const platform of PLATFORMS) {
       const status = getStatus(item, platform);
       if (status !== "Scheduled") continue;
-      const dueAt = getPublishDate(item, platform);
-      if (!dueAt) continue;
+      const dueAt = getPublishDate(item, platform);  // optional — if missing, Buffer uses its queue slots
       if (bufferPostIds[platform]) {
         result.skipped++;
         continue;
