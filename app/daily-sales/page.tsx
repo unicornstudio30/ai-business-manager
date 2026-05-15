@@ -1,5 +1,13 @@
-import { getKpiByDate, suggestedCountsForDate, get7DaysOfKpis } from "@/lib/db/daily-kpis";
+import {
+  getKpiByDate,
+  suggestedCountsForDate,
+  get7DaysOfKpis,
+  platformBreakdownForDate,
+  platformBreakdown7Days,
+} from "@/lib/db/daily-kpis";
 import { TodayCard } from "@/components/daily-sales/today-card";
+import { PlatformBreakdown } from "@/components/daily-sales/platform-breakdown";
+import { Platform7DayGrid } from "@/components/daily-sales/platform-7day-grid";
 import { fmtDate } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -18,10 +26,12 @@ const KPI_FIELDS: Array<{ key: string; label: string; emoji: string }> = [
 
 export default async function DailySalesPage() {
   const today = new Date();
-  const [todayRow, suggested, week] = await Promise.all([
+  const [todayRow, suggested, week, platformToday, platformWeek] = await Promise.all([
     getKpiByDate(today),
     suggestedCountsForDate(today),
     get7DaysOfKpis(),
+    platformBreakdownForDate(today),
+    platformBreakdown7Days(),
   ]);
 
   return (
@@ -36,6 +46,10 @@ export default async function DailySalesPage() {
       </div>
 
       <TodayCard today={todayRow} suggested={suggested} />
+
+      <PlatformBreakdown rows={platformToday} />
+
+      <Platform7DayGrid days={platformWeek} />
 
       <section>
         <h2 className="text-sm font-semibold text-stone-900 mb-3">Last 7 days</h2>
