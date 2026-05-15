@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Calendar, Video, ExternalLink, User } from "lucide-react";
+import { Calendar, Video, ExternalLink, User, Sparkles } from "lucide-react";
 import { fmtDate, fmtDateTime } from "@/lib/utils";
 
 type Props = {
@@ -73,6 +73,13 @@ export function MeetingRow({ meeting, contactName, showRelative = true }: Props)
           )}
         </div>
         <div className="flex-shrink-0 flex items-center gap-2">
+          <Link
+            href={`/meetings/${meeting.id}/brief`}
+            className="flex items-center gap-1 rounded-md border border-violet-300 bg-violet-50 px-2.5 py-1.5 text-xs font-medium text-violet-800 hover:bg-violet-100"
+            title="Open prep brief"
+          >
+            <Sparkles className="size-3.5" /> Brief
+          </Link>
           {meeting.meetingUrl && (
             <a
               href={meeting.meetingUrl}

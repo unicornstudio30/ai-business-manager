@@ -32,6 +32,7 @@ import { inboxView, inboxCounts } from "@/lib/db/inbox-view";
 import { INBOX_CHANNELS } from "@/lib/inbox";
 import { stuckDeals, stuckByStage } from "@/lib/db/stuck-deals";
 import { listClosedDeals, winLossSummary } from "@/lib/db/wins-losses";
+import { buildPrepBrief } from "@/lib/prep-brief";
 import { syncNotion, syncStatus } from "@/lib/notion/sync";
 import { STAGES } from "@/lib/stages";
 
@@ -303,6 +304,26 @@ export function buildMcpServer(): McpServer {
     async ({ channel }) => {
       const [items, counts] = await Promise.all([inboxView({ channel }), inboxCounts()]);
       return ok({ items, counts });
+    }
+  );
+
+  server.registerTool(
+    "prep_brief",
+    {
+      title: "Discovery Call Prep Brief",
+      description:
+        "Generate a discovery-call prep brief for a specific meeting. Returns: " +
+        "meeting metadata, contact details + lead score, recent touchpoints, audits, " +
+        "stage-aware discovery questions, common objection responses, and Unicorn's 30-sec pitch. " +
+        "Pull this before a call and Claude can polish it into talking points.",
+      inputSchema: {
+        meeting_id: z.string().describe("ID of the meeting (from upcoming_meetings tool)"),
+      },
+    },
+    async ({ meeting_id }) => {
+      const brief = await buildPrepBrief(meeting_id);
+      if (!brief) return ok({ error: "Meeting not found", meeting_id });
+      return ok(brief);
     }
   );
 
