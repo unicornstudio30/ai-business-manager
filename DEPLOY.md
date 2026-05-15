@@ -98,6 +98,26 @@ Now slash commands run from your local Claude Code but write to the hosted app:
 
 ---
 
+## Auto-sync (optional)
+
+The web app auto-syncs Notion every 5 min while you have a tab open
+(`NEXT_PUBLIC_AUTO_SYNC_MINUTES=5`, set to 0 to disable). The header shows
+"Synced X ago" and a checkbox to pause auto-sync per-session.
+
+**For production-grade sync that keeps running even when you're not browsing**,
+hit `/api/sync` from an external cron service. Free options:
+
+- **cron-job.org** (recommended, free): create a job that POSTs to
+  `https://<your-vercel-url>/api/sync?entity=contacts` every 10 min.
+  Add 2 more jobs for `?entity=content_items` and `?entity=tracker_entries`.
+- **EasyCron** (free tier 200 calls/day): same pattern.
+- **UptimeRobot** (free): set up a "monitor" that pings `/api/sync` every 5 min.
+
+Vercel Cron Jobs (the native option) require Pro plan ($20/mo) — skip unless
+you upgrade.
+
+---
+
 ## Troubleshooting
 
 **Build fails on Vercel with libsql error**: check `next.config.ts` has `serverExternalPackages: ["@libsql/client"]`. Already there.
