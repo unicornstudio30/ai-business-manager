@@ -9,6 +9,8 @@ import { notion, NOTION_DATA_SOURCES, isNotionConfigured } from "./client";
 import { notionToContact, contactToNotionProperties } from "./contacts-mapper";
 import { notionToContentItem, contentToNotionProperties } from "./content-mapper";
 import { notionToTrackerEntry } from "./tracker-mapper";
+import { emitInferredActivities } from "./inferred-activities";
+import { recomputeOne } from "../db/lead-scores";
 import type { PageObjectResponse } from "@notionhq/client";
 
 type SyncResult = { entity: string; pulled: number; pushed: number; error?: string };
@@ -72,8 +74,10 @@ async function pullContacts(deadlineMs?: number): Promise<number> {
   let count = 0;
   for await (const page of paginatedQuery(NOTION_DATA_SOURCES.contacts, 100, deadlineMs)) {
     const row = notionToContact(page);
+    // Fetch the FULL existing row so we can diff fields (engageTouch, status)
+    // and emit inferred activities when CRM updates happen in Notion.
     const existing = await db
-      .select({ id: schema.contacts.id, lastEdited: schema.contacts.notionLastEditedAt })
+      .select()
       .from(schema.contacts)
       .where(eq(schema.contacts.notionPageId, page.id))
       .limit(1);
@@ -82,13 +86,28 @@ async function pullContacts(deadlineMs?: number): Promise<number> {
       await db.insert(schema.contacts).values(row);
       count++;
     } else {
-      const localEdited = existing[0].lastEdited?.getTime() ?? 0;
+      const prev = existing[0];
+      const localEdited = prev.notionLastEditedAt?.getTime() ?? 0;
       const notionEdited = row.notionLastEditedAt?.getTime() ?? 0;
       if (notionEdited > localEdited) {
+        // Detect Notion-side changes BEFORE we overwrite the local row.
+        // Emits dm_sent / note activities so daily KPI counters reflect
+        // CRM updates without requiring manual entry.
+        try {
+          const emitted = await emitInferredActivities(prev, row, prev.id);
+          if (emitted > 0) {
+            // Recompute lead score so the new activities affect ranking
+            recomputeOne(prev.id).catch(() => {});
+          }
+        } catch (err) {
+          // Don't fail the sync if inference has a bug
+          console.error(`Inferred activity emit failed for ${prev.id}:`, err);
+        }
+
         await db
           .update(schema.contacts)
           .set({ ...row, dirty: 0 })
-          .where(eq(schema.contacts.id, existing[0].id));
+          .where(eq(schema.contacts.id, prev.id));
         count++;
       }
     }
