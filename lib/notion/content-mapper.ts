@@ -18,6 +18,12 @@ const date = (p: any): Date | null => {
   return isNaN(d.getTime()) ? null : d;
 };
 const people = (p: any): string[] => p?.people?.map((u: any) => u.id) ?? [];
+const files = (p: any): string[] => {
+  if (!p?.files) return [];
+  return p.files
+    .map((f: any) => f?.file?.url ?? f?.external?.url ?? null)
+    .filter((u: string | null): u is string => !!u);
+};
 
 export function notionToContentItem(page: PageObjectResponse): Omit<ContentItem, "id" | "createdAt"> {
   const props = page.properties as any;
@@ -28,6 +34,7 @@ export function notionToContentItem(page: PageObjectResponse): Omit<ContentItem,
     title: text(props["Title"]) || "(untitled)",
     topic: text(props["Topic"]),
     engagement: text(props["Engagement"]),
+    engagedPeopleList: files(props["Engaged People List"]).join(",") || null,
     framework: text(props["Framework"]),
     url: text(props["URL"]),
     type: select(props["Type"]),

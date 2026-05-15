@@ -1,0 +1,1 @@
+ALTER TABLE `content_items` ADD `engaged_people_list` text;

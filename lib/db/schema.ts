@@ -89,6 +89,7 @@ export const contentItems = sqliteTable(
     title: text("title").notNull().default(""),
     topic: text("topic"),
     engagement: text("engagement"),
+    engagedPeopleList: text("engaged_people_list"),  // CSV of file URLs from Notion file column (Apify scrape output)
     framework: text("framework"),
     url: text("url"),
     type: text("type"),                          // 15 options (see lib/content-types.ts)

@@ -93,44 +93,68 @@ export default async function ContentPage({
                 <th className="text-left px-4 py-2.5">Status</th>
                 <th className="text-left px-4 py-2.5">Publish</th>
                 <th className="text-left px-4 py-2.5">Framework</th>
+                <th className="text-left px-4 py-2.5">Engagement</th>
+                <th className="text-left px-4 py-2.5">Engaged People</th>
                 <th></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-sm text-stone-500">
+                  <td colSpan={8} className="px-4 py-12 text-center text-sm text-stone-500">
                     No content items yet. Click <span className="font-medium">Sync Notion</span> to pull.
                   </td>
                 </tr>
               ) : (
-                items.map((c) => (
-                  <tr key={c.id} className="hover:bg-stone-50">
-                    <td className="px-4 py-3 font-medium text-stone-900">{c.title}</td>
-                    <td className="px-4 py-3 text-stone-700">{c.type || "—"}</td>
-                    <td className="px-4 py-3">
-                      {c.status && (
-                        <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[c.status] ?? "bg-stone-100"}`}>
-                          {c.status}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-stone-500">{fmtDate(c.publishDate)}</td>
-                    <td className="px-4 py-3 text-stone-500 text-xs">{c.framework || "—"}</td>
-                    <td className="px-4 py-3 text-right">
-                      {c.notionPageId && (
-                        <a
-                          href={`https://www.notion.so/${c.notionPageId.replace(/-/g, "")}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-stone-500 hover:text-stone-900"
-                        >
-                          <ExternalLink className="size-3 inline" />
-                        </a>
-                      )}
-                    </td>
-                  </tr>
-                ))
+                items.map((c) => {
+                  const engagedFiles = c.engagedPeopleList
+                    ? c.engagedPeopleList.split(",").filter(Boolean)
+                    : [];
+                  return (
+                    <tr key={c.id} className="hover:bg-stone-50">
+                      <td className="px-4 py-3 font-medium text-stone-900">{c.title}</td>
+                      <td className="px-4 py-3 text-stone-700">{c.type || "—"}</td>
+                      <td className="px-4 py-3">
+                        {c.status && (
+                          <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[c.status] ?? "bg-stone-100"}`}>
+                            {c.status}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-stone-500">{fmtDate(c.publishDate)}</td>
+                      <td className="px-4 py-3 text-stone-500 text-xs">{c.framework || "—"}</td>
+                      <td className="px-4 py-3 text-stone-700 text-xs max-w-[200px] truncate" title={c.engagement ?? undefined}>
+                        {c.engagement || <span className="text-stone-300">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        {engagedFiles.length === 0 ? (
+                          <span className="text-stone-300">—</span>
+                        ) : (
+                          <a
+                            href={engagedFiles[0]}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-700 hover:underline"
+                          >
+                            {engagedFiles.length === 1 ? "1 file" : `${engagedFiles.length} files`}
+                          </a>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {c.notionPageId && (
+                          <a
+                            href={`https://www.notion.so/${c.notionPageId.replace(/-/g, "")}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-stone-500 hover:text-stone-900"
+                          >
+                            <ExternalLink className="size-3 inline" />
+                          </a>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
