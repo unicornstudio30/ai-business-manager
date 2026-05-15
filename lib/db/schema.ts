@@ -275,6 +275,40 @@ export const claudeRuns = sqliteTable("claude_runs", {
   args: text("args"),  // JSON
 });
 
+// Posts that have been published via Buffer.
+// Source-of-truth for "what went out and where" — engagement metrics
+// get added later once Buffer Analyze or Apify scraping is wired up.
+export const publishedPosts = sqliteTable(
+  "published_posts",
+  {
+    id: id(),
+    source: text("source").notNull().default("buffer"),
+    externalId: text("external_id").unique(),       // Buffer post id
+    channel: text("channel"),                        // linkedin | twitter | facebook | ...
+    channelName: text("channel_name"),               // saidur-builder / saidur_builder / etc.
+    sentAt: ts("sent_at"),
+    text: text("text"),                              // post body
+    externalLink: text("external_link"),             // permalink on the published platform
+    status: text("status"),                          // sent | scheduled | failed
+    contentItemId: text("content_item_id").references(() => contentItems.id), // best-effort match to Notion item
+
+    // Engagement (nullable for now — Buffer Analyze / Apify can fill later)
+    impressions: integer("impressions"),
+    likes: integer("likes"),
+    comments: integer("comments"),
+    shares: integer("shares"),
+    clicks: integer("clicks"),
+    metricsFetchedAt: ts("metrics_fetched_at"),
+
+    createdAt: now(),
+    updatedAt: ts("updated_at").$defaultFn(() => new Date()),
+  },
+  (t) => ({
+    sentIdx: index("published_posts_sent_idx").on(t.sentAt),
+    channelIdx: index("published_posts_channel_idx").on(t.channel),
+  })
+);
+
 // Lead score per contact, recomputed on activity insert + nightly.
 // Score = stage_weight + recency + engagement_count + reply_ratio (0..100).
 export const leadScores = sqliteTable("lead_scores", {

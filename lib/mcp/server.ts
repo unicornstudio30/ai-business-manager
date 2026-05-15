@@ -24,7 +24,8 @@ import {
 import { listEngagementQueue, getTodayCounts, DAILY_TARGETS } from "@/lib/db/engagement";
 import { computeCadence, dueToday, dueSoon } from "@/lib/cadences";
 import { db, schema } from "@/lib/db/client";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
+import { syncBuffer } from "@/lib/buffer/sync";
 import { funnelCounts, activityTrend30d } from "@/lib/db/analytics";
 import { upcomingMeetings, recentMeetings } from "@/lib/db/meetings";
 import { syncGoogleCalendar } from "@/lib/gcal/sync";
@@ -409,6 +410,51 @@ export function buildMcpServer(): McpServer {
     },
     async () => {
       const result = await syncGoogleCalendar();
+      return ok(result);
+    }
+  );
+
+  server.registerTool(
+    "published_posts",
+    {
+      title: "Published Posts (Buffer)",
+      description:
+        "Posts pulled from Buffer (LinkedIn + Twitter sent posts). Each row has channel, channelName, " +
+        "sentAt, text, externalLink (live URL), and (when populated) impressions/likes/comments/shares. " +
+        "Engagement metrics are nullable until Buffer Analyze or Apify scraping is wired up.",
+      inputSchema: {
+        channel: z.string().optional().describe("Filter by channel service (linkedin, twitter, etc.)"),
+        limit: z.number().int().min(1).max(200).optional().default(50),
+      },
+    },
+    async ({ channel, limit }) => {
+      const rows = channel
+        ? await db
+            .select()
+            .from(schema.publishedPosts)
+            .where(eq(schema.publishedPosts.channel, channel))
+            .orderBy(desc(schema.publishedPosts.sentAt))
+            .limit(limit ?? 50)
+        : await db
+            .select()
+            .from(schema.publishedPosts)
+            .orderBy(desc(schema.publishedPosts.sentAt))
+            .limit(limit ?? 50);
+      return ok({ count: rows.length, posts: rows });
+    }
+  );
+
+  server.registerTool(
+    "sync_buffer",
+    {
+      title: "Sync Buffer",
+      description:
+        "Pull latest sent posts from Buffer into published_posts. Best-effort matches each post " +
+        "to a content_items row by first-line text. Engagement metrics are NOT pulled (token tier).",
+      inputSchema: {},
+    },
+    async () => {
+      const result = await syncBuffer();
       return ok(result);
     }
   );

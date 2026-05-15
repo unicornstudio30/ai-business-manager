@@ -43,6 +43,8 @@ export function SyncButton() {
       }
       // GCal best-effort
       try { await fetch("/api/gcal/sync", { method: "POST" }); } catch {}
+      // Buffer best-effort
+      try { await fetch("/api/buffer/sync", { method: "POST" }); } catch {}
       setLastSynced(Date.now());
       startTransition(() => router.refresh());
     } finally {

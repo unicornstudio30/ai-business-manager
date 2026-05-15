@@ -17,6 +17,7 @@ import {
   Network,
   DollarSign,
   BarChart3,
+  Send,
   Settings as SettingsIcon,
 } from "lucide-react";
 
@@ -30,6 +31,7 @@ const items = [
   { href: "/meetings", label: "Meetings", icon: CalendarClock },
   { href: "/tracker", label: "Sales Tracker", icon: NotebookPen },
   { href: "/content", label: "Content Calendar", icon: Calendar },
+  { href: "/published", label: "Published Posts", icon: Send },
   { href: "/projects", label: "Projects", icon: Briefcase },
   { href: "/audits", label: "Audits", icon: ScanSearch },
   { href: "/partners", label: "Partners", icon: Handshake },
