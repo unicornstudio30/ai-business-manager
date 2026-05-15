@@ -3,7 +3,6 @@ import { StageBreakdown } from "@/components/dashboard/stage-breakdown";
 import { HotLeadsList } from "@/components/dashboard/hot-leads-list";
 import { FollowUpList } from "@/components/dashboard/follow-up-list";
 import { FunnelChart } from "@/components/dashboard/funnel-chart";
-import { ScoreHistogram } from "@/components/dashboard/score-histogram";
 import { ActivityTrend } from "@/components/dashboard/activity-trend";
 import {
   getDashboardStats,
@@ -11,7 +10,7 @@ import {
   getNeedsFollowUp,
   getStageGroupCounts,
 } from "@/lib/db/queries";
-import { funnelCounts, scoreHistogram, activityTrend30d } from "@/lib/db/analytics";
+import { funnelCounts, activityTrend30d } from "@/lib/db/analytics";
 import { nextMeetings } from "@/lib/db/meetings";
 import { inboxView, inboxCounts } from "@/lib/db/inbox-view";
 import { stuckDeals } from "@/lib/db/stuck-deals";
@@ -24,14 +23,13 @@ import { syncStatus } from "@/lib/notion/sync";
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const [stats, groups, hot, followUps, sync, funnel, scoreHist, trend, meetings, contacts, inbox, inboxC, stuck] = await Promise.all([
+  const [stats, groups, hot, followUps, sync, funnel, trend, meetings, contacts, inbox, inboxC, stuck] = await Promise.all([
     getDashboardStats(),
     getStageGroupCounts(),
     getHotLeads(6),
     getNeedsFollowUp(11, 6),
     syncStatus(),
     funnelCounts(),
-    scoreHistogram(),
     activityTrend30d(),
     nextMeetings(3),
     db.select({ id: schema.contacts.id, name: schema.contacts.name }).from(schema.contacts),
@@ -74,10 +72,7 @@ export default async function Home() {
 
       <FunnelChart data={funnel} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ActivityTrend data={trend} />
-        <ScoreHistogram data={scoreHist} />
-      </div>
+      <ActivityTrend data={trend} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <StageBreakdown groups={groups} />

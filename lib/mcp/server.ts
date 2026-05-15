@@ -1,10 +1,11 @@
 // MCP server definition — exposes Unicorn Studio's web app as tools for Claude.
 // Reuses all existing query/mutation code; doesn't duplicate logic.
 //
-// 12 tools total:
 //   READ: briefing, list_contacts, get_contact, hot_leads, needs_follow_up,
-//         engagement_queue, cadences_due, lead_score, analytics
-//   WRITE: create_activity, sync_notion, recompute_lead_score
+//         engagement_queue, cadences_due, icp_score, analytics, inbox,
+//         stuck_deals, wins_losses, prep_brief, upcoming_meetings,
+//         stage_definitions
+//   WRITE: create_activity, sync_notion, sync_gcal, save_audit
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -24,8 +25,7 @@ import { listEngagementQueue, getTodayCounts, DAILY_TARGETS } from "@/lib/db/eng
 import { computeCadence, dueToday, dueSoon } from "@/lib/cadences";
 import { db, schema } from "@/lib/db/client";
 import { eq } from "drizzle-orm";
-import { recomputeOne, recomputeAll, getScoresMap } from "@/lib/db/lead-scores";
-import { funnelCounts, scoreHistogram, activityTrend30d } from "@/lib/db/analytics";
+import { funnelCounts, activityTrend30d } from "@/lib/db/analytics";
 import { upcomingMeetings, recentMeetings } from "@/lib/db/meetings";
 import { syncGoogleCalendar } from "@/lib/gcal/sync";
 import { inboxView, inboxCounts } from "@/lib/db/inbox-view";
@@ -33,7 +33,7 @@ import { INBOX_CHANNELS } from "@/lib/inbox";
 import { stuckDeals, stuckByStage } from "@/lib/db/stuck-deals";
 import { listClosedDeals, winLossSummary } from "@/lib/db/wins-losses";
 import { buildPrepBrief } from "@/lib/prep-brief";
-import { computeIcpScore, compositeScore } from "@/lib/icp-scoring";
+import { computeIcpScore } from "@/lib/icp-scoring";
 import { syncNotion, syncStatus } from "@/lib/notion/sync";
 import { STAGES } from "@/lib/stages";
 
@@ -217,40 +217,15 @@ export function buildMcpServer(): McpServer {
   );
 
   server.registerTool(
-    "lead_score",
-    {
-      title: "Lead Score",
-      description:
-        "Get the lead score (0–100) for a specific contact, with breakdown by component " +
-        "(stage_weight, recency, engagement, reply_ratio).",
-      inputSchema: {
-        contact_id: z.string().describe("Contact id (ULID)"),
-      },
-    },
-    async ({ contact_id }) => {
-      const scoresMap = await getScoresMap();
-      const score = scoresMap.get(contact_id);
-      const row = (
-        await db.select().from(schema.leadScores).where(eq(schema.leadScores.contactId, contact_id)).limit(1)
-      )[0];
-      return ok({ contact_id, score, breakdown: row ?? null });
-    }
-  );
-
-  server.registerTool(
     "analytics",
     {
       title: "Pipeline Analytics",
-      description: "Pipeline funnel counts (Cold→Won), lead score distribution histogram, and 30-day activity trend.",
+      description: "Pipeline funnel counts (Cold→Won) + 30-day activity trend.",
       inputSchema: {},
     },
     async () => {
-      const [funnel, histogram, trend] = await Promise.all([
-        funnelCounts(),
-        scoreHistogram(),
-        activityTrend30d(),
-      ]);
-      return ok({ funnel, score_histogram: histogram, activity_trend_30d: trend });
+      const [funnel, trend] = await Promise.all([funnelCounts(), activityTrend30d()]);
+      return ok({ funnel, activity_trend_30d: trend });
     }
   );
 
@@ -348,8 +323,8 @@ export function buildMcpServer(): McpServer {
       title: "ICP Fit Score",
       description:
         "Compute ICP fit score (0-100) for one or more contacts based on their profession, " +
-        "position, country, platform, and contactability. Independent from lead score. " +
-        "Pass contact_id for one, or omit for the top 20 by composite (lead + ICP).",
+        "position, country, platform, and contactability. " +
+        "Pass contact_id for one, or omit for the top 20 by ICP fit.",
       inputSchema: {
         contact_id: z.string().optional(),
       },
@@ -358,32 +333,12 @@ export function buildMcpServer(): McpServer {
       if (contact_id) {
         const c = (await db.select().from(schema.contacts).where(eq(schema.contacts.id, contact_id)).limit(1))[0];
         if (!c) return ok({ error: "Contact not found", contact_id });
-        const icp = computeIcpScore(c);
-        const leadRow = (await db.select().from(schema.leadScores).where(eq(schema.leadScores.contactId, contact_id)).limit(1))[0];
-        const leadScoreVal = leadRow?.score ?? 0;
-        return ok({
-          contact_id,
-          icp,
-          lead_score: leadScoreVal,
-          composite: compositeScore(leadScoreVal, icp.score),
-        });
+        return ok({ contact_id, icp: computeIcpScore(c) });
       }
-      // Top 20 by composite
       const contacts = await db.select().from(schema.contacts);
-      const leadRows = await db.select().from(schema.leadScores);
-      const leadMap = new Map(leadRows.map((r) => [r.contactId, r.score]));
       const ranked = contacts
-        .map((c) => {
-          const icp = computeIcpScore(c);
-          const lead = leadMap.get(c.id) ?? 0;
-          return {
-            contact: c,
-            icp_score: icp.score,
-            lead_score: lead,
-            composite: compositeScore(lead, icp.score),
-          };
-        })
-        .sort((a, b) => b.composite - a.composite)
+        .map((c) => ({ contact: c, icp_score: computeIcpScore(c).score }))
+        .sort((a, b) => b.icp_score - a.icp_score)
         .slice(0, 20);
       return ok({ ranked });
     }
@@ -487,10 +442,6 @@ export function buildMcpServer(): McpServer {
         .insert(schema.activities)
         .values({ contactId: contact_id, type, content, sourceUrl: source_url })
         .returning();
-      // Fire-and-forget recompute
-      recomputeOne(contact_id).catch((e) =>
-        console.error("Lead score recompute failed:", e?.message)
-      );
       return ok({ ok: true, activity: row });
     }
   );
@@ -510,26 +461,6 @@ export function buildMcpServer(): McpServer {
     async ({ entity }) => {
       const results = await syncNotion(entity);
       return ok({ ok: true, results });
-    }
-  );
-
-  server.registerTool(
-    "recompute_lead_score",
-    {
-      title: "Recompute Lead Score",
-      description:
-        "Force-recompute the lead score for a specific contact (passing contact_id) or all contacts (omit contact_id).",
-      inputSchema: {
-        contact_id: z.string().optional(),
-      },
-    },
-    async ({ contact_id }) => {
-      if (contact_id) {
-        const result = await recomputeOne(contact_id);
-        return ok({ contact_id, result });
-      }
-      const count = await recomputeAll();
-      return ok({ recomputed: count });
     }
   );
 

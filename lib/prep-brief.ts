@@ -8,7 +8,7 @@
 
 import { db, schema } from "./db/client";
 import { eq, desc } from "drizzle-orm";
-import { computeLeadScore } from "./lead-scoring";
+import { computeIcpScore } from "./icp-scoring";
 import type { Meeting, Contact, Activity } from "./db/schema";
 
 // Stage-aware discovery questions, drawn from /strategy/unicorn-sales-playbook.md.
@@ -79,7 +79,7 @@ export type PrepBrief = {
   meeting: Meeting;
   contact: Contact | null;
   recentActivities: Activity[];
-  leadScore: { score: number; breakdown: Record<string, number> } | null;
+  icpScore: number | null;
   audits: any[];
   questions: string[];
   objectionBank: typeof COMMON_OBJECTIONS;
@@ -108,19 +108,7 @@ export async function buildPrepBrief(meetingId: string): Promise<PrepBrief | nul
         .limit(15)
     : [];
 
-  let leadScore: PrepBrief["leadScore"] = null;
-  if (contact) {
-    const breakdown = computeLeadScore(contact, recentActivities);
-    leadScore = {
-      score: breakdown.score,
-      breakdown: {
-        stage: breakdown.stageWeight,
-        recency: breakdown.recencyScore,
-        engagement: breakdown.engagementScore,
-        reply: breakdown.replyScore,
-      },
-    };
-  }
+  const icpScore = contact ? computeIcpScore(contact).score : null;
 
   const audits = contact
     ? await db.select().from(schema.audits).where(eq(schema.audits.contactId, contact.id))
@@ -134,7 +122,7 @@ export async function buildPrepBrief(meetingId: string): Promise<PrepBrief | nul
     meeting,
     contact,
     recentActivities,
-    leadScore,
+    icpScore,
     audits,
     questions,
     objectionBank: COMMON_OBJECTIONS,

@@ -3,6 +3,7 @@
 import { db, schema } from "./client";
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { HOT_LEAD_STAGES } from "../stages";
+import { computeIcpScore } from "../icp-scoring";
 
 // Default daily targets — from Saidur's sales playbook.
 // (Eventually configurable via /settings.)
@@ -16,7 +17,7 @@ export const DAILY_TARGETS = {
   new_prospects: 5,
 };
 
-// Returns each contact + their most recent activity, ordered by lead score desc.
+// Returns each contact + their most recent activity, ordered by ICP fit desc.
 export async function listEngagementQueue(opts: { onlyHot?: boolean; limit?: number } = {}) {
   const conditions = [];
   if (opts.onlyHot) conditions.push(inArray(schema.contacts.status, [...HOT_LEAD_STAGES]));
@@ -41,12 +42,9 @@ export async function listEngagementQueue(opts: { onlyHot?: boolean; limit?: num
     }
   }
 
-  const scoreRows = await db.select().from(schema.leadScores);
-  const scoreMap = new Map(scoreRows.map((r) => [r.contactId, r.score]));
-
   const enriched = contacts.map((c) => ({
     contact: c,
-    score: scoreMap.get(c.id) ?? 0,
+    score: computeIcpScore(c).score,
     lastActivity: lastByContact.get(c.id) ?? null,
   }));
 

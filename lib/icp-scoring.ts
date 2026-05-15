@@ -132,9 +132,3 @@ export function icpColor(score: number): string {
   return "text-stone-400 bg-stone-50 border-stone-200";
 }
 
-// Composite ranking score = 60% lead + 40% ICP.
-// Tuned so a hot non-ICP contact still ranks highly (you might learn something)
-// but a perfect-ICP cold contact also surfaces (worth the outreach effort).
-export function compositeScore(leadScore: number, icpScore: number): number {
-  return Math.round(leadScore * 0.6 + icpScore * 0.4);
-}

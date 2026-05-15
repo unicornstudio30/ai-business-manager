@@ -4,7 +4,7 @@ import { ArrowLeft, ExternalLink, Trophy, Sparkles, MessageCircle, AlertCircle }
 import { buildPrepBrief } from "@/lib/prep-brief";
 import { fmtDate, fmtDateTime } from "@/lib/utils";
 import { STAGE_COLORS, type Stage } from "@/lib/stages";
-import { scoreColor } from "@/lib/lead-scoring";
+import { icpColor } from "@/lib/icp-scoring";
 
 export const dynamic = "force-dynamic";
 
@@ -58,14 +58,11 @@ export default async function PrepBriefPage({ params }: { params: Promise<{ id: 
               </a>
             )}
           </div>
-          {brief.leadScore && (
+          {brief.icpScore !== null && (
             <div className="text-right">
-              <div className="text-xs font-medium text-stone-500 uppercase tracking-wide mb-1">Lead score</div>
-              <div className={`inline-flex items-center justify-center w-16 h-16 rounded-lg border text-2xl font-semibold tabular-nums ${scoreColor(brief.leadScore.score)}`}>
-                {brief.leadScore.score}
-              </div>
-              <div className="text-[10px] text-stone-400 mt-2">
-                stage {brief.leadScore.breakdown.stage} · recency {brief.leadScore.breakdown.recency} · engage {brief.leadScore.breakdown.engagement}
+              <div className="text-xs font-medium text-stone-500 uppercase tracking-wide mb-1">ICP fit</div>
+              <div className={`inline-flex items-center justify-center w-16 h-16 rounded-lg border text-2xl font-semibold tabular-nums ${icpColor(brief.icpScore)}`}>
+                {brief.icpScore}
               </div>
             </div>
           )}

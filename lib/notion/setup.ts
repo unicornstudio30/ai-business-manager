@@ -1,8 +1,7 @@
 // One-time setup helpers — add web-app-managed columns to the Notion CRM.
 // Idempotent: skips columns that already exist.
 //
-// Adds 3 properties:
-//   "Lead Score" (number)        — pushed from web app, recomputed on activity insert
+// Adds 2 properties:
 //   "Closed Reason" (rich_text)  — pushed when you fill it in /wins-losses
 //   "Latest Audit" (rich_text)   — pushed when /audit runs against a contact
 
@@ -11,7 +10,6 @@ import { notion, NOTION_DBS, isNotionConfigured } from "./client";
 type SetupResult = { added: string[]; existed: string[]; error?: string };
 
 const PROPERTIES_TO_ADD: Record<string, any> = {
-  "Lead Score": { number: { format: "number" } },
   "Closed Reason": { rich_text: {} },
   "Latest Audit": { rich_text: {} },
 };

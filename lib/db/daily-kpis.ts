@@ -20,16 +20,48 @@ function endOfDay(d: Date): Date {
 
 // Counts from activities for a single day, mapped to KPI columns.
 // These are SUGGESTIONS — the user can override. We don't auto-write.
+//
+// Inbound leads are derived from Notion CRM Category field: any contact
+// added today (savedDate or statusDate falls in the day) whose Category
+// includes "Inbound" counts as +1 inbound lead. New prospects = same
+// query without the Inbound filter.
 export async function suggestedCountsForDate(date: Date) {
   const start = startOfDay(date);
   const end = endOfDay(date);
-  const rows = await db
+
+  // Activity-derived counts
+  const activityRows = await db
     .select({ type: schema.activities.type, count: sql<number>`count(*)` })
     .from(schema.activities)
     .where(and(gte(schema.activities.createdAt, start), lt(schema.activities.createdAt, end)))
     .groupBy(schema.activities.type);
+  const counts = new Map(activityRows.map((r) => [r.type, Number(r.count)]));
 
-  const counts = new Map(rows.map((r) => [r.type, Number(r.count)]));
+  // CRM-derived counts: contacts saved/added today, segmented by Category
+  const newToday = await db
+    .select({
+      id: schema.contacts.id,
+      category: schema.contacts.category,
+      savedDate: schema.contacts.savedDate,
+      statusDate: schema.contacts.statusDate,
+    })
+    .from(schema.contacts);
+
+  let inboundLeads = 0;
+  let newProspects = 0;
+  for (const c of newToday) {
+    const ref = c.savedDate ?? c.statusDate;
+    if (!ref) continue;
+    if (ref < start || ref >= end) continue;
+    newProspects++;
+    if (c.category) {
+      try {
+        const cats: string[] = JSON.parse(c.category);
+        if (cats.some((x) => x.toLowerCase() === "inbound")) inboundLeads++;
+      } catch { /* ignore */ }
+    }
+  }
+
   return {
     coldDmsSent: counts.get("dm_sent") ?? 0,
     coldEmailsSent: counts.get("email_drafted") ?? 0,
@@ -38,8 +70,8 @@ export async function suggestedCountsForDate(date: Date) {
     warmDmsSent: 0,
     responses: 0,
     callsBooked: 0,
-    newProspects: 0,
-    inboundLeads: 0,
+    newProspects,
+    inboundLeads,
   };
 }
 

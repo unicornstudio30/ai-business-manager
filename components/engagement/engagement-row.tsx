@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Check, Copy, MessageSquare, Send, ExternalLink } from "lucide-react";
-import { scoreColor } from "@/lib/lead-scoring";
+import { icpColor } from "@/lib/icp-scoring";
 import { fmtDate, daysAgo } from "@/lib/utils";
 
 type Activity = {
@@ -50,7 +50,7 @@ export function EngagementRow({
     <div className="rounded-xl border border-stone-200 bg-white p-4 hover:shadow-sm transition-shadow">
       <div className="flex items-start gap-4">
         {/* Score badge */}
-        <span className={`flex-shrink-0 inline-flex items-center justify-center w-11 h-11 rounded-lg border text-base font-semibold tabular-nums ${scoreColor(score)}`}>
+        <span className={`flex-shrink-0 inline-flex items-center justify-center w-11 h-11 rounded-lg border text-base font-semibold tabular-nums ${icpColor(score)}`}>
           {score}
         </span>
 

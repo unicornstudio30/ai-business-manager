@@ -23,27 +23,6 @@ export async function funnelCounts(): Promise<{ group: StageGroup; count: number
   });
 }
 
-// Score histogram: 5 buckets (0-19, 20-39, 40-59, 60-79, 80+).
-export async function scoreHistogram() {
-  const rows = await db.select({ score: schema.leadScores.score }).from(schema.leadScores);
-  const buckets = [
-    { range: "0–19", count: 0 },
-    { range: "20–39", count: 0 },
-    { range: "40–59", count: 0 },
-    { range: "60–79", count: 0 },
-    { range: "80+", count: 0 },
-  ];
-  for (const r of rows) {
-    const s = r.score ?? 0;
-    if (s < 20) buckets[0].count++;
-    else if (s < 40) buckets[1].count++;
-    else if (s < 60) buckets[2].count++;
-    else if (s < 80) buckets[3].count++;
-    else buckets[4].count++;
-  }
-  return buckets;
-}
-
 // Activity trend: count per day, last 30 days.
 export async function activityTrend30d() {
   const thirty = new Date();

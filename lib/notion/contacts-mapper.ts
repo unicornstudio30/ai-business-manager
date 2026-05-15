@@ -83,12 +83,8 @@ export function notionToContact(page: PageObjectResponse): NewContact {
 
 // For pushing local edits back to Notion. Only sends fields the user
 // commonly edits in the web app; leaves the rest untouched.
-//
-// `extras` carries computed fields not stored on the contact row directly
-// (currently: leadScore from lead_scores table). Pass them at push time.
 export function contactToNotionProperties(
-  c: Partial<NewContact>,
-  extras?: { leadScore?: number | null }
+  c: Partial<NewContact>
 ): Record<string, any> {
   const out: Record<string, any> = {};
   if (c.name !== undefined) {
@@ -123,9 +119,6 @@ export function contactToNotionProperties(
     out["website url "] = { rich_text: [{ text: { content: c.websiteUrl || "" } }] };
   }
   // Web-app-managed columns (added via /api/setup-notion). Push when set.
-  if (extras?.leadScore !== undefined && extras.leadScore !== null) {
-    out["Lead Score"] = { number: extras.leadScore };
-  }
   if (c.closedReason !== undefined) {
     out["Closed Reason"] = { rich_text: [{ text: { content: c.closedReason || "" } }] };
   }
