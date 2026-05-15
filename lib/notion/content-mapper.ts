@@ -39,6 +39,10 @@ export function notionToContentItem(page: PageObjectResponse): Omit<ContentItem,
     url: text(props["URL"]),
     type: select(props["Type"]),
     status: JSON.stringify(multiSelect(props["Status "])),
+    linkedinStatus: select(props["LinkedIn Status"]),
+    xStatus: select(props["X Status"]),
+    facebookStatus: select(props["Facebook Status"]),
+    instagramStatus: select(props["Instagram Status"]),
     contentMethod: select(props["Content Method"]),
     readyToPostPlatform: JSON.stringify(multiSelect(props["Ready to Post Platform"])),
     publishedPlatform: JSON.stringify(multiSelect(props["Published Platform"])),
@@ -66,6 +70,14 @@ export function contentToNotionProperties(c: Partial<ContentItem>): Record<strin
     try { statuses = JSON.parse(c.status); } catch { statuses = c.status ? [c.status] : []; }
     out["Status "] = { multi_select: statuses.map((name) => ({ name })) };
   }
+  if (c.linkedinStatus !== undefined)
+    out["LinkedIn Status"] = c.linkedinStatus ? { select: { name: c.linkedinStatus } } : { select: null };
+  if (c.xStatus !== undefined)
+    out["X Status"] = c.xStatus ? { select: { name: c.xStatus } } : { select: null };
+  if (c.facebookStatus !== undefined)
+    out["Facebook Status"] = c.facebookStatus ? { select: { name: c.facebookStatus } } : { select: null };
+  if (c.instagramStatus !== undefined)
+    out["Instagram Status"] = c.instagramStatus ? { select: { name: c.instagramStatus } } : { select: null };
   if (c.contentMethod !== undefined && c.contentMethod !== null)
     out["Content Method"] = { select: { name: c.contentMethod } };
   if (c.publishDate !== undefined) {

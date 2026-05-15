@@ -18,13 +18,6 @@ const STATUS_COLORS: Record<string, string> = {
   "Published ✨": "bg-emerald-100 text-emerald-800",
 };
 
-const PLATFORM_COLORS: Record<string, string> = {
-  Linkedin: "bg-blue-100 text-blue-800",
-  X: "bg-stone-200 text-stone-800",
-  Facebook: "bg-indigo-100 text-indigo-800",
-  Instagram: "bg-pink-100 text-pink-800",
-};
-
 function parseList(s: string | null | undefined): string[] {
   if (!s) return [];
   try {
@@ -109,9 +102,11 @@ export default async function ContentPage({
                 <th className="text-left px-4 py-2.5">Title</th>
                 <th className="text-left px-4 py-2.5">Type</th>
                 <th className="text-left px-4 py-2.5">Status</th>
-                <th className="text-left px-4 py-2.5">Published On</th>
+                <th className="text-left px-4 py-2.5">LinkedIn</th>
+                <th className="text-left px-4 py-2.5">X</th>
+                <th className="text-left px-4 py-2.5">Facebook</th>
+                <th className="text-left px-4 py-2.5">Instagram</th>
                 <th className="text-left px-4 py-2.5">Publish</th>
-                <th className="text-left px-4 py-2.5">Framework</th>
                 <th className="text-left px-4 py-2.5">Engagement</th>
                 <th className="text-left px-4 py-2.5">Engaged People</th>
                 <th></th>
@@ -120,7 +115,7 @@ export default async function ContentPage({
             <tbody className="divide-y divide-stone-100">
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-sm text-stone-500">
+                  <td colSpan={11} className="px-4 py-12 text-center text-sm text-stone-500">
                     No content items yet. Click <span className="font-medium">Sync Notion</span> to pull.
                   </td>
                 </tr>
@@ -130,11 +125,20 @@ export default async function ContentPage({
                     ? c.engagedPeopleList.split(",").filter(Boolean)
                     : [];
                   const statuses = parseList(c.status);
-                  const publishedOn = parseList(c.publishedPlatform);
+                  const platformPill = (s: string | null) =>
+                    s ? (
+                      <span
+                        className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[s] ?? "bg-stone-100"}`}
+                      >
+                        {s}
+                      </span>
+                    ) : (
+                      <span className="text-stone-300">—</span>
+                    );
                   return (
                     <tr key={c.id} className="hover:bg-stone-50">
                       <td className="px-4 py-3 font-medium text-stone-900">{c.title}</td>
-                      <td className="px-4 py-3 text-stone-700">{c.type || "—"}</td>
+                      <td className="px-4 py-3 text-stone-700 text-xs">{c.type || "—"}</td>
                       <td className="px-4 py-3">
                         {statuses.length === 0 ? (
                           <span className="text-stone-300">—</span>
@@ -151,24 +155,11 @@ export default async function ContentPage({
                           </div>
                         )}
                       </td>
-                      <td className="px-4 py-3">
-                        {publishedOn.length === 0 ? (
-                          <span className="text-stone-300">—</span>
-                        ) : (
-                          <div className="flex flex-wrap gap-1">
-                            {publishedOn.map((p) => (
-                              <span
-                                key={p}
-                                className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${PLATFORM_COLORS[p] ?? "bg-stone-100 text-stone-700"}`}
-                              >
-                                {p}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-stone-500">{fmtDate(c.publishDate)}</td>
-                      <td className="px-4 py-3 text-stone-500 text-xs">{c.framework || "—"}</td>
+                      <td className="px-4 py-3">{platformPill(c.linkedinStatus)}</td>
+                      <td className="px-4 py-3">{platformPill(c.xStatus)}</td>
+                      <td className="px-4 py-3">{platformPill(c.facebookStatus)}</td>
+                      <td className="px-4 py-3">{platformPill(c.instagramStatus)}</td>
+                      <td className="px-4 py-3 text-stone-500 text-xs">{fmtDate(c.publishDate)}</td>
                       <td className="px-4 py-3 text-stone-700 text-xs max-w-[200px] truncate" title={c.engagement ?? undefined}>
                         {c.engagement || <span className="text-stone-300">—</span>}
                       </td>

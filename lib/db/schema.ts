@@ -93,7 +93,11 @@ export const contentItems = sqliteTable(
     framework: text("framework"),
     url: text("url"),
     type: text("type"),                          // 15 options (see lib/content-types.ts)
-    status: text("status"),                      // JSON array of statuses: Idea 💡, In Progress, In Review, Done, Scheduled, Published ✨
+    status: text("status"),                      // JSON array of statuses: Idea 💡, In Progress, In Review, Done, Scheduled, Published ✨ (overall lifecycle)
+    linkedinStatus: text("linkedin_status"),     // per-platform single-select (same option set as status)
+    xStatus: text("x_status"),
+    facebookStatus: text("facebook_status"),
+    instagramStatus: text("instagram_status"),
     contentMethod: text("content_method"),
     readyToPostPlatform: text("ready_to_post_platform"),  // JSON
     publishedPlatform: text("published_platform"),        // JSON — which platforms have actually been published on
