@@ -87,45 +87,32 @@ export const contentItems = sqliteTable(
     notionLastEditedAt: ts("notion_last_edited_at"),
 
     title: text("title").notNull().default(""),
-    topic: text("topic"),
-    engagement: text("engagement"),
-    engagedPeopleList: text("engaged_people_list"),
-    framework: text("framework"),
-    url: text("url"),                              // legacy overall URL — Notion column removed
-    linkedinUrl: text("linkedin_url"),             // per-platform live post URL
-    xUrl: text("x_url"),
-    facebookUrl: text("facebook_url"),
     type: text("type"),                          // storytelling | lead magnet | Contrarian | educational | informational
     topics: text("topics"),                      // far past | recent past | present | trending | manufactured
-    status: text("status"),                      // legacy overall status — Notion column removed; kept for historical data only
-    linkedinStatus: text("linkedin_status"),     // per-platform single-select (same option set as status)
+    repurposePlatform: text("repurpose_platform"),  // JSON multi-select
+    reusePlatform: text("reuse_platform"),          // JSON multi-select
+
+    // Per-platform tracking (LinkedIn / X / Facebook)
+    linkedinStatus: text("linkedin_status"),
     xStatus: text("x_status"),
     facebookStatus: text("facebook_status"),
-    instagramStatus: text("instagram_status"),
-    linkedinMetrics: text("linkedin_metrics"),   // free text per platform — engagement summary (impressions, likes, etc.)
-    xMetrics: text("x_metrics"),
-    facebookMetrics: text("facebook_metrics"),
-    instagramMetrics: text("instagram_metrics"),
-    linkedinEngagedPeople: text("linkedin_engaged_people"),  // CSV of file URLs from Notion file column
-    xEngagedPeople: text("x_engaged_people"),
-    facebookEngagedPeople: text("facebook_engaged_people"),
-    instagramEngagedPeople: text("instagram_engaged_people"),
-    contentMethod: text("content_method"),
-    readyToPostPlatform: text("ready_to_post_platform"),  // JSON
-    publishedPlatform: text("published_platform"),        // legacy — Notion column removed; kept for historical data only
-    reusePlatform: text("reuse_platform"),                // JSON
-    repurposePlatform: text("repurpose_platform"),        // JSON
-    publishDate: ts("publish_date"),              // legacy — Notion column removed; use per-platform fields below
-    reuseDate: ts("reuse_date"),                  // legacy
     linkedinPublishDate: ts("linkedin_publish_date"),
     xPublishDate: ts("x_publish_date"),
     facebookPublishDate: ts("facebook_publish_date"),
-    instagramPublishDate: ts("instagram_publish_date"),
-    linkedinReuseDate: ts("linkedin_reuse_date"), // per-platform reuse date
+    linkedinReuseDate: ts("linkedin_reuse_date"),
     xReuseDate: ts("x_reuse_date"),
     facebookReuseDate: ts("facebook_reuse_date"),
-    instagramReuseDate: ts("instagram_reuse_date"),
-    assignUserIds: text("assign_user_ids"),              // JSON
+    linkedinUrl: text("linkedin_url"),
+    xUrl: text("x_url"),
+    facebookUrl: text("facebook_url"),
+    linkedinMetrics: text("linkedin_metrics"),     // free text — engagement summary (Apify target)
+    xMetrics: text("x_metrics"),
+    facebookMetrics: text("facebook_metrics"),
+    linkedinEngagedPeople: text("linkedin_engaged_people"),  // CSV of file URLs (Apify target)
+    xEngagedPeople: text("x_engaged_people"),
+    facebookEngagedPeople: text("facebook_engaged_people"),
+
+    // Reserved for Claude Code drafts (currently unused but cheap to keep)
     bodyMarkdown: text("body_markdown"),
     claudeRunId: text("claude_run_id"),
 
@@ -134,8 +121,7 @@ export const contentItems = sqliteTable(
     dirty: integer("dirty").notNull().default(0),
   },
   (t) => ({
-    statusIdx: index("content_status_idx").on(t.status),
-    publishIdx: index("content_publish_idx").on(t.publishDate),
+    linkedinPublishIdx: index("content_linkedin_publish_idx").on(t.linkedinPublishDate),
   })
 );
 
