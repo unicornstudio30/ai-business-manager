@@ -4,6 +4,8 @@ import { getContactById, getContactActivities } from "@/lib/db/queries";
 import { StageStepper } from "@/components/contacts/stage-stepper";
 import { SequenceWidget } from "@/components/contacts/sequence-widget";
 import { ActivitiesFeed } from "@/components/contacts/activities-feed";
+import { StageSuggestionsBanner } from "@/components/contacts/stage-suggestions-banner";
+import { computeStageSuggestions } from "@/lib/stage-suggestions";
 import { fmtDate, daysAgo, parseJson } from "@/lib/utils";
 import { ExternalLink, Mail, MapPin, ArrowLeft, Globe } from "lucide-react";
 
@@ -19,6 +21,7 @@ export default async function ContactDetail({ params }: { params: Promise<{ id: 
   const professions = parseJson<string[]>(contact.profession, []);
   const categories = parseJson<string[]>(contact.category, []);
   const followUpAge = daysAgo(contact.followUpDate);
+  const stageSuggestions = computeStageSuggestions(contact, activities);
 
   return (
     <div className="flex flex-col gap-6">
@@ -39,6 +42,12 @@ export default async function ContactDetail({ params }: { params: Promise<{ id: 
           )}
         </div>
       </div>
+
+      <StageSuggestionsBanner
+        currentStage={contact.status}
+        suggestions={stageSuggestions}
+        notionPageId={contact.notionPageId}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.5fr] gap-6 items-start">
         {/* Left: profile + sequence */}
