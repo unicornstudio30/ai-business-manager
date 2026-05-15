@@ -309,6 +309,40 @@ export function buildMcpServer(): McpServer {
   );
 
   server.registerTool(
+    "save_audit",
+    {
+      title: "Save Site Audit (write)",
+      description:
+        "Save a site audit + drafted ACA email to the audits table. Used by the /audit slash command. " +
+        "If contact_id is provided, the audit links to that contact and shows on /audits.",
+      inputSchema: {
+        url: z.string().describe("URL that was audited"),
+        summary: z.string().optional().describe("2-3 sentence honest read"),
+        scores: z.record(z.string(), z.number()).optional().describe("e.g. {design:4, copy:3, conversion:4, speed_signal:3}"),
+        detected_stack: z.array(z.string()).optional().describe("e.g. ['WordPress','Elementor']"),
+        missing_pages: z.array(z.string()).optional().describe("e.g. ['/case-studies','/pricing']"),
+        email_draft: z.string().optional().describe("Full ACA outreach email markdown"),
+        contact_id: z.string().optional(),
+      },
+    },
+    async ({ url, summary, scores, detected_stack, missing_pages, email_draft, contact_id }) => {
+      const [row] = await db
+        .insert(schema.audits)
+        .values({
+          url,
+          contactId: contact_id ?? null,
+          summary: summary ?? null,
+          scores: scores ? JSON.stringify(scores) : null,
+          detectedStack: detected_stack ? JSON.stringify(detected_stack) : null,
+          missingPages: missing_pages ? JSON.stringify(missing_pages) : null,
+          emailDraft: email_draft ?? null,
+        })
+        .returning();
+      return ok({ ok: true, audit: row });
+    }
+  );
+
+  server.registerTool(
     "icp_score",
     {
       title: "ICP Fit Score",
