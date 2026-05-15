@@ -29,6 +29,13 @@
       "when": 1778847555860,
       "tag": "0003_sparkling_dorian_gray",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1778867748601,
+      "tag": "0004_sparkling_ricochet",
+      "breakpoints": true
     }
   ]
 }

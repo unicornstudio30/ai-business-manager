@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@/lib/db/client";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 
 export async function GET() {
@@ -45,5 +45,24 @@ export async function POST(req: NextRequest) {
       claudeRunId: parsed.data.claude_run_id ?? null,
     })
     .returning();
+
+  // If the audit is linked to a contact, also stamp a one-line summary on
+  // the contact's "Latest Audit" field — pushed to Notion on next sync.
+  if (parsed.data.contact_id) {
+    const scores = parsed.data.scores ?? {};
+    const scoreLine = Object.entries(scores)
+      .map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}/5`)
+      .join(" · ");
+    const summary = parsed.data.summary
+      ? `${parsed.data.summary}${scoreLine ? `\n${scoreLine}` : ""}`
+      : scoreLine;
+    if (summary) {
+      await db
+        .update(schema.contacts)
+        .set({ latestAuditSummary: summary, dirty: 1, updatedAt: new Date() })
+        .where(eq(schema.contacts.id, parsed.data.contact_id));
+    }
+  }
+
   return NextResponse.json(row, { status: 201 });
 }

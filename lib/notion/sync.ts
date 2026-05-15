@@ -176,11 +176,18 @@ async function pullTracker(deadlineMs?: number): Promise<number> {
 async function pushContacts(): Promise<number> {
   const dirty = await db.select().from(schema.contacts).where(eq(schema.contacts.dirty, 1));
   if (dirty.length === 0) return 0;
+  // Pre-fetch lead scores for all dirty contacts (one query, not N).
+  const dirtyIds = dirty.map((c) => c.id);
+  const scoreRows = dirtyIds.length
+    ? await db.select().from(schema.leadScores)
+    : [];
+  const scoreMap = new Map(scoreRows.map((r) => [r.contactId, r.score]));
   const n = notion();
   let count = 0;
   for (const c of dirty) {
     try {
-      const props = contactToNotionProperties(c);
+      const leadScore = scoreMap.get(c.id) ?? null;
+      const props = contactToNotionProperties(c, { leadScore });
       if (c.notionPageId) {
         await n.pages.update({ page_id: c.notionPageId, properties: props });
       } else {

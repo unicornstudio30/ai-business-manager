@@ -72,6 +72,8 @@ export function notionToContact(page: PageObjectResponse): NewContact {
     engageTouch: number(props["Engage Touch"]),
     crossOutreach: select(props["Cross outreach"]),
     remarks: text(props["Remarks"]),
+    closedReason: text(props["Closed Reason"]),
+    latestAuditSummary: text(props["Latest Audit"]),
     sequenceTrack: trackForPlatform(platform),
     lastTouchAt: date(props["Status Date"]) || new Date(page.last_edited_time),
     updatedAt: new Date(page.last_edited_time),
@@ -81,8 +83,12 @@ export function notionToContact(page: PageObjectResponse): NewContact {
 
 // For pushing local edits back to Notion. Only sends fields the user
 // commonly edits in the web app; leaves the rest untouched.
+//
+// `extras` carries computed fields not stored on the contact row directly
+// (currently: leadScore from lead_scores table). Pass them at push time.
 export function contactToNotionProperties(
-  c: Partial<NewContact>
+  c: Partial<NewContact>,
+  extras?: { leadScore?: number | null }
 ): Record<string, any> {
   const out: Record<string, any> = {};
   if (c.name !== undefined) {
@@ -115,6 +121,16 @@ export function contactToNotionProperties(
   }
   if (c.websiteUrl !== undefined) {
     out["website url "] = { rich_text: [{ text: { content: c.websiteUrl || "" } }] };
+  }
+  // Web-app-managed columns (added via /api/setup-notion). Push when set.
+  if (extras?.leadScore !== undefined && extras.leadScore !== null) {
+    out["Lead Score"] = { number: extras.leadScore };
+  }
+  if (c.closedReason !== undefined) {
+    out["Closed Reason"] = { rich_text: [{ text: { content: c.closedReason || "" } }] };
+  }
+  if (c.latestAuditSummary !== undefined) {
+    out["Latest Audit"] = { rich_text: [{ text: { content: c.latestAuditSummary || "" } }] };
   }
   return out;
 }

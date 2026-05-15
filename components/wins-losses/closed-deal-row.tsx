@@ -29,6 +29,7 @@ export function ClosedDealRow({ deal }: { deal: ClosedDeal }) {
   async function saveReason() {
     if (!reason.trim() || !deal.contact.id) return;
     setSaving(true);
+    // Activity log (web-app history)
     await fetch("/api/activities", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -37,6 +38,12 @@ export function ClosedDealRow({ deal }: { deal: ClosedDeal }) {
         type: "closed_reason",
         content: reason.trim(),
       }),
+    });
+    // Also update the contact's Closed Reason field — pushes to Notion on next sync.
+    await fetch(`/api/contacts/${deal.contact.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ closedReason: reason.trim() }),
     });
     setSaving(false);
     setEditing(false);

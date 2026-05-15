@@ -1,5 +1,6 @@
 import { syncStatus } from "@/lib/notion/sync";
 import { fmtDateTime } from "@/lib/utils";
+import { NotionColumnsSetup } from "@/components/settings/notion-columns-setup";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,8 @@ export default async function SettingsPage() {
           </div>
         )}
       </section>
+
+      <NotionColumnsSetup />
 
       <section className="rounded-xl border border-stone-200 bg-white p-6">
         <div className="text-sm font-semibold text-stone-900 mb-3">Recent sync activity</div>

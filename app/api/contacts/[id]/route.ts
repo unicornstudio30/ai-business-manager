@@ -28,6 +28,8 @@ const PatchSchema = z.object({
   engageTouch: z.number().int().optional(),
   platform: z.string().optional(),
   country: z.string().optional(),
+  closedReason: z.string().optional().nullable(),
+  latestAuditSummary: z.string().optional().nullable(),
 });
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {

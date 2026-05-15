@@ -47,6 +47,10 @@ export const contacts = sqliteTable(
     lastTouchAt: ts("last_touch_at"),
     lastScannedAt: ts("last_scanned_at"),
 
+    // Mirrored to/from Notion (added Round 4 — synced both ways).
+    closedReason: text("closed_reason"),               // win/loss reason
+    latestAuditSummary: text("latest_audit_summary"),  // most recent audit blurb
+
     createdAt: now(),
     updatedAt: ts("updated_at").$defaultFn(() => new Date()),
     dirty: integer("dirty").notNull().default(0),

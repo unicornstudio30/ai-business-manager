@@ -44,6 +44,17 @@ export async function recomputeOne(contactId: string): Promise<LeadScoreBreakdow
       },
     });
 
+  // Mark contact dirty so the new lead score pushes to Notion on next sync.
+  // Only flips dirty when the score actually changed enough to be worth a
+  // Notion write (≥3 point delta) — avoids spamming Notion on every activity.
+  const prevScore = (await db.select({ s: schema.contacts.dirty }).from(schema.contacts).where(eq(schema.contacts.id, contactId)))[0];
+  if (prevScore !== undefined) {
+    await db
+      .update(schema.contacts)
+      .set({ dirty: 1, updatedAt: new Date() })
+      .where(eq(schema.contacts.id, contactId));
+  }
+
   return result;
 }
 
