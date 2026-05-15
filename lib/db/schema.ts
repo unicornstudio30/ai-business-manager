@@ -112,8 +112,12 @@ export const contentItems = sqliteTable(
     publishedPlatform: text("published_platform"),        // legacy — Notion column removed; kept for historical data only
     reusePlatform: text("reuse_platform"),                // JSON
     repurposePlatform: text("repurpose_platform"),        // JSON
-    publishDate: ts("publish_date"),
-    reuseDate: ts("reuse_date"),                  // legacy — Notion column removed
+    publishDate: ts("publish_date"),              // legacy — Notion column removed; use per-platform fields below
+    reuseDate: ts("reuse_date"),                  // legacy
+    linkedinPublishDate: ts("linkedin_publish_date"),
+    xPublishDate: ts("x_publish_date"),
+    facebookPublishDate: ts("facebook_publish_date"),
+    instagramPublishDate: ts("instagram_publish_date"),
     linkedinReuseDate: ts("linkedin_reuse_date"), // per-platform reuse date
     xReuseDate: ts("x_reuse_date"),
     facebookReuseDate: ts("facebook_reuse_date"),

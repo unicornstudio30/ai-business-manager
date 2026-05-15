@@ -94,26 +94,32 @@ export default async function ContentPage({
                 <th className="text-left px-4 py-2.5 min-w-[180px]">X</th>
                 <th className="text-left px-4 py-2.5 min-w-[180px]">Facebook</th>
                 <th className="text-left px-4 py-2.5 min-w-[180px]">Instagram</th>
-                <th className="text-left px-4 py-2.5">Publish</th>
                 <th></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-sm text-stone-500">
+                  <td colSpan={6} className="px-4 py-12 text-center text-sm text-stone-500">
                     No content items yet. Click <span className="font-medium">Sync Notion</span> to pull.
                   </td>
                 </tr>
               ) : (
                 items.map((c) => {
+                  let bufferIds: Record<string, string> = {};
+                  try {
+                    bufferIds = c.bufferPostIds ? JSON.parse(c.bufferPostIds) : {};
+                  } catch { bufferIds = {}; }
                   const platformCell = (
                     status: string | null,
+                    publishDate: Date | null,
                     metrics: string | null,
                     engagedCsv: string | null,
-                    reuseDate: Date | null
+                    reuseDate: Date | null,
+                    bufferKey: string
                   ) => {
                     const files = engagedCsv ? engagedCsv.split(",").filter(Boolean) : [];
+                    const inBuffer = !!bufferIds[bufferKey];
                     return (
                       <div className="flex flex-col gap-1">
                         {status ? (
@@ -124,6 +130,23 @@ export default async function ContentPage({
                           </span>
                         ) : (
                           <span className="text-stone-300 text-xs">—</span>
+                        )}
+                        {publishDate && (
+                          <span className="text-[11px] text-stone-700 font-medium" title="Publish date">
+                            📅 {fmtDate(publishDate)}
+                          </span>
+                        )}
+                        {inBuffer && (
+                          <a
+                            href="https://publish.buffer.com/calendar/week"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex w-fit items-center gap-1 text-[11px] text-blue-700 hover:underline"
+                            title={`Buffer post id: ${bufferIds[bufferKey]}`}
+                          >
+                            <span className="size-1.5 rounded-full bg-blue-500" />
+                            In Buffer →
+                          </a>
                         )}
                         {metrics && (
                           <span className="text-[11px] text-stone-600 line-clamp-2" title={metrics}>
@@ -165,11 +188,10 @@ export default async function ContentPage({
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3">{platformCell(c.linkedinStatus, c.linkedinMetrics, c.linkedinEngagedPeople, c.linkedinReuseDate)}</td>
-                      <td className="px-4 py-3">{platformCell(c.xStatus, c.xMetrics, c.xEngagedPeople, c.xReuseDate)}</td>
-                      <td className="px-4 py-3">{platformCell(c.facebookStatus, c.facebookMetrics, c.facebookEngagedPeople, c.facebookReuseDate)}</td>
-                      <td className="px-4 py-3">{platformCell(c.instagramStatus, c.instagramMetrics, c.instagramEngagedPeople, c.instagramReuseDate)}</td>
-                      <td className="px-4 py-3 text-stone-500 text-xs">{fmtDate(c.publishDate)}</td>
+                      <td className="px-4 py-3">{platformCell(c.linkedinStatus, c.linkedinPublishDate, c.linkedinMetrics, c.linkedinEngagedPeople, c.linkedinReuseDate, "linkedin")}</td>
+                      <td className="px-4 py-3">{platformCell(c.xStatus, c.xPublishDate, c.xMetrics, c.xEngagedPeople, c.xReuseDate, "x")}</td>
+                      <td className="px-4 py-3">{platformCell(c.facebookStatus, c.facebookPublishDate, c.facebookMetrics, c.facebookEngagedPeople, c.facebookReuseDate, "facebook")}</td>
+                      <td className="px-4 py-3">{platformCell(c.instagramStatus, c.instagramPublishDate, c.instagramMetrics, c.instagramEngagedPeople, c.instagramReuseDate, "instagram")}</td>
                       <td className="px-4 py-3 text-right">
                         {c.notionPageId && (
                           <a

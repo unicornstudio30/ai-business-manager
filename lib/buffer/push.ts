@@ -3,7 +3,7 @@
 // so we don't push duplicates.
 
 import { db, schema } from "../db/client";
-import { eq, isNotNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { isBufferConfigured, listChannels, createDraftPost } from "./client";
 
 type Platform = "linkedin" | "x" | "facebook" | "instagram";
@@ -25,6 +25,13 @@ function getStatus(item: any, p: Platform): string | null {
   return item.instagramStatus;
 }
 
+function getPublishDate(item: any, p: Platform): Date | null {
+  if (p === "linkedin") return item.linkedinPublishDate;
+  if (p === "x") return item.xPublishDate;
+  if (p === "facebook") return item.facebookPublishDate;
+  return item.instagramPublishDate;
+}
+
 export type PushResult = {
   pushed: number;
   skipped: number;
@@ -39,15 +46,10 @@ export async function pushDraftsForContent(): Promise<PushResult> {
   const channelByService = new Map<string, string>();
   for (const c of channels) channelByService.set(c.service, c.id);
 
-  // Eligible: has publishDate set
-  const items = await db
-    .select()
-    .from(schema.contentItems)
-    .where(isNotNull(schema.contentItems.publishDate));
+  // Eligible: any row in the table — we'll check per-platform publish dates inside
+  const items = await db.select().from(schema.contentItems);
 
   for (const item of items) {
-    if (!item.publishDate) continue;
-
     let bufferPostIds: Record<string, string> = {};
     try {
       bufferPostIds = item.bufferPostIds ? JSON.parse(item.bufferPostIds) : {};
@@ -60,6 +62,8 @@ export async function pushDraftsForContent(): Promise<PushResult> {
     for (const platform of PLATFORMS) {
       const status = getStatus(item, platform);
       if (status !== "Scheduled") continue;
+      const dueAt = getPublishDate(item, platform);
+      if (!dueAt) continue;
       if (bufferPostIds[platform]) {
         result.skipped++;
         continue;
@@ -75,7 +79,7 @@ export async function pushDraftsForContent(): Promise<PushResult> {
         const postId = await createDraftPost({
           channelId,
           text: item.title,
-          dueAt: item.publishDate,
+          dueAt,
         });
         bufferPostIds[platform] = postId;
         result.pushed++;

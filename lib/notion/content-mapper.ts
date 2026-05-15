@@ -56,8 +56,12 @@ export function notionToContentItem(page: PageObjectResponse): Omit<ContentItem,
     publishedPlatform: null,
     reusePlatform: null,                           // Notion column removed (replaced by per-platform Reuse Date)
     repurposePlatform: JSON.stringify(multiSelect(props["Repurpose Platform"])),
-    publishDate: date(props["Publish Date"]),
-    reuseDate: null,                               // Notion column removed
+    publishDate: null,                             // Notion column removed (replaced by per-platform)
+    reuseDate: null,
+    linkedinPublishDate: date(props["LinkedIn Publish Date"]),
+    xPublishDate: date(props["X Publish Date"]),
+    facebookPublishDate: date(props["Facebook Publish Date"]),
+    instagramPublishDate: date(props["Instagram Publish Date"]),
     linkedinReuseDate: date(props["LinkedIn Reuse Date"]),
     xReuseDate: date(props["X Reuse Date"]),
     facebookReuseDate: date(props["Facebook Reuse Date"]),
@@ -108,11 +112,22 @@ export function contentToNotionProperties(c: Partial<ContentItem>): Record<strin
     out["Instagram Reuse Date"] = c.instagramReuseDate
       ? { date: { start: c.instagramReuseDate.toISOString().slice(0, 10) } }
       : { date: null };
-  if (c.publishDate !== undefined) {
-    out["Publish Date"] = c.publishDate
-      ? { date: { start: c.publishDate.toISOString().slice(0, 10) } }
+  if (c.linkedinPublishDate !== undefined)
+    out["LinkedIn Publish Date"] = c.linkedinPublishDate
+      ? { date: { start: c.linkedinPublishDate.toISOString().slice(0, 10) } }
       : { date: null };
-  }
+  if (c.xPublishDate !== undefined)
+    out["X Publish Date"] = c.xPublishDate
+      ? { date: { start: c.xPublishDate.toISOString().slice(0, 10) } }
+      : { date: null };
+  if (c.facebookPublishDate !== undefined)
+    out["Facebook Publish Date"] = c.facebookPublishDate
+      ? { date: { start: c.facebookPublishDate.toISOString().slice(0, 10) } }
+      : { date: null };
+  if (c.instagramPublishDate !== undefined)
+    out["Instagram Publish Date"] = c.instagramPublishDate
+      ? { date: { start: c.instagramPublishDate.toISOString().slice(0, 10) } }
+      : { date: null };
   if (c.url !== undefined) out["URL"] = c.url ? { url: c.url } : { url: null };
   return out;
 }
