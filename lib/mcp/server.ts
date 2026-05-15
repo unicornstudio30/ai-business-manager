@@ -30,6 +30,7 @@ import { upcomingMeetings, recentMeetings } from "@/lib/db/meetings";
 import { syncGoogleCalendar } from "@/lib/gcal/sync";
 import { inboxView, inboxCounts } from "@/lib/db/inbox-view";
 import { INBOX_CHANNELS } from "@/lib/inbox";
+import { stuckDeals, stuckByStage } from "@/lib/db/stuck-deals";
 import { syncNotion, syncStatus } from "@/lib/notion/sync";
 import { STAGES } from "@/lib/stages";
 
@@ -301,6 +302,22 @@ export function buildMcpServer(): McpServer {
     async ({ channel }) => {
       const [items, counts] = await Promise.all([inboxView({ channel }), inboxCounts()]);
       return ok({ items, counts });
+    }
+  );
+
+  server.registerTool(
+    "stuck_deals",
+    {
+      title: "Stuck Deals",
+      description:
+        "Contacts that have stalled past their stage's freshness threshold. " +
+        "Each item has stage, days stuck, days over threshold, and a suggested next action " +
+        "from Saidur's playbook.",
+      inputSchema: {},
+    },
+    async () => {
+      const [items, byStage] = await Promise.all([stuckDeals(), stuckByStage()]);
+      return ok({ items, by_stage: byStage, total: items.length });
     }
   );
 

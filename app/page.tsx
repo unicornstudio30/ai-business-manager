@@ -14,15 +14,17 @@ import {
 import { funnelCounts, scoreHistogram, activityTrend30d } from "@/lib/db/analytics";
 import { nextMeetings } from "@/lib/db/meetings";
 import { inboxView, inboxCounts } from "@/lib/db/inbox-view";
+import { stuckDeals } from "@/lib/db/stuck-deals";
 import { NextMeetings } from "@/components/dashboard/next-meetings";
 import { InboxWidget } from "@/components/dashboard/inbox-widget";
+import { StuckWidget } from "@/components/dashboard/stuck-widget";
 import { db, schema } from "@/lib/db/client";
 import { syncStatus } from "@/lib/notion/sync";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const [stats, groups, hot, followUps, sync, funnel, scoreHist, trend, meetings, contacts, inbox, inboxC] = await Promise.all([
+  const [stats, groups, hot, followUps, sync, funnel, scoreHist, trend, meetings, contacts, inbox, inboxC, stuck] = await Promise.all([
     getDashboardStats(),
     getStageGroupCounts(),
     getHotLeads(6),
@@ -35,6 +37,7 @@ export default async function Home() {
     db.select({ id: schema.contacts.id, name: schema.contacts.name }).from(schema.contacts),
     inboxView(),
     inboxCounts(),
+    stuckDeals(),
   ]);
   const contactName = new Map(contacts.map((c) => [c.id, c.name]));
 
@@ -65,9 +68,11 @@ export default async function Home() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <InboxWidget items={inbox} total={inboxC.total} byChannel={inboxC.byChannel} />
+        <StuckWidget items={stuck} />
         <NextMeetings meetings={meetings} contactName={contactName} />
-        <FunnelChart data={funnel} />
       </div>
+
+      <FunnelChart data={funnel} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ActivityTrend data={trend} />
