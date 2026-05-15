@@ -35,9 +35,9 @@ export function notion(): Client {
 
 export const isNotionConfigured = () => !!NOTION_TOKEN;
 
-// Fetch a Notion page's body as plain text (for pushing post content to Buffer, etc.).
-// Walks all child blocks, extracts rich_text, joins paragraphs with double newlines,
-// list items with single newlines + bullet/number prefix.
+// Fetch a Notion page's body as plain text. Walks all child blocks, extracts
+// rich_text, joins paragraphs with double newlines, list items with single
+// newlines + bullet/number prefix.
 export async function fetchPageText(pageId: string): Promise<string> {
   const n = notion();
   const lines: string[] = [];
