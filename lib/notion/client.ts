@@ -34,3 +34,38 @@ export function notion(): Client {
 }
 
 export const isNotionConfigured = () => !!NOTION_TOKEN;
+
+// Fetch a Notion page's body as plain text (for pushing post content to Buffer, etc.).
+// Walks all child blocks, extracts rich_text, joins paragraphs with double newlines,
+// list items with single newlines + bullet/number prefix.
+export async function fetchPageText(pageId: string): Promise<string> {
+  const n = notion();
+  const lines: string[] = [];
+  let cursor: string | undefined = undefined;
+  do {
+    const res: any = await n.blocks.children.list({
+      block_id: pageId,
+      start_cursor: cursor,
+      page_size: 100,
+    });
+    for (const block of res.results) {
+      const text = blockToText(block);
+      if (text) lines.push(text);
+    }
+    cursor = res.has_more ? res.next_cursor : undefined;
+  } while (cursor);
+  return lines.join("\n\n").trim();
+}
+
+function blockToText(block: any): string {
+  const type = block.type;
+  const rich = block[type]?.rich_text;
+  if (!rich || !Array.isArray(rich)) return "";
+  const text = rich.map((t: any) => t.plain_text || "").join("");
+  if (!text) return "";
+  if (type === "bulleted_list_item") return `• ${text}`;
+  if (type === "numbered_list_item") return `- ${text}`;
+  if (type === "to_do") return `${block.to_do?.checked ? "[x]" : "[ ]"} ${text}`;
+  if (type === "quote") return `> ${text}`;
+  return text;
+}

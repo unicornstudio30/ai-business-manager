@@ -5,6 +5,7 @@
 import { db, schema } from "../db/client";
 import { eq } from "drizzle-orm";
 import { isBufferConfigured, listChannels, createDraftPost } from "./client";
+import { fetchPageText } from "../notion/client";
 
 type Platform = "linkedin" | "x" | "facebook";
 
@@ -56,6 +57,24 @@ export async function pushDraftsForContent(): Promise<PushResult> {
 
     let changed = false;
 
+    // Per row: only fetch the Notion page body once (lazy — only if we'll actually push)
+    let bodyText: string | null = null;
+    const getBodyText = async (): Promise<string> => {
+      if (bodyText !== null) return bodyText;
+      if (!item.notionPageId) {
+        bodyText = item.title;
+        return bodyText;
+      }
+      try {
+        const fetched = await fetchPageText(item.notionPageId);
+        bodyText = fetched.trim() || item.title;  // fall back to title if empty body
+      } catch (err) {
+        console.error(`Failed to fetch Notion body for ${item.id}:`, err);
+        bodyText = item.title;
+      }
+      return bodyText;
+    };
+
     for (const platform of PLATFORMS) {
       const status = getStatus(item, platform);
       if (status !== "Scheduled") continue;
@@ -72,9 +91,10 @@ export async function pushDraftsForContent(): Promise<PushResult> {
       }
 
       try {
+        const text = await getBodyText();
         const postId = await createDraftPost({
           channelId,
-          text: item.title,
+          text,
           dueAt,
         });
         bufferPostIds[platform] = postId;
