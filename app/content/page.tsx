@@ -90,17 +90,16 @@ export default async function ContentPage({
             <thead className="bg-stone-50 text-xs uppercase tracking-wide text-stone-500">
               <tr>
                 <th className="text-left px-4 py-2.5">Title</th>
-                <th className="text-left px-4 py-2.5 min-w-[180px]">LinkedIn</th>
-                <th className="text-left px-4 py-2.5 min-w-[180px]">X</th>
-                <th className="text-left px-4 py-2.5 min-w-[180px]">Facebook</th>
-                <th className="text-left px-4 py-2.5 min-w-[180px]">Instagram</th>
+                <th className="text-left px-4 py-2.5 min-w-[200px]">LinkedIn</th>
+                <th className="text-left px-4 py-2.5 min-w-[200px]">X</th>
+                <th className="text-left px-4 py-2.5 min-w-[200px]">Facebook</th>
                 <th></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-sm text-stone-500">
+                  <td colSpan={5} className="px-4 py-12 text-center text-sm text-stone-500">
                     No content items yet. Click <span className="font-medium">Sync Notion</span> to pull.
                   </td>
                 </tr>
@@ -110,12 +109,21 @@ export default async function ContentPage({
                   try {
                     bufferIds = c.bufferPostIds ? JSON.parse(c.bufferPostIds) : {};
                   } catch { bufferIds = {}; }
+                  const reuseList = (() => {
+                    try { return c.reusePlatform ? (JSON.parse(c.reusePlatform) as string[]) : []; }
+                    catch { return []; }
+                  })();
+                  const repurposeList = (() => {
+                    try { return c.repurposePlatform ? (JSON.parse(c.repurposePlatform) as string[]) : []; }
+                    catch { return []; }
+                  })();
                   const platformCell = (
                     status: string | null,
                     publishDate: Date | null,
                     metrics: string | null,
                     engagedCsv: string | null,
                     reuseDate: Date | null,
+                    liveUrl: string | null,
                     bufferKey: string
                   ) => {
                     const files = engagedCsv ? engagedCsv.split(",").filter(Boolean) : [];
@@ -146,6 +154,17 @@ export default async function ContentPage({
                           >
                             <span className="size-1.5 rounded-full bg-blue-500" />
                             In Buffer →
+                          </a>
+                        )}
+                        {liveUrl && (
+                          <a
+                            href={liveUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex w-fit items-center gap-1 text-[11px] text-emerald-700 hover:underline"
+                            title="Open live post"
+                          >
+                            🔗 View live →
                           </a>
                         )}
                         {metrics && (
@@ -187,11 +206,20 @@ export default async function ContentPage({
                             </span>
                           )}
                         </div>
+                        {(reuseList.length > 0 || repurposeList.length > 0) && (
+                          <div className="mt-1.5 flex flex-col gap-0.5 text-[10px] text-stone-500">
+                            {reuseList.length > 0 && (
+                              <div>♻️ Reuse: <span className="text-stone-700">{reuseList.join(", ")}</span></div>
+                            )}
+                            {repurposeList.length > 0 && (
+                              <div>🔁 Repurpose: <span className="text-stone-700">{repurposeList.join(", ")}</span></div>
+                            )}
+                          </div>
+                        )}
                       </td>
-                      <td className="px-4 py-3">{platformCell(c.linkedinStatus, c.linkedinPublishDate, c.linkedinMetrics, c.linkedinEngagedPeople, c.linkedinReuseDate, "linkedin")}</td>
-                      <td className="px-4 py-3">{platformCell(c.xStatus, c.xPublishDate, c.xMetrics, c.xEngagedPeople, c.xReuseDate, "x")}</td>
-                      <td className="px-4 py-3">{platformCell(c.facebookStatus, c.facebookPublishDate, c.facebookMetrics, c.facebookEngagedPeople, c.facebookReuseDate, "facebook")}</td>
-                      <td className="px-4 py-3">{platformCell(c.instagramStatus, c.instagramPublishDate, c.instagramMetrics, c.instagramEngagedPeople, c.instagramReuseDate, "instagram")}</td>
+                      <td className="px-4 py-3">{platformCell(c.linkedinStatus, c.linkedinPublishDate, c.linkedinMetrics, c.linkedinEngagedPeople, c.linkedinReuseDate, c.linkedinUrl, "linkedin")}</td>
+                      <td className="px-4 py-3">{platformCell(c.xStatus, c.xPublishDate, c.xMetrics, c.xEngagedPeople, c.xReuseDate, c.xUrl, "x")}</td>
+                      <td className="px-4 py-3">{platformCell(c.facebookStatus, c.facebookPublishDate, c.facebookMetrics, c.facebookEngagedPeople, c.facebookReuseDate, c.facebookUrl, "facebook")}</td>
                       <td className="px-4 py-3 text-right">
                         {c.notionPageId && (
                           <a

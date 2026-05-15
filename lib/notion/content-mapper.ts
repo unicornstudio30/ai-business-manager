@@ -31,42 +31,45 @@ export function notionToContentItem(page: PageObjectResponse): Omit<ContentItem,
     notionLastSyncedAt: new Date(),
     notionLastEditedAt: new Date(page.last_edited_time),
     title: text(props["Title"]) || "(untitled)",
-    topic: null,                                   // Notion column removed
+    topic: null,
     engagement: null,
     engagedPeopleList: null,
-    framework: null,                               // Notion column removed
-    url: text(props["URL"]),
+    framework: null,
+    url: null,                                     // Notion overall URL column removed
+    linkedinUrl: text(props["Linkedin URL"]),
+    xUrl: text(props["X URL"]),
+    facebookUrl: text(props["Facebook URL"]),
     type: select(props["Type"]),
     topics: select(props["Topics"]),
     status: null,
     linkedinStatus: select(props["LinkedIn Status"]),
     xStatus: select(props["X Status"]),
     facebookStatus: select(props["Facebook Status"]),
-    instagramStatus: select(props["Instagram Status"]),
+    instagramStatus: null,                         // Instagram removed from Notion
     linkedinMetrics: text(props["Linkedin Metrics"]),
     xMetrics: text(props["X Metrics"]),
     facebookMetrics: text(props["Facebook Metrics"]),
-    instagramMetrics: text(props["Instagram Metrics"]),
+    instagramMetrics: null,
     linkedinEngagedPeople: files(props["Linkedin Engaged People List"]).join(",") || null,
     xEngagedPeople: files(props["X Engaged People List"]).join(",") || null,
     facebookEngagedPeople: files(props["Facebook Engaged People List"]).join(",") || null,
-    instagramEngagedPeople: files(props["Instagram Engaged People List"]).join(",") || null,
-    contentMethod: null,                           // Notion column removed
-    readyToPostPlatform: null,                     // Notion column removed
+    instagramEngagedPeople: null,
+    contentMethod: null,
+    readyToPostPlatform: null,
     publishedPlatform: null,
-    reusePlatform: null,                           // Notion column removed (replaced by per-platform Reuse Date)
+    reusePlatform: JSON.stringify(multiSelect(props["Reuse Platform "])),  // note: Notion column has trailing space
     repurposePlatform: JSON.stringify(multiSelect(props["Repurpose Platform"])),
-    publishDate: null,                             // Notion column removed (replaced by per-platform)
+    publishDate: null,
     reuseDate: null,
     linkedinPublishDate: date(props["LinkedIn Publish Date"]),
     xPublishDate: date(props["X Publish Date"]),
     facebookPublishDate: date(props["Facebook Publish Date"]),
-    instagramPublishDate: date(props["Instagram Publish Date"]),
+    instagramPublishDate: null,
     linkedinReuseDate: date(props["LinkedIn Reuse Date"]),
     xReuseDate: date(props["X Reuse Date"]),
     facebookReuseDate: date(props["Facebook Reuse Date"]),
-    instagramReuseDate: date(props["Instagram Reuse Date"]),
-    assignUserIds: null,                           // Notion column removed
+    instagramReuseDate: null,
+    assignUserIds: null,
     bodyMarkdown: null,
     claudeRunId: null,
     updatedAt: new Date(page.last_edited_time),
@@ -86,16 +89,18 @@ export function contentToNotionProperties(c: Partial<ContentItem>): Record<strin
     out["X Status"] = c.xStatus ? { select: { name: c.xStatus } } : { select: null };
   if (c.facebookStatus !== undefined)
     out["Facebook Status"] = c.facebookStatus ? { select: { name: c.facebookStatus } } : { select: null };
-  if (c.instagramStatus !== undefined)
-    out["Instagram Status"] = c.instagramStatus ? { select: { name: c.instagramStatus } } : { select: null };
   if (c.linkedinMetrics !== undefined)
     out["Linkedin Metrics"] = { rich_text: [{ text: { content: c.linkedinMetrics || "" } }] };
   if (c.xMetrics !== undefined)
     out["X Metrics"] = { rich_text: [{ text: { content: c.xMetrics || "" } }] };
   if (c.facebookMetrics !== undefined)
     out["Facebook Metrics"] = { rich_text: [{ text: { content: c.facebookMetrics || "" } }] };
-  if (c.instagramMetrics !== undefined)
-    out["Instagram Metrics"] = { rich_text: [{ text: { content: c.instagramMetrics || "" } }] };
+  if (c.linkedinUrl !== undefined)
+    out["Linkedin URL"] = c.linkedinUrl ? { url: c.linkedinUrl } : { url: null };
+  if (c.xUrl !== undefined)
+    out["X URL"] = c.xUrl ? { url: c.xUrl } : { url: null };
+  if (c.facebookUrl !== undefined)
+    out["Facebook URL"] = c.facebookUrl ? { url: c.facebookUrl } : { url: null };
   if (c.linkedinReuseDate !== undefined)
     out["LinkedIn Reuse Date"] = c.linkedinReuseDate
       ? { date: { start: c.linkedinReuseDate.toISOString().slice(0, 10) } }
@@ -107,10 +112,6 @@ export function contentToNotionProperties(c: Partial<ContentItem>): Record<strin
   if (c.facebookReuseDate !== undefined)
     out["Facebook Reuse Date"] = c.facebookReuseDate
       ? { date: { start: c.facebookReuseDate.toISOString().slice(0, 10) } }
-      : { date: null };
-  if (c.instagramReuseDate !== undefined)
-    out["Instagram Reuse Date"] = c.instagramReuseDate
-      ? { date: { start: c.instagramReuseDate.toISOString().slice(0, 10) } }
       : { date: null };
   if (c.linkedinPublishDate !== undefined)
     out["LinkedIn Publish Date"] = c.linkedinPublishDate
@@ -124,10 +125,5 @@ export function contentToNotionProperties(c: Partial<ContentItem>): Record<strin
     out["Facebook Publish Date"] = c.facebookPublishDate
       ? { date: { start: c.facebookPublishDate.toISOString().slice(0, 10) } }
       : { date: null };
-  if (c.instagramPublishDate !== undefined)
-    out["Instagram Publish Date"] = c.instagramPublishDate
-      ? { date: { start: c.instagramPublishDate.toISOString().slice(0, 10) } }
-      : { date: null };
-  if (c.url !== undefined) out["URL"] = c.url ? { url: c.url } : { url: null };
   return out;
 }

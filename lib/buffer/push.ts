@@ -6,30 +6,27 @@ import { db, schema } from "../db/client";
 import { eq } from "drizzle-orm";
 import { isBufferConfigured, listChannels, createDraftPost } from "./client";
 
-type Platform = "linkedin" | "x" | "facebook" | "instagram";
+type Platform = "linkedin" | "x" | "facebook";
 
 // Map our per-platform field key → Buffer's channelService string
 const PLATFORM_TO_SERVICE: Record<Platform, string> = {
   linkedin: "linkedin",
   x: "twitter",
   facebook: "facebook",
-  instagram: "instagram",
 };
 
-const PLATFORMS: Platform[] = ["linkedin", "x", "facebook", "instagram"];
+const PLATFORMS: Platform[] = ["linkedin", "x", "facebook"];
 
 function getStatus(item: any, p: Platform): string | null {
   if (p === "linkedin") return item.linkedinStatus;
   if (p === "x") return item.xStatus;
-  if (p === "facebook") return item.facebookStatus;
-  return item.instagramStatus;
+  return item.facebookStatus;
 }
 
 function getPublishDate(item: any, p: Platform): Date | null {
   if (p === "linkedin") return item.linkedinPublishDate;
   if (p === "x") return item.xPublishDate;
-  if (p === "facebook") return item.facebookPublishDate;
-  return item.instagramPublishDate;
+  return item.facebookPublishDate;
 }
 
 export type PushResult = {

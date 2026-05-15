@@ -89,9 +89,12 @@ export const contentItems = sqliteTable(
     title: text("title").notNull().default(""),
     topic: text("topic"),
     engagement: text("engagement"),
-    engagedPeopleList: text("engaged_people_list"),  // CSV of file URLs from Notion file column (Apify scrape output)
+    engagedPeopleList: text("engaged_people_list"),
     framework: text("framework"),
-    url: text("url"),
+    url: text("url"),                              // legacy overall URL — Notion column removed
+    linkedinUrl: text("linkedin_url"),             // per-platform live post URL
+    xUrl: text("x_url"),
+    facebookUrl: text("facebook_url"),
     type: text("type"),                          // storytelling | lead magnet | Contrarian | educational | informational
     topics: text("topics"),                      // far past | recent past | present | trending | manufactured
     status: text("status"),                      // legacy overall status — Notion column removed; kept for historical data only
