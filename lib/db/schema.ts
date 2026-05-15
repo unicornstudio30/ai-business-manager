@@ -93,14 +93,22 @@ export const contentItems = sqliteTable(
     framework: text("framework"),
     url: text("url"),
     type: text("type"),                          // 15 options (see lib/content-types.ts)
-    status: text("status"),                      // JSON array of statuses: Idea 💡, In Progress, In Review, Done, Scheduled, Published ✨ (overall lifecycle)
+    status: text("status"),                      // legacy overall status — Notion column removed; kept for historical data only
     linkedinStatus: text("linkedin_status"),     // per-platform single-select (same option set as status)
     xStatus: text("x_status"),
     facebookStatus: text("facebook_status"),
     instagramStatus: text("instagram_status"),
+    linkedinMetrics: text("linkedin_metrics"),   // free text per platform — engagement summary (impressions, likes, etc.)
+    xMetrics: text("x_metrics"),
+    facebookMetrics: text("facebook_metrics"),
+    instagramMetrics: text("instagram_metrics"),
+    linkedinEngagedPeople: text("linkedin_engaged_people"),  // CSV of file URLs from Notion file column
+    xEngagedPeople: text("x_engaged_people"),
+    facebookEngagedPeople: text("facebook_engaged_people"),
+    instagramEngagedPeople: text("instagram_engaged_people"),
     contentMethod: text("content_method"),
     readyToPostPlatform: text("ready_to_post_platform"),  // JSON
-    publishedPlatform: text("published_platform"),        // JSON — which platforms have actually been published on
+    publishedPlatform: text("published_platform"),        // legacy — Notion column removed; kept for historical data only
     reusePlatform: text("reuse_platform"),                // JSON
     repurposePlatform: text("repurpose_platform"),        // JSON
     publishDate: ts("publish_date"),

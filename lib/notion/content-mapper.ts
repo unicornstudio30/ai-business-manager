@@ -33,19 +33,27 @@ export function notionToContentItem(page: PageObjectResponse): Omit<ContentItem,
     notionLastEditedAt: new Date(page.last_edited_time),
     title: text(props["Title"]) || "(untitled)",
     topic: text(props["Topic"]),
-    engagement: text(props["Engagement"]),
-    engagedPeopleList: files(props["Engaged People List"]).join(",") || null,
+    engagement: null,                              // Notion column removed; legacy field kept null
+    engagedPeopleList: null,
     framework: text(props["Framework"]),
     url: text(props["URL"]),
     type: select(props["Type"]),
-    status: JSON.stringify(multiSelect(props["Status "])),
+    status: null,                                  // Notion overall Status column removed
     linkedinStatus: select(props["LinkedIn Status"]),
     xStatus: select(props["X Status"]),
     facebookStatus: select(props["Facebook Status"]),
     instagramStatus: select(props["Instagram Status"]),
+    linkedinMetrics: text(props["Linkedin Metrics"]),
+    xMetrics: text(props["X Metrics"]),
+    facebookMetrics: text(props["Facebook Metrics"]),
+    instagramMetrics: text(props["Instagram Metrics"]),
+    linkedinEngagedPeople: files(props["Linkedin Engaged People List"]).join(",") || null,
+    xEngagedPeople: files(props["X Engaged People List"]).join(",") || null,
+    facebookEngagedPeople: files(props["Facebook Engaged People List"]).join(",") || null,
+    instagramEngagedPeople: files(props["Instagram Engaged People List"]).join(",") || null,
     contentMethod: select(props["Content Method"]),
     readyToPostPlatform: JSON.stringify(multiSelect(props["Ready to Post Platform"])),
-    publishedPlatform: JSON.stringify(multiSelect(props["Published Platform"])),
+    publishedPlatform: null,                       // Notion column removed
     reusePlatform: JSON.stringify(multiSelect(props["Reuse Platform"])),
     repurposePlatform: JSON.stringify(multiSelect(props["Repurpose Platform"])),
     publishDate: date(props["Publish Date"]),
@@ -63,13 +71,7 @@ export function contentToNotionProperties(c: Partial<ContentItem>): Record<strin
   if (c.title !== undefined) out["Title"] = { title: [{ text: { content: c.title || "" } }] };
   if (c.topic !== undefined) out["Topic"] = { rich_text: [{ text: { content: c.topic || "" } }] };
   if (c.framework !== undefined) out["Framework"] = { rich_text: [{ text: { content: c.framework || "" } }] };
-  if (c.engagement !== undefined) out["Engagement"] = { rich_text: [{ text: { content: c.engagement || "" } }] };
   if (c.type !== undefined && c.type !== null) out["Type"] = { select: { name: c.type } };
-  if (c.status !== undefined && c.status !== null) {
-    let statuses: string[] = [];
-    try { statuses = JSON.parse(c.status); } catch { statuses = c.status ? [c.status] : []; }
-    out["Status "] = { multi_select: statuses.map((name) => ({ name })) };
-  }
   if (c.linkedinStatus !== undefined)
     out["LinkedIn Status"] = c.linkedinStatus ? { select: { name: c.linkedinStatus } } : { select: null };
   if (c.xStatus !== undefined)
@@ -78,6 +80,14 @@ export function contentToNotionProperties(c: Partial<ContentItem>): Record<strin
     out["Facebook Status"] = c.facebookStatus ? { select: { name: c.facebookStatus } } : { select: null };
   if (c.instagramStatus !== undefined)
     out["Instagram Status"] = c.instagramStatus ? { select: { name: c.instagramStatus } } : { select: null };
+  if (c.linkedinMetrics !== undefined)
+    out["Linkedin Metrics"] = { rich_text: [{ text: { content: c.linkedinMetrics || "" } }] };
+  if (c.xMetrics !== undefined)
+    out["X Metrics"] = { rich_text: [{ text: { content: c.xMetrics || "" } }] };
+  if (c.facebookMetrics !== undefined)
+    out["Facebook Metrics"] = { rich_text: [{ text: { content: c.facebookMetrics || "" } }] };
+  if (c.instagramMetrics !== undefined)
+    out["Instagram Metrics"] = { rich_text: [{ text: { content: c.instagramMetrics || "" } }] };
   if (c.contentMethod !== undefined && c.contentMethod !== null)
     out["Content Method"] = { select: { name: c.contentMethod } };
   if (c.publishDate !== undefined) {

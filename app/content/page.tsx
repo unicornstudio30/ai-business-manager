@@ -18,16 +18,6 @@ const STATUS_COLORS: Record<string, string> = {
   "Published ✨": "bg-emerald-100 text-emerald-800",
 };
 
-function parseList(s: string | null | undefined): string[] {
-  if (!s) return [];
-  try {
-    const parsed = JSON.parse(s);
-    return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
-  } catch {
-    return s ? [s] : [];
-  }
-}
-
 export default async function ContentPage({
   searchParams,
 }: {
@@ -101,82 +91,67 @@ export default async function ContentPage({
               <tr>
                 <th className="text-left px-4 py-2.5">Title</th>
                 <th className="text-left px-4 py-2.5">Type</th>
-                <th className="text-left px-4 py-2.5">Status</th>
-                <th className="text-left px-4 py-2.5">LinkedIn</th>
-                <th className="text-left px-4 py-2.5">X</th>
-                <th className="text-left px-4 py-2.5">Facebook</th>
-                <th className="text-left px-4 py-2.5">Instagram</th>
+                <th className="text-left px-4 py-2.5 min-w-[180px]">LinkedIn</th>
+                <th className="text-left px-4 py-2.5 min-w-[180px]">X</th>
+                <th className="text-left px-4 py-2.5 min-w-[180px]">Facebook</th>
+                <th className="text-left px-4 py-2.5 min-w-[180px]">Instagram</th>
                 <th className="text-left px-4 py-2.5">Publish</th>
-                <th className="text-left px-4 py-2.5">Engagement</th>
-                <th className="text-left px-4 py-2.5">Engaged People</th>
                 <th></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-4 py-12 text-center text-sm text-stone-500">
+                  <td colSpan={8} className="px-4 py-12 text-center text-sm text-stone-500">
                     No content items yet. Click <span className="font-medium">Sync Notion</span> to pull.
                   </td>
                 </tr>
               ) : (
                 items.map((c) => {
-                  const engagedFiles = c.engagedPeopleList
-                    ? c.engagedPeopleList.split(",").filter(Boolean)
-                    : [];
-                  const statuses = parseList(c.status);
-                  const platformPill = (s: string | null) =>
-                    s ? (
-                      <span
-                        className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[s] ?? "bg-stone-100"}`}
-                      >
-                        {s}
-                      </span>
-                    ) : (
-                      <span className="text-stone-300">—</span>
-                    );
-                  return (
-                    <tr key={c.id} className="hover:bg-stone-50">
-                      <td className="px-4 py-3 font-medium text-stone-900">{c.title}</td>
-                      <td className="px-4 py-3 text-stone-700 text-xs">{c.type || "—"}</td>
-                      <td className="px-4 py-3">
-                        {statuses.length === 0 ? (
-                          <span className="text-stone-300">—</span>
+                  const platformCell = (
+                    status: string | null,
+                    metrics: string | null,
+                    engagedCsv: string | null
+                  ) => {
+                    const files = engagedCsv ? engagedCsv.split(",").filter(Boolean) : [];
+                    return (
+                      <div className="flex flex-col gap-1">
+                        {status ? (
+                          <span
+                            className={`inline-flex w-fit items-center rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[status] ?? "bg-stone-100"}`}
+                          >
+                            {status}
+                          </span>
                         ) : (
-                          <div className="flex flex-wrap gap-1">
-                            {statuses.map((s) => (
-                              <span
-                                key={s}
-                                className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[s] ?? "bg-stone-100"}`}
-                              >
-                                {s}
-                              </span>
-                            ))}
-                          </div>
+                          <span className="text-stone-300 text-xs">—</span>
                         )}
-                      </td>
-                      <td className="px-4 py-3">{platformPill(c.linkedinStatus)}</td>
-                      <td className="px-4 py-3">{platformPill(c.xStatus)}</td>
-                      <td className="px-4 py-3">{platformPill(c.facebookStatus)}</td>
-                      <td className="px-4 py-3">{platformPill(c.instagramStatus)}</td>
-                      <td className="px-4 py-3 text-stone-500 text-xs">{fmtDate(c.publishDate)}</td>
-                      <td className="px-4 py-3 text-stone-700 text-xs max-w-[200px] truncate" title={c.engagement ?? undefined}>
-                        {c.engagement || <span className="text-stone-300">—</span>}
-                      </td>
-                      <td className="px-4 py-3 text-xs">
-                        {engagedFiles.length === 0 ? (
-                          <span className="text-stone-300">—</span>
-                        ) : (
+                        {metrics && (
+                          <span className="text-[11px] text-stone-600 line-clamp-2" title={metrics}>
+                            {metrics}
+                          </span>
+                        )}
+                        {files.length > 0 && (
                           <a
-                            href={engagedFiles[0]}
+                            href={files[0]}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-blue-700 hover:underline"
+                            className="text-[11px] text-blue-700 hover:underline w-fit"
                           >
-                            {engagedFiles.length === 1 ? "1 file" : `${engagedFiles.length} files`}
+                            👥 {files.length === 1 ? "1 file" : `${files.length} files`}
                           </a>
                         )}
-                      </td>
+                      </div>
+                    );
+                  };
+                  return (
+                    <tr key={c.id} className="hover:bg-stone-50 align-top">
+                      <td className="px-4 py-3 font-medium text-stone-900">{c.title}</td>
+                      <td className="px-4 py-3 text-stone-700 text-xs">{c.type || "—"}</td>
+                      <td className="px-4 py-3">{platformCell(c.linkedinStatus, c.linkedinMetrics, c.linkedinEngagedPeople)}</td>
+                      <td className="px-4 py-3">{platformCell(c.xStatus, c.xMetrics, c.xEngagedPeople)}</td>
+                      <td className="px-4 py-3">{platformCell(c.facebookStatus, c.facebookMetrics, c.facebookEngagedPeople)}</td>
+                      <td className="px-4 py-3">{platformCell(c.instagramStatus, c.instagramMetrics, c.instagramEngagedPeople)}</td>
+                      <td className="px-4 py-3 text-stone-500 text-xs">{fmtDate(c.publishDate)}</td>
                       <td className="px-4 py-3 text-right">
                         {c.notionPageId && (
                           <a
