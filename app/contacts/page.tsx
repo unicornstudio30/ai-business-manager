@@ -3,6 +3,7 @@ import { listContacts } from "@/lib/db/queries";
 import { computeIcpScore, icpColor } from "@/lib/icp-scoring";
 import { STAGES, STAGE_COLORS, type Stage } from "@/lib/stages";
 import { fmtDate, daysAgo, parseJson } from "@/lib/utils";
+import { db, schema } from "@/lib/db/client";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,28 @@ export default async function ContactsPage({
   const sp = await searchParams;
   const rowsRaw = await listContacts({ ...sp, limit: 200 });
   const icpScores = new Map(rowsRaw.map((c) => [c.id, computeIcpScore(c).score]));
+
+  // Load distinct statuses present in the synced data so the Stage filter
+  // only shows what's actually in the CRM (not all 18 hardcoded stages).
+  // Includes counts so user sees pipeline distribution at a glance.
+  // Aggregate in JS — Drizzle's sql<count>`count(*)` aliasing varies by driver.
+  const allStatusRows = await db
+    .select({ status: schema.contacts.status })
+    .from(schema.contacts);
+  const statusCounts = new Map<string, number>();
+  for (const r of allStatusRows) {
+    if (!r.status) continue;
+    statusCounts.set(r.status, (statusCounts.get(r.status) ?? 0) + 1);
+  }
+  // Order by canonical STAGES list (so Cold → Won flow is preserved),
+  // then any unrecognized statuses go at the bottom.
+  const orderedStatuses: { name: string; count: number }[] = [];
+  for (const s of STAGES) {
+    if (statusCounts.has(s)) orderedStatuses.push({ name: s, count: statusCounts.get(s)! });
+  }
+  for (const [s, n] of statusCounts) {
+    if (!STAGES.includes(s as Stage)) orderedStatuses.push({ name: s, count: n });
+  }
   // Default sort: ICP fit desc. Overrides: ?sort=name|status|date
   const rows = [...rowsRaw].sort((a, b) => {
     if (sp.sort === "name") return (a.name || "").localeCompare(b.name || "");
@@ -40,11 +63,11 @@ export default async function ContactsPage({
           />
         </label>
         <label className="flex flex-col gap-1 text-xs text-stone-600">
-          Stage
+          Stage <span className="text-stone-400 font-normal">({orderedStatuses.length} active)</span>
           <select name="status" defaultValue={sp.status ?? ""} className="rounded-md border border-stone-300 px-2 py-1.5 text-sm">
             <option value="">All</option>
-            {STAGES.map((s) => (
-              <option key={s} value={s}>{s}</option>
+            {orderedStatuses.map((s) => (
+              <option key={s.name} value={s.name}>{s.name} ({s.count})</option>
             ))}
           </select>
         </label>
