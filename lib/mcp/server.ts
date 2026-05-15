@@ -31,6 +31,7 @@ import { syncGoogleCalendar } from "@/lib/gcal/sync";
 import { inboxView, inboxCounts } from "@/lib/db/inbox-view";
 import { INBOX_CHANNELS } from "@/lib/inbox";
 import { stuckDeals, stuckByStage } from "@/lib/db/stuck-deals";
+import { listClosedDeals, winLossSummary } from "@/lib/db/wins-losses";
 import { syncNotion, syncStatus } from "@/lib/notion/sync";
 import { STAGES } from "@/lib/stages";
 
@@ -302,6 +303,26 @@ export function buildMcpServer(): McpServer {
     async ({ channel }) => {
       const [items, counts] = await Promise.all([inboxView({ channel }), inboxCounts()]);
       return ok({ items, counts });
+    }
+  );
+
+  server.registerTool(
+    "wins_losses",
+    {
+      title: "Wins & Losses",
+      description:
+        "Closed deals (Partnership = win, Lost / Closed without Partnership = loss, Not qualified = disqualified) " +
+        "with their reasons (when captured). Returns summary stats + per-deal records. Use to find patterns in why deals close.",
+      inputSchema: {
+        limit: z.number().int().min(1).max(50).optional().default(20),
+      },
+    },
+    async ({ limit }) => {
+      const [deals, summary] = await Promise.all([
+        listClosedDeals({ limit: limit ?? 20 }),
+        winLossSummary(),
+      ]);
+      return ok({ deals, summary });
     }
   );
 

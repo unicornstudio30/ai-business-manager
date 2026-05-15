@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   Repeat2,
   CalendarClock,
+  Trophy,
   NotebookPen,
   Calendar,
   Briefcase,
@@ -35,6 +36,7 @@ const items = [
   { href: "/networking", label: "Networking", icon: Network },
   { href: "/communities", label: "Communities", icon: Globe },
   { href: "/finance", label: "Finance", icon: DollarSign },
+  { href: "/wins-losses", label: "Wins & Losses", icon: Trophy },
   { href: "/daily-sales", label: "Daily KPIs", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
 ];

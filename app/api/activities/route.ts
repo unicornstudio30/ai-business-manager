@@ -15,6 +15,7 @@ const ActivityType = z.enum([
   "follow_up_sent",
   "dm_sent",
   "note",
+  "closed_reason",
 ]);
 
 export async function GET(req: NextRequest) {
