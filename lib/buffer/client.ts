@@ -61,6 +61,32 @@ export type BufferPost = {
   status: string;
 };
 
+// Create a draft post in Buffer's queue. Uses customScheduled mode + the given dueAt
+// so the post sits in Buffer until that time. User can edit/cancel/approve in Buffer's UI.
+// Returns the created post id so we can track which content_items have been pushed.
+export async function createDraftPost(opts: {
+  channelId: string;
+  text: string;
+  dueAt: Date;
+}): Promise<string> {
+  const data = await gql<{ createPost: { id: string } }>(
+    `mutation CreatePost($input: CreatePostInput!) {
+       createPost(input: $input) { id }
+     }`,
+    {
+      input: {
+        channelId: opts.channelId,
+        text: opts.text,
+        dueAt: opts.dueAt.toISOString(),
+        mode: "customScheduled",
+        schedulingType: "automatic",
+        assets: [],
+      },
+    }
+  );
+  return data.createPost.id;
+}
+
 // Pull "sent" posts with pagination. Buffer paginates with cursor-based first/after.
 export async function* listSentPosts(
   organizationId: string,

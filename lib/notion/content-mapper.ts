@@ -17,7 +17,6 @@ const date = (p: any): Date | null => {
   const d = new Date(s);
   return isNaN(d.getTime()) ? null : d;
 };
-const people = (p: any): string[] => p?.people?.map((u: any) => u.id) ?? [];
 const files = (p: any): string[] => {
   if (!p?.files) return [];
   return p.files
@@ -32,13 +31,14 @@ export function notionToContentItem(page: PageObjectResponse): Omit<ContentItem,
     notionLastSyncedAt: new Date(),
     notionLastEditedAt: new Date(page.last_edited_time),
     title: text(props["Title"]) || "(untitled)",
-    topic: text(props["Topic"]),
-    engagement: null,                              // Notion column removed; legacy field kept null
+    topic: null,                                   // Notion column removed
+    engagement: null,
     engagedPeopleList: null,
-    framework: text(props["Framework"]),
+    framework: null,                               // Notion column removed
     url: text(props["URL"]),
     type: select(props["Type"]),
-    status: null,                                  // Notion overall Status column removed
+    topics: select(props["Topics"]),
+    status: null,
     linkedinStatus: select(props["LinkedIn Status"]),
     xStatus: select(props["X Status"]),
     facebookStatus: select(props["Facebook Status"]),
@@ -51,14 +51,18 @@ export function notionToContentItem(page: PageObjectResponse): Omit<ContentItem,
     xEngagedPeople: files(props["X Engaged People List"]).join(",") || null,
     facebookEngagedPeople: files(props["Facebook Engaged People List"]).join(",") || null,
     instagramEngagedPeople: files(props["Instagram Engaged People List"]).join(",") || null,
-    contentMethod: select(props["Content Method"]),
-    readyToPostPlatform: JSON.stringify(multiSelect(props["Ready to Post Platform"])),
-    publishedPlatform: null,                       // Notion column removed
-    reusePlatform: JSON.stringify(multiSelect(props["Reuse Platform"])),
+    contentMethod: null,                           // Notion column removed
+    readyToPostPlatform: null,                     // Notion column removed
+    publishedPlatform: null,
+    reusePlatform: null,                           // Notion column removed (replaced by per-platform Reuse Date)
     repurposePlatform: JSON.stringify(multiSelect(props["Repurpose Platform"])),
     publishDate: date(props["Publish Date"]),
-    reuseDate: date(props["Reuse date"]),
-    assignUserIds: JSON.stringify(people(props["Assign"])),
+    reuseDate: null,                               // Notion column removed
+    linkedinReuseDate: date(props["LinkedIn Reuse Date"]),
+    xReuseDate: date(props["X Reuse Date"]),
+    facebookReuseDate: date(props["Facebook Reuse Date"]),
+    instagramReuseDate: date(props["Instagram Reuse Date"]),
+    assignUserIds: null,                           // Notion column removed
     bodyMarkdown: null,
     claudeRunId: null,
     updatedAt: new Date(page.last_edited_time),
@@ -69,9 +73,9 @@ export function notionToContentItem(page: PageObjectResponse): Omit<ContentItem,
 export function contentToNotionProperties(c: Partial<ContentItem>): Record<string, any> {
   const out: Record<string, any> = {};
   if (c.title !== undefined) out["Title"] = { title: [{ text: { content: c.title || "" } }] };
-  if (c.topic !== undefined) out["Topic"] = { rich_text: [{ text: { content: c.topic || "" } }] };
-  if (c.framework !== undefined) out["Framework"] = { rich_text: [{ text: { content: c.framework || "" } }] };
   if (c.type !== undefined && c.type !== null) out["Type"] = { select: { name: c.type } };
+  if (c.topics !== undefined)
+    out["Topics"] = c.topics ? { select: { name: c.topics } } : { select: null };
   if (c.linkedinStatus !== undefined)
     out["LinkedIn Status"] = c.linkedinStatus ? { select: { name: c.linkedinStatus } } : { select: null };
   if (c.xStatus !== undefined)
@@ -88,8 +92,22 @@ export function contentToNotionProperties(c: Partial<ContentItem>): Record<strin
     out["Facebook Metrics"] = { rich_text: [{ text: { content: c.facebookMetrics || "" } }] };
   if (c.instagramMetrics !== undefined)
     out["Instagram Metrics"] = { rich_text: [{ text: { content: c.instagramMetrics || "" } }] };
-  if (c.contentMethod !== undefined && c.contentMethod !== null)
-    out["Content Method"] = { select: { name: c.contentMethod } };
+  if (c.linkedinReuseDate !== undefined)
+    out["LinkedIn Reuse Date"] = c.linkedinReuseDate
+      ? { date: { start: c.linkedinReuseDate.toISOString().slice(0, 10) } }
+      : { date: null };
+  if (c.xReuseDate !== undefined)
+    out["X Reuse Date"] = c.xReuseDate
+      ? { date: { start: c.xReuseDate.toISOString().slice(0, 10) } }
+      : { date: null };
+  if (c.facebookReuseDate !== undefined)
+    out["Facebook Reuse Date"] = c.facebookReuseDate
+      ? { date: { start: c.facebookReuseDate.toISOString().slice(0, 10) } }
+      : { date: null };
+  if (c.instagramReuseDate !== undefined)
+    out["Instagram Reuse Date"] = c.instagramReuseDate
+      ? { date: { start: c.instagramReuseDate.toISOString().slice(0, 10) } }
+      : { date: null };
   if (c.publishDate !== undefined) {
     out["Publish Date"] = c.publishDate
       ? { date: { start: c.publishDate.toISOString().slice(0, 10) } }

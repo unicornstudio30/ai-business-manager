@@ -45,6 +45,8 @@ export function SyncButton() {
       try { await fetch("/api/gcal/sync", { method: "POST" }); } catch {}
       // Buffer best-effort
       try { await fetch("/api/buffer/sync", { method: "POST" }); } catch {}
+      // Push Notion → Buffer drafts (for content with Publish Date + Scheduled platform status)
+      try { await fetch("/api/buffer/push-drafts", { method: "POST" }); } catch {}
       setLastSynced(Date.now());
       startTransition(() => router.refresh());
     } finally {

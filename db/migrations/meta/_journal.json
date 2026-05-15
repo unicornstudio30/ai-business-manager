@@ -71,6 +71,20 @@
       "when": 1778879569259,
       "tag": "0009_reflective_virginia_dare",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1778882409355,
+      "tag": "0010_smart_scorpion",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1778882938267,
+      "tag": "0011_massive_garia",
+      "breakpoints": true
     }
   ]
 }

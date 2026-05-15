@@ -90,7 +90,6 @@ export default async function ContentPage({
             <thead className="bg-stone-50 text-xs uppercase tracking-wide text-stone-500">
               <tr>
                 <th className="text-left px-4 py-2.5">Title</th>
-                <th className="text-left px-4 py-2.5">Type</th>
                 <th className="text-left px-4 py-2.5 min-w-[180px]">LinkedIn</th>
                 <th className="text-left px-4 py-2.5 min-w-[180px]">X</th>
                 <th className="text-left px-4 py-2.5 min-w-[180px]">Facebook</th>
@@ -102,7 +101,7 @@ export default async function ContentPage({
             <tbody className="divide-y divide-stone-100">
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-sm text-stone-500">
+                  <td colSpan={7} className="px-4 py-12 text-center text-sm text-stone-500">
                     No content items yet. Click <span className="font-medium">Sync Notion</span> to pull.
                   </td>
                 </tr>
@@ -111,7 +110,8 @@ export default async function ContentPage({
                   const platformCell = (
                     status: string | null,
                     metrics: string | null,
-                    engagedCsv: string | null
+                    engagedCsv: string | null,
+                    reuseDate: Date | null
                   ) => {
                     const files = engagedCsv ? engagedCsv.split(",").filter(Boolean) : [];
                     return (
@@ -140,17 +140,35 @@ export default async function ContentPage({
                             👥 {files.length === 1 ? "1 file" : `${files.length} files`}
                           </a>
                         )}
+                        {reuseDate && (
+                          <span className="text-[11px] text-stone-500" title="Reuse date">
+                            ↻ {fmtDate(reuseDate)}
+                          </span>
+                        )}
                       </div>
                     );
                   };
                   return (
                     <tr key={c.id} className="hover:bg-stone-50 align-top">
-                      <td className="px-4 py-3 font-medium text-stone-900">{c.title}</td>
-                      <td className="px-4 py-3 text-stone-700 text-xs">{c.type || "—"}</td>
-                      <td className="px-4 py-3">{platformCell(c.linkedinStatus, c.linkedinMetrics, c.linkedinEngagedPeople)}</td>
-                      <td className="px-4 py-3">{platformCell(c.xStatus, c.xMetrics, c.xEngagedPeople)}</td>
-                      <td className="px-4 py-3">{platformCell(c.facebookStatus, c.facebookMetrics, c.facebookEngagedPeople)}</td>
-                      <td className="px-4 py-3">{platformCell(c.instagramStatus, c.instagramMetrics, c.instagramEngagedPeople)}</td>
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-stone-900">{c.title}</div>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {c.type && (
+                            <span className="inline-flex items-center rounded-md bg-stone-100 px-1.5 py-0.5 text-[10px] font-medium text-stone-700">
+                              {c.type}
+                            </span>
+                          )}
+                          {c.topics && (
+                            <span className="inline-flex items-center rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                              {c.topics}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">{platformCell(c.linkedinStatus, c.linkedinMetrics, c.linkedinEngagedPeople, c.linkedinReuseDate)}</td>
+                      <td className="px-4 py-3">{platformCell(c.xStatus, c.xMetrics, c.xEngagedPeople, c.xReuseDate)}</td>
+                      <td className="px-4 py-3">{platformCell(c.facebookStatus, c.facebookMetrics, c.facebookEngagedPeople, c.facebookReuseDate)}</td>
+                      <td className="px-4 py-3">{platformCell(c.instagramStatus, c.instagramMetrics, c.instagramEngagedPeople, c.instagramReuseDate)}</td>
                       <td className="px-4 py-3 text-stone-500 text-xs">{fmtDate(c.publishDate)}</td>
                       <td className="px-4 py-3 text-right">
                         {c.notionPageId && (

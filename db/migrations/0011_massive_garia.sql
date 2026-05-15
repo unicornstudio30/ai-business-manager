@@ -1,0 +1,1 @@
+ALTER TABLE `content_items` ADD `buffer_post_ids` text;

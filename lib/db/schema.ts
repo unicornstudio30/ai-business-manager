@@ -92,7 +92,8 @@ export const contentItems = sqliteTable(
     engagedPeopleList: text("engaged_people_list"),  // CSV of file URLs from Notion file column (Apify scrape output)
     framework: text("framework"),
     url: text("url"),
-    type: text("type"),                          // 15 options (see lib/content-types.ts)
+    type: text("type"),                          // storytelling | lead magnet | Contrarian | educational | informational
+    topics: text("topics"),                      // far past | recent past | present | trending | manufactured
     status: text("status"),                      // legacy overall status — Notion column removed; kept for historical data only
     linkedinStatus: text("linkedin_status"),     // per-platform single-select (same option set as status)
     xStatus: text("x_status"),
@@ -112,7 +113,12 @@ export const contentItems = sqliteTable(
     reusePlatform: text("reuse_platform"),                // JSON
     repurposePlatform: text("repurpose_platform"),        // JSON
     publishDate: ts("publish_date"),
-    reuseDate: ts("reuse_date"),
+    reuseDate: ts("reuse_date"),                  // legacy — Notion column removed
+    linkedinReuseDate: ts("linkedin_reuse_date"), // per-platform reuse date
+    xReuseDate: ts("x_reuse_date"),
+    facebookReuseDate: ts("facebook_reuse_date"),
+    instagramReuseDate: ts("instagram_reuse_date"),
+    bufferPostIds: text("buffer_post_ids"),       // JSON map: { linkedin: "id", twitter: "id", ... } — tracks which platforms have been pushed to Buffer
     assignUserIds: text("assign_user_ids"),              // JSON
     bodyMarkdown: text("body_markdown"),
     claudeRunId: text("claude_run_id"),
