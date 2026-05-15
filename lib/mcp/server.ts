@@ -26,6 +26,8 @@ import { db, schema } from "@/lib/db/client";
 import { eq } from "drizzle-orm";
 import { recomputeOne, recomputeAll, getScoresMap } from "@/lib/db/lead-scores";
 import { funnelCounts, scoreHistogram, activityTrend30d } from "@/lib/db/analytics";
+import { upcomingMeetings, recentMeetings } from "@/lib/db/meetings";
+import { syncGoogleCalendar } from "@/lib/gcal/sync";
 import { syncNotion, syncStatus } from "@/lib/notion/sync";
 import { STAGES } from "@/lib/stages";
 
@@ -257,6 +259,41 @@ export function buildMcpServer(): McpServer {
     async () => {
       const { STAGE_GROUPS } = await import("@/lib/stages");
       return ok({ stages: STAGES, stage_groups: STAGE_GROUPS });
+    }
+  );
+
+  server.registerTool(
+    "upcoming_meetings",
+    {
+      title: "Upcoming Meetings",
+      description:
+        "Upcoming + recent meetings from Google Calendar (synced via ICS). " +
+        "Returns up to 'limit' future events plus 'recentDays' days of past events. " +
+        "Each meeting links to its contact when invitee email matches.",
+      inputSchema: {
+        limit: z.number().int().min(1).max(50).optional().default(20),
+        recentDays: z.number().int().min(0).max(60).optional().default(7),
+      },
+    },
+    async ({ limit, recentDays }) => {
+      const [upcoming, recent] = await Promise.all([
+        upcomingMeetings(limit ?? 20),
+        recentMeetings(recentDays ?? 7, 20),
+      ]);
+      return ok({ upcoming, recent });
+    }
+  );
+
+  server.registerTool(
+    "sync_gcal",
+    {
+      title: "Sync Google Calendar",
+      description: "Pull latest events from the configured Google Calendar ICS feed.",
+      inputSchema: {},
+    },
+    async () => {
+      const result = await syncGoogleCalendar();
+      return ok(result);
     }
   );
 

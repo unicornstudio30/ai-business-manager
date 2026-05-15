@@ -15,6 +15,13 @@
       "when": 1778592512275,
       "tag": "0001_clean_jane_foster",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1778845732545,
+      "tag": "0002_fantastic_night_nurse",
+      "breakpoints": true
     }
   ]
 }

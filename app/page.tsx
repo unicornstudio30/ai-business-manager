@@ -12,12 +12,15 @@ import {
   getStageGroupCounts,
 } from "@/lib/db/queries";
 import { funnelCounts, scoreHistogram, activityTrend30d } from "@/lib/db/analytics";
+import { nextMeetings } from "@/lib/db/meetings";
+import { NextMeetings } from "@/components/dashboard/next-meetings";
+import { db, schema } from "@/lib/db/client";
 import { syncStatus } from "@/lib/notion/sync";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const [stats, groups, hot, followUps, sync, funnel, scoreHist, trend] = await Promise.all([
+  const [stats, groups, hot, followUps, sync, funnel, scoreHist, trend, meetings, contacts] = await Promise.all([
     getDashboardStats(),
     getStageGroupCounts(),
     getHotLeads(6),
@@ -26,7 +29,10 @@ export default async function Home() {
     funnelCounts(),
     scoreHistogram(),
     activityTrend30d(),
+    nextMeetings(3),
+    db.select({ id: schema.contacts.id, name: schema.contacts.name }).from(schema.contacts),
   ]);
+  const contactName = new Map(contacts.map((c) => [c.id, c.name]));
 
   const notConfigured = !sync.configured;
 
@@ -53,7 +59,10 @@ export default async function Home() {
         <StatCard label="Need follow-up" value={stats.needFollowUp} tone="amber" />
       </div>
 
-      <FunnelChart data={funnel} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <NextMeetings meetings={meetings} contactName={contactName} />
+        <FunnelChart data={funnel} />
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ActivityTrend data={trend} />

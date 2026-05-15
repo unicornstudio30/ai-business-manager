@@ -36,6 +36,19 @@ export function SyncButton() {
       }
     }
 
+    // Also sync Google Calendar (best-effort; silent if not configured)
+    try {
+      const res = await fetch("/api/gcal/sync", { method: "POST" });
+      const json = await res.json();
+      if (json.ok && json.result && !json.result.error) {
+        lines.push(`gcal: +${json.result.pulled}↓ -${json.result.deleted}`);
+      } else if (json.ok && json.result?.error && !json.result.error.includes("not set")) {
+        lines.push(`gcal: ${json.result.error}`);
+      }
+    } catch {
+      // ignore
+    }
+
     setMsg(firstError ?? lines.join("  •  "));
     setRunning(false);
     startTransition(() => router.refresh());
