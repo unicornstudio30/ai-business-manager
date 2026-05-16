@@ -21,9 +21,9 @@ export function SourceAttribution({ contactId, currentSourceId }: Props) {
   useEffect(() => {
     fetch("/api/content?limit=200")
       .then((r) => r.json())
-      .then((rows: any[]) => {
-        const items = Array.isArray(rows) ? rows : (rows?.items ?? []);
-        setOptions(items.map((c: any) => ({ id: c.id, title: c.title || "(untitled)" })));
+      .then((raw: unknown) => {
+        const items: any[] = Array.isArray(raw) ? raw : ((raw as any)?.items ?? []);
+        setOptions(items.map((c) => ({ id: c.id, title: c.title || "(untitled)" })));
       })
       .catch(() => {});
   }, []);

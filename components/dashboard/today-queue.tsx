@@ -24,8 +24,8 @@ export async function TodayQueue() {
 
   // 3) Meetings today
   const meetings = (await upcomingMeetings(8)).filter((m) => {
-    if (!m.startsAt) return false;
-    return m.startsAt <= endOfDay;
+    if (!m.scheduledAt) return false;
+    return m.scheduledAt <= endOfDay;
   });
 
   const total = cadenceDue.length + followUps.length + meetings.length;
@@ -100,8 +100,8 @@ export async function TodayQueue() {
             <ul className="flex flex-col gap-1">
               {meetings.map((m) => (
                 <li key={m.id} className="text-xs">
-                  <span className="text-stone-800">{m.title || "(untitled)"}</span>
-                  <span className="text-stone-400"> · {m.startsAt ? m.startsAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "—"}</span>
+                  <span className="text-stone-800">{m.eventName || "(untitled)"}</span>
+                  <span className="text-stone-400"> · {m.scheduledAt ? m.scheduledAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "—"}</span>
                 </li>
               ))}
             </ul>
