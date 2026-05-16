@@ -1,8 +1,7 @@
 import { db, schema } from "@/lib/db/client";
 import { desc } from "drizzle-orm";
-import { PROJECT_STATUSES, PROJECT_STATUS_COLORS, type ProjectStatus } from "@/lib/projects";
 import { NewProjectForm } from "@/components/projects/new-project-form";
-import { ProjectCard } from "@/components/projects/project-card";
+import { KanbanBoard } from "@/components/projects/kanban-board";
 
 export const dynamic = "force-dynamic";
 
@@ -13,16 +12,15 @@ export default async function ProjectsPage() {
   ]);
 
   const contactName = new Map(contacts.map((c) => [c.id, c.name]));
-  const byStatus = new Map<ProjectStatus, typeof projects>();
-  for (const s of PROJECT_STATUSES) byStatus.set(s, []);
-  for (const p of projects) {
-    const s = (p.status as ProjectStatus) ?? "Briefing";
-    if (byStatus.has(s)) byStatus.get(s)!.push(p);
-    else byStatus.get("Briefing")!.push(p);
-  }
-
   const total = projects.length;
   const active = projects.filter((p) => p.status !== "Closed").length;
+
+  // Hydrate contact name onto each project so the client kanban doesn't
+  // need its own contacts query
+  const enriched = projects.map((p) => ({
+    ...p,
+    contactName: p.contactId ? contactName.get(p.contactId) ?? null : null,
+  }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -30,7 +28,7 @@ export default async function ProjectsPage() {
         <div>
           <h1 className="text-2xl font-semibold text-stone-900">Projects</h1>
           <p className="text-sm text-stone-500 mt-1">
-            Active 5–8 week AI builds. {active}/{total} active.
+            Active 5–8 week AI builds. {active}/{total} active. <span className="text-stone-400">Drag cards between columns to update status.</span>
           </p>
         </div>
         <NewProjectForm contacts={contacts} />
@@ -44,40 +42,7 @@ export default async function ProjectsPage() {
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto pb-4">
-          <div className="flex gap-4 min-w-fit">
-            {PROJECT_STATUSES.map((status) => {
-              const items = byStatus.get(status) ?? [];
-              return (
-                <div key={status} className="flex-shrink-0 w-72">
-                  <div className="flex items-center justify-between mb-3 px-1">
-                    <span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium ${PROJECT_STATUS_COLORS[status]}`}>
-                      {status}
-                    </span>
-                    <span className="text-xs text-stone-400 tabular-nums">{items.length}</span>
-                  </div>
-                  <div className="flex flex-col gap-3 min-h-[200px]">
-                    {items.length === 0 ? (
-                      <div className="rounded-xl border border-dashed border-stone-200 bg-stone-50 p-4 text-center text-xs text-stone-400">
-                        empty
-                      </div>
-                    ) : (
-                      items.map((p) => (
-                        <ProjectCard
-                          key={p.id}
-                          project={{
-                            ...p,
-                            contactName: p.contactId ? contactName.get(p.contactId) ?? null : null,
-                          }}
-                        />
-                      ))
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <KanbanBoard projects={enriched} />
       )}
     </div>
   );
