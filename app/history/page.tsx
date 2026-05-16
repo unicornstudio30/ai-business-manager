@@ -7,8 +7,11 @@ import {
   type HistoryCategory,
   ALL_TYPES,
   TYPES_BY_CATEGORY,
-  CATEGORY_OF,
+  ACTIVITY_SUBTYPES,
+  ACTIVITY_SUBTYPE_LABEL,
 } from "@/lib/db/history";
+import { getOutreachSummary } from "@/lib/db/outreach-summary";
+import { OutreachSummaryPanel } from "@/components/history/outreach-summary";
 
 export const dynamic = "force-dynamic";
 
@@ -66,7 +69,8 @@ type PageProps = {
     cat?: string;
     type?: string;
     range?: string;
-    q?: string;     // contact search
+    q?: string;       // contact search
+    sub?: string;     // activity subtype filter (comma-separated)
   }>;
 };
 
@@ -100,12 +104,25 @@ export default async function HistoryPage({ searchParams }: PageProps) {
 
   const contactSearch = sp.q?.trim() || undefined;
 
-  const events = await getHistory({
-    types: activeTypes,
-    since,
-    contactSearch,
-    limit: 300,
-  });
+  // Activity subtype filter: when on Sales (or All) tab, lets you narrow to just
+  // dm_sent or comment_drafted etc. Undefined → all subtypes.
+  const activitySubtypes: string[] | undefined = sp.sub === undefined
+    ? undefined
+    : sp.sub === ""
+      ? []
+      : sp.sub.split(",").filter((s) => (ACTIVITY_SUBTYPES as readonly string[]).includes(s));
+
+  const [events, summary] = await Promise.all([
+    getHistory({
+      types: activeTypes,
+      activitySubtypes,
+      since,
+      contactSearch,
+      limit: 300,
+    }),
+    // Outreach summary is always for the full range — independent of type filters
+    getOutreachSummary({ since }),
+  ]);
 
   // Group by date
   const groups = new Map<string, HistoryEvent[]>();
@@ -124,6 +141,7 @@ export default async function HistoryPage({ searchParams }: PageProps) {
       range: rangeKey === "30d" ? undefined : rangeKey,
       type: sp.type,
       q: contactSearch,
+      sub: sp.sub,
       ...overrides,
     };
     for (const [k, v] of Object.entries(merged)) {
@@ -133,19 +151,27 @@ export default async function HistoryPage({ searchParams }: PageProps) {
     return qs ? `/history?${qs}` : "/history";
   }
 
-  // For "select only this type" / "select all" links, compute the type param string
-  function typeOnlyUrl(t: HistoryEventType): string {
-    return buildUrl({ type: t });
-  }
   function toggleTypeUrl(t: HistoryEventType): string {
     const isOn = activeTypes.includes(t);
     const next = isOn ? activeTypes.filter((x) => x !== t) : [...activeTypes, t];
     if (next.length === typesInCategory.length) {
-      // All selected → represent as "absent" so URL stays clean
       return buildUrl({ type: undefined });
     }
     return buildUrl({ type: next.join(",") });
   }
+
+  // Toggle a single subtype on/off
+  function toggleSubtypeUrl(s: string): string {
+    const current = activitySubtypes ?? [...ACTIVITY_SUBTYPES];
+    const isOn = current.includes(s);
+    const next = isOn ? current.filter((x) => x !== s) : [...current, s];
+    if (next.length === ACTIVITY_SUBTYPES.length) {
+      return buildUrl({ sub: undefined });
+    }
+    return buildUrl({ sub: next.join(",") });
+  }
+  const subtypesShown = cat === "all" || cat === "sales";
+  const activeSubtypes = activitySubtypes ?? [...ACTIVITY_SUBTYPES];
 
   return (
     <div className="flex flex-col gap-5">
@@ -158,6 +184,9 @@ export default async function HistoryPage({ searchParams }: PageProps) {
           Everything that happened across sales, marketing, and system events. Filter by category, type, date, and contact.
         </p>
       </div>
+
+      {/* INPUT vs OUTPUT scorecard — always for the selected date range, ignores type filters */}
+      <OutreachSummaryPanel summary={summary} periodLabel={`last ${days}d`} />
 
       {/* Category tabs */}
       <div className="flex gap-1 border-b border-stone-200 -mx-1">
@@ -251,6 +280,32 @@ export default async function HistoryPage({ searchParams }: PageProps) {
           </Link>
         )}
       </div>
+
+      {/* Activity subtype chips — only show when activity events are visible */}
+      {subtypesShown && activeTypes.includes("activity") && (
+        <div className="flex flex-wrap items-center gap-1.5 -mt-2">
+          <span className="text-[10px] uppercase tracking-wide text-stone-400 mr-1">Activity:</span>
+          {ACTIVITY_SUBTYPES.map((s) => {
+            const isOn = activeSubtypes.includes(s);
+            return (
+              <Link
+                key={s}
+                href={toggleSubtypeUrl(s)}
+                className={`text-[11px] px-2 py-0.5 rounded-md border transition-all ${
+                  isOn ? "bg-violet-50 text-violet-800 border-violet-200" : "bg-white text-stone-500 border-stone-200 hover:border-stone-300"
+                }`}
+              >
+                {ACTIVITY_SUBTYPE_LABEL[s]}
+              </Link>
+            );
+          })}
+          {activitySubtypes !== undefined && (
+            <Link href={buildUrl({ sub: undefined })} className="text-[11px] text-stone-500 hover:text-stone-800 ml-1">
+              reset
+            </Link>
+          )}
+        </div>
+      )}
 
       {/* Events list */}
       {activeTypes.length === 0 ? (

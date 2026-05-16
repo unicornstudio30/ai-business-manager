@@ -54,6 +54,7 @@ export type HistoryEvent = {
   timestamp: Date;
   type: HistoryEventType;
   category: HistoryCategory;
+  subtype?: string;                 // for activities: dm_sent, comment_drafted, etc.
   title: string;
   summary?: string | null;
   contactId?: string | null;
@@ -64,12 +65,37 @@ export type HistoryEvent = {
 
 export type HistoryFilters = {
   types?: HistoryEventType[];        // if empty array passed, returns 0 events; if undefined, defaults to ALL_TYPES
+  activitySubtypes?: string[];       // restrict activity events to these subtypes (e.g., ["dm_sent","comment_drafted"])
   since?: Date;
   until?: Date;
   contactId?: string;
   contactSearch?: string;            // case-insensitive substring on contact name
   limit?: number;
 };
+
+// Human-readable labels for activity subtypes
+export const ACTIVITY_SUBTYPES = [
+  "dm_sent",
+  "comment_drafted",
+  "email_drafted",
+  "follow_up_sent",
+  "audit_run",
+  "post_observed",
+  "note",
+] as const;
+
+export const ACTIVITY_SUBTYPE_LABEL: Record<string, string> = {
+  dm_sent: "DM sent",
+  comment_drafted: "Comment drafted",
+  email_drafted: "Email drafted",
+  follow_up_sent: "Follow-up sent",
+  audit_run: "Audit run",
+  post_observed: "Post observed",
+  note: "Note",
+};
+
+// Outbound = work Saidur did (the "input")
+export const OUTBOUND_SUBTYPES = ["dm_sent", "comment_drafted", "email_drafted", "follow_up_sent", "audit_run", "post_observed"] as const;
 
 const BADGES: Record<HistoryEventType, HistoryEvent["badge"]> = {
   activity:           { label: "Activity",     tone: "violet" },
@@ -109,7 +135,7 @@ export async function getHistory(filters: HistoryFilters = {}): Promise<HistoryE
     return true;
   };
 
-  // 1) Activities — main per-contact feed
+  // 1) Activities — main per-contact feed (each carries a subtype: dm_sent, etc.)
   if (types.includes("activity")) {
     const where = and(
       gte(schema.activities.createdAt, since),
@@ -125,15 +151,19 @@ export async function getHistory(filters: HistoryFilters = {}): Promise<HistoryE
     for (const a of rows) {
       if (!a.createdAt) continue;
       if (!contactMatch(a.contactId)) continue;
+      if (filters.activitySubtypes && filters.activitySubtypes.length > 0 && !filters.activitySubtypes.includes(a.type)) continue;
+      const name = a.contactId ? contactName.get(a.contactId) ?? null : null;
+      const label = ACTIVITY_SUBTYPE_LABEL[a.type] ?? a.type;
       events.push({
         id: `activity:${a.id}`,
         timestamp: a.createdAt,
         type: "activity",
         category: "sales",
-        title: a.type,
+        subtype: a.type,
+        title: name ? `${label} → ${name}` : label,
         summary: (a.content ?? "").slice(0, 200).replace(/\n+/g, " ") || null,
         contactId: a.contactId,
-        contactName: a.contactId ? contactName.get(a.contactId) ?? null : null,
+        contactName: name,
         link: a.contactId ? `/contacts/${a.contactId}` : undefined,
         badge: BADGES.activity,
       });
