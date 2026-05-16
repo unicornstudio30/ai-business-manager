@@ -6,6 +6,8 @@
 //         stuck_deals, wins_losses, prep_brief, upcoming_meetings,
 //         stage_definitions
 //   WRITE: create_activity, sync_notion, sync_gcal, save_audit
+//   AI:    next_message, stuck_suggestion, daily_summary, classify_icp
+//         (server-side OpenRouter — callable from Claude.ai)
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -36,6 +38,10 @@ import { buildPrepBrief } from "@/lib/prep-brief";
 import { computeIcpScore } from "@/lib/icp-scoring";
 import { syncNotion, syncStatus } from "@/lib/notion/sync";
 import { STAGES } from "@/lib/stages";
+import { generateNextMessage } from "@/lib/ai/next-message";
+import { getStuckSuggestion } from "@/lib/ai/stuck-suggestion";
+import { getDailySummary } from "@/lib/ai/daily-summary";
+import { classifyContact } from "@/lib/ai/classify-icp";
 
 // JSON-serialize a result wrapping it as MCP text content.
 function ok(data: unknown) {
@@ -461,6 +467,84 @@ export function buildMcpServer(): McpServer {
     async ({ entity }) => {
       const results = await syncNotion(entity);
       return ok({ ok: true, results });
+    }
+  );
+
+  // ─────────── AI TOOLS (server-side OpenRouter) ───────────
+  // These mirror the .claude/commands/*.md slash commands so Claude.ai (which
+  // can only call MCP tools) gets identical output without needing to load the
+  // strategy docs / sequence engine itself.
+
+  server.registerTool(
+    "next_message",
+    {
+      title: "Draft Next DM Message",
+      description:
+        "Server-side equivalent of /next-message. Looks up the contact's current step in the 7-step LinkedIn / 8-step Facebook DM sequence and drafts the next message in ACA voice as Saidur. " +
+        "Returns the draft + step metadata (too-soon flag, earliest-send date, target stage). " +
+        "Pass save=true to also write the draft to the contact's activities feed as a 'dm_sent' entry. " +
+        "Uses OpenRouter (free tier) — no Claude Code needed.",
+      inputSchema: {
+        contact_id: z.string().describe("Contact ULID"),
+        save: z.boolean().optional().default(false).describe("If true, save the draft as a dm_sent activity"),
+      },
+    },
+    async ({ contact_id, save }) => {
+      const result = await generateNextMessage({ contactId: contact_id, save: save ?? false });
+      if (!result) return ok({ error: "OPENROUTER_API_KEY not set or contact not found", contact_id });
+      return ok(result);
+    }
+  );
+
+  server.registerTool(
+    "stuck_suggestion",
+    {
+      title: "AI Suggestion for Stuck Contact",
+      description:
+        "One-sentence next-action suggestion for a stuck contact. Reads recent activities + stage. " +
+        "Uses OpenRouter (free tier), cached 24h per contact.",
+      inputSchema: {
+        contact_id: z.string().describe("Contact ULID"),
+      },
+    },
+    async ({ contact_id }) => {
+      const result = await getStuckSuggestion(contact_id);
+      if (!result) return ok({ error: "OPENROUTER_API_KEY not set or contact not found", contact_id });
+      return ok(result);
+    }
+  );
+
+  server.registerTool(
+    "daily_summary",
+    {
+      title: "AI Daily Briefing",
+      description:
+        "3-bullet morning briefing of yesterday's activity. Cached 24h. " +
+        "Server-side equivalent of part of /run-daily — narrative section only.",
+      inputSchema: {},
+    },
+    async () => {
+      const result = await getDailySummary();
+      if (!result) return ok({ error: "OPENROUTER_API_KEY not set" });
+      return ok(result);
+    }
+  );
+
+  server.registerTool(
+    "classify_icp",
+    {
+      title: "Classify Contact ICP Fit",
+      description:
+        "LLM-classifies a contact against Unicorn Studio's ICP (AI SaaS founders / B2B SMBs needing AI automation). " +
+        "Returns a short tag (Hot/Warm/Cold/Not ICP + one-line reason) and saves it to the contact row.",
+      inputSchema: {
+        contact_id: z.string().describe("Contact ULID"),
+      },
+    },
+    async ({ contact_id }) => {
+      const result = await classifyContact(contact_id);
+      if (!result) return ok({ error: "OPENROUTER_API_KEY not set or contact not found", contact_id });
+      return ok(result);
     }
   );
 
