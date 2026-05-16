@@ -43,6 +43,8 @@ export function SyncButton() {
       }
       // GCal best-effort
       try { await fetch("/api/gcal/sync", { method: "POST" }); } catch {}
+      // ICP classify pending contacts best-effort (~10/sync, rate-limit aware)
+      try { await fetch("/api/ai/classify-pending?limit=10", { method: "POST" }); } catch {}
       setLastSynced(Date.now());
       startTransition(() => router.refresh());
     } finally {

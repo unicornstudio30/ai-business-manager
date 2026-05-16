@@ -30,7 +30,7 @@ export default async function ContactDetail({ params }: { params: Promise<{ id: 
           <ArrowLeft className="size-3" /> Back to contacts
         </Link>
         <h1 className="text-2xl font-semibold text-stone-900">{contact.name || "(no name)"}</h1>
-        <div className="mt-1 flex items-center gap-3 text-sm text-stone-500">
+        <div className="mt-1 flex items-center gap-3 text-sm text-stone-500 flex-wrap">
           {contact.country && (
             <span className="flex items-center gap-1">
               <MapPin className="size-3" /> {contact.country}
@@ -39,6 +39,11 @@ export default async function ContactDetail({ params }: { params: Promise<{ id: 
           {contact.platform && <span>{contact.platform}</span>}
           {categories.length > 0 && (
             <span className="rounded-md bg-stone-100 px-2 py-0.5 text-xs">{categories.join(", ")}</span>
+          )}
+          {contact.icpClassification && (
+            <span className="rounded-md bg-violet-50 border border-violet-200 px-2 py-0.5 text-xs text-violet-800" title="LLM-derived ICP fit (OpenRouter)">
+              ✨ {contact.icpClassification}
+            </span>
           )}
         </div>
       </div>

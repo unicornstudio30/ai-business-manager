@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Check, Copy, ArrowUpRight, AlertTriangle, ExternalLink } from "lucide-react";
+import { Check, Copy, ArrowUpRight, AlertTriangle, ExternalLink, Sparkles } from "lucide-react";
 import { fmtDate } from "@/lib/utils";
 import { STAGE_COLORS, type Stage } from "@/lib/stages";
 import type { Contact } from "@/lib/db/schema";
@@ -15,8 +15,32 @@ type Props = {
   suggestedAction: string;
 };
 
+type AiState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "ok"; text: string; cached: boolean }
+  | { status: "error"; error: string };
+
 export function StuckRow({ contact, daysStuck, threshold, overBy, suggestedAction }: Props) {
   const [copied, setCopied] = useState(false);
+  const [ai, setAi] = useState<AiState>({ status: "idle" });
+
+  // Lazy-load AI suggestion when the user hovers/clicks the row's "Get AI" button
+  async function loadAi() {
+    if (ai.status === "loading" || ai.status === "ok") return;
+    setAi({ status: "loading" });
+    try {
+      const r = await fetch(`/api/ai/stuck-suggestion?contact_id=${contact.id}`);
+      const json = await r.json();
+      if (json.ok) {
+        setAi({ status: "ok", text: json.text, cached: json.cached });
+      } else {
+        setAi({ status: "error", error: json.error || "Unknown" });
+      }
+    } catch (err) {
+      setAi({ status: "error", error: String(err) });
+    }
+  }
 
   async function copyTriageCmd() {
     await navigator.clipboard.writeText(`/triage --contact=${contact.id}`);
@@ -51,8 +75,28 @@ export function StuckRow({ contact, daysStuck, threshold, overBy, suggestedActio
             {contact.platform && <span className="text-xs text-stone-400">· {contact.platform}</span>}
           </div>
           <p className="text-sm text-stone-700 mb-1">
-            <span className="text-stone-500">Suggested:</span> {suggestedAction}
+            <span className="text-stone-500">Playbook:</span> {suggestedAction}
           </p>
+          {ai.status === "idle" && (
+            <button
+              onClick={loadAi}
+              className="inline-flex items-center gap-1 text-[11px] text-violet-700 hover:underline mb-1"
+            >
+              <Sparkles className="size-3" /> Get AI suggestion
+            </button>
+          )}
+          {ai.status === "loading" && (
+            <p className="text-[11px] text-stone-400 mb-1">Drafting…</p>
+          )}
+          {ai.status === "ok" && (
+            <p className="text-sm text-violet-900 bg-violet-50 border border-violet-200 rounded-md px-2 py-1 mb-1 inline-flex items-start gap-1.5">
+              <Sparkles className="size-3.5 text-violet-600 mt-0.5 flex-shrink-0" />
+              <span>{ai.text}{ai.cached ? <span className="ml-1 text-[10px] text-violet-400">(cached)</span> : null}</span>
+            </p>
+          )}
+          {ai.status === "error" && (
+            <p className="text-[11px] text-red-600 mb-1">⚠ {ai.error}</p>
+          )}
           <div className="text-xs text-stone-500">
             Last touch {fmtDate(contact.lastTouchAt ?? contact.statusDate)} · threshold for stage: {threshold}d
           </div>

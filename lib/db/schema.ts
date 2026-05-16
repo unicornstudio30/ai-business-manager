@@ -51,6 +51,10 @@ export const contacts = sqliteTable(
     closedReason: text("closed_reason"),               // win/loss reason
     latestAuditSummary: text("latest_audit_summary"),  // most recent audit blurb
 
+    // LLM-derived ICP classification (OpenRouter)
+    icpClassification: text("icp_classification"),     // e.g. "Hot — AI SaaS founder" / "Cold — not ICP"
+    icpClassifiedAt: ts("icp_classified_at"),
+
     createdAt: now(),
     updatedAt: ts("updated_at").$defaultFn(() => new Date()),
     dirty: integer("dirty").notNull().default(0),
@@ -333,6 +337,16 @@ export const syncLog = sqliteTable("sync_log", {
   finishedAt: ts("finished_at"),
   rowsChanged: integer("rows_changed").default(0),
   error: text("error"),
+});
+
+// LLM response cache (OpenRouter calls hashed by prompt+model, with TTL).
+// Free tier rate-limited so we cache aggressively.
+export const aiCache = sqliteTable("ai_cache", {
+  cacheKey: text("cache_key").primaryKey(),    // sha1(model + ":" + prompt)
+  model: text("model").notNull(),
+  response: text("response").notNull(),
+  createdAt: now(),
+  expiresAt: ts("expires_at").notNull(),
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
