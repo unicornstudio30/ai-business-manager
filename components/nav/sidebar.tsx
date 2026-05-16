@@ -20,6 +20,7 @@ import {
   Network,
   DollarSign,
   BarChart3,
+  History as HistoryIcon,
   Settings as SettingsIcon,
 } from "lucide-react";
 
@@ -41,6 +42,7 @@ const items = [
   { href: "/finance", label: "Finance", icon: DollarSign },
   { href: "/wins-losses", label: "Wins & Losses", icon: Trophy },
   { href: "/daily-sales", label: "Daily KPIs", icon: BarChart3 },
+  { href: "/history", label: "History", icon: HistoryIcon },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
 ];
 

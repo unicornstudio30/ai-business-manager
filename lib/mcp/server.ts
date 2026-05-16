@@ -42,6 +42,7 @@ import { generateNextMessage } from "@/lib/ai/next-message";
 import { getStuckSuggestion } from "@/lib/ai/stuck-suggestion";
 import { getDailySummary } from "@/lib/ai/daily-summary";
 import { classifyContact } from "@/lib/ai/classify-icp";
+import { getHistory, type HistoryEventType } from "@/lib/db/history";
 
 // JSON-serialize a result wrapping it as MCP text content.
 function ok(data: unknown) {
@@ -527,6 +528,33 @@ export function buildMcpServer(): McpServer {
       const result = await getDailySummary();
       if (!result) return ok({ error: "OPENROUTER_API_KEY not set" });
       return ok(result);
+    }
+  );
+
+  server.registerTool(
+    "history",
+    {
+      title: "Global History",
+      description:
+        "Unified chronological event stream from across the tool: drafted/sent activities, " +
+        "meetings, audits, tracker entries, sync events, and content-publish flips. " +
+        "Filter by type, date range, contact. Default: last 30 days, all types, up to 200 events.",
+      inputSchema: {
+        days: z.number().int().min(1).max(365).optional().default(30),
+        types: z.array(z.enum(["activity", "meeting", "audit", "tracker", "sync", "content_published"])).optional(),
+        contact_id: z.string().optional(),
+        limit: z.number().int().min(1).max(500).optional().default(200),
+      },
+    },
+    async ({ days, types, contact_id, limit }) => {
+      const since = new Date(Date.now() - (days ?? 30) * 24 * 60 * 60 * 1000);
+      const events = await getHistory({
+        since,
+        types: types as HistoryEventType[] | undefined,
+        contactId: contact_id,
+        limit,
+      });
+      return ok({ count: events.length, events });
     }
   );
 
