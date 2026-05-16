@@ -1,60 +1,115 @@
 // Global history feed — composes a unified chronological event stream from
-// the major tables (activities, meetings, audits, tracker entries, sync log,
-// content-publish flips). No new tables; pure SELECT + merge in code.
+// every major table. No new tables; pure SELECT + merge in code.
+//
+// Event types are grouped into categories:
+//   sales     — work that moves deals: activities, meetings, audits, stage flips, daily KPIs, journal
+//   marketing — work that builds reach: content created, content published
+//   system    — plumbing: notion/gcal sync events
 
 import { db, schema } from "./client";
-import { gte, lte, desc, eq, and, inArray, isNotNull } from "drizzle-orm";
+import { gte, lte, desc, eq, and, isNotNull } from "drizzle-orm";
 
 export type HistoryEventType =
+  // sales
   | "activity"
   | "meeting"
   | "audit"
+  | "deal_closed"
   | "tracker"
-  | "sync"
-  | "content_published";
+  | "kpi_logged"
+  // marketing
+  | "content_created"
+  | "content_published"
+  // system
+  | "sync";
+
+export type HistoryCategory = "sales" | "marketing" | "system";
+
+export const TYPES_BY_CATEGORY: Record<HistoryCategory, HistoryEventType[]> = {
+  sales: ["activity", "meeting", "audit", "deal_closed", "tracker", "kpi_logged"],
+  marketing: ["content_created", "content_published"],
+  system: ["sync"],
+};
+
+export const ALL_TYPES: HistoryEventType[] = [
+  ...TYPES_BY_CATEGORY.sales,
+  ...TYPES_BY_CATEGORY.marketing,
+  ...TYPES_BY_CATEGORY.system,
+];
+
+export const CATEGORY_OF: Record<HistoryEventType, HistoryCategory> = {
+  activity: "sales",
+  meeting: "sales",
+  audit: "sales",
+  deal_closed: "sales",
+  tracker: "sales",
+  kpi_logged: "sales",
+  content_created: "marketing",
+  content_published: "marketing",
+  sync: "system",
+};
 
 export type HistoryEvent = {
   id: string;                       // synthetic: `${type}:${sourceId}`
   timestamp: Date;
   type: HistoryEventType;
+  category: HistoryCategory;
   title: string;
   summary?: string | null;
   contactId?: string | null;
   contactName?: string | null;
   link?: string;
-  badge: { label: string; tone: "stone" | "violet" | "blue" | "emerald" | "amber" | "rose" };
+  badge: { label: string; tone: "stone" | "violet" | "blue" | "emerald" | "amber" | "rose" | "indigo" };
 };
 
 export type HistoryFilters = {
-  types?: HistoryEventType[];
+  types?: HistoryEventType[];        // if empty array passed, returns 0 events; if undefined, defaults to ALL_TYPES
   since?: Date;
   until?: Date;
   contactId?: string;
+  contactSearch?: string;            // case-insensitive substring on contact name
   limit?: number;
 };
 
 const BADGES: Record<HistoryEventType, HistoryEvent["badge"]> = {
-  activity:           { label: "Activity",   tone: "violet" },
-  meeting:            { label: "Meeting",    tone: "blue" },
-  audit:              { label: "Audit",      tone: "amber" },
-  tracker:            { label: "Tracker",    tone: "stone" },
-  sync:               { label: "Sync",       tone: "stone" },
-  content_published:  { label: "Published",  tone: "emerald" },
+  activity:           { label: "Activity",     tone: "violet" },
+  meeting:            { label: "Meeting",      tone: "blue" },
+  audit:              { label: "Audit",        tone: "amber" },
+  deal_closed:        { label: "Deal closed",  tone: "rose" },
+  tracker:            { label: "Tracker",      tone: "stone" },
+  kpi_logged:         { label: "Daily KPI",    tone: "indigo" },
+  content_created:    { label: "Content idea", tone: "stone" },
+  content_published:  { label: "Published",    tone: "emerald" },
+  sync:               { label: "Sync",         tone: "stone" },
 };
 
 export async function getHistory(filters: HistoryFilters = {}): Promise<HistoryEvent[]> {
-  const types = filters.types ?? (["activity", "meeting", "audit", "tracker", "sync", "content_published"] as HistoryEventType[]);
+  // Note: undefined types → all; empty-array types → zero events (explicit "none selected")
+  const types = filters.types === undefined ? ALL_TYPES : filters.types;
+  if (types.length === 0) return [];
+
   const since = filters.since ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const until = filters.until ?? new Date();
   const limit = filters.limit ?? 200;
 
   const events: HistoryEvent[] = [];
 
-  // Preload contact name map (cheap; lets us label every event with a name)
-  const contactRows = await db.select({ id: schema.contacts.id, name: schema.contacts.name }).from(schema.contacts);
+  // Preload contacts so every event can carry a contact name
+  const contactRows = await db
+    .select({ id: schema.contacts.id, name: schema.contacts.name })
+    .from(schema.contacts);
   const contactName = new Map(contactRows.map((c) => [c.id, c.name]));
+  const contactMatch = (id: string | null | undefined): boolean => {
+    if (filters.contactId && id !== filters.contactId) return false;
+    if (filters.contactSearch) {
+      if (!id) return false;
+      const name = contactName.get(id) ?? "";
+      if (!name.toLowerCase().includes(filters.contactSearch.toLowerCase())) return false;
+    }
+    return true;
+  };
 
-  // 1) Activities — the main per-contact feed
+  // 1) Activities — main per-contact feed
   if (types.includes("activity")) {
     const where = and(
       gte(schema.activities.createdAt, since),
@@ -69,10 +124,12 @@ export async function getHistory(filters: HistoryFilters = {}): Promise<HistoryE
       .limit(limit);
     for (const a of rows) {
       if (!a.createdAt) continue;
+      if (!contactMatch(a.contactId)) continue;
       events.push({
         id: `activity:${a.id}`,
         timestamp: a.createdAt,
         type: "activity",
+        category: "sales",
         title: a.type,
         summary: (a.content ?? "").slice(0, 200).replace(/\n+/g, " ") || null,
         contactId: a.contactId,
@@ -84,48 +141,30 @@ export async function getHistory(filters: HistoryFilters = {}): Promise<HistoryE
   }
 
   // 2) Meetings
-  if (types.includes("meeting") && !filters.contactId) {
+  if (types.includes("meeting")) {
+    const where = and(
+      gte(schema.meetings.scheduledAt, since),
+      lte(schema.meetings.scheduledAt, until),
+      filters.contactId ? eq(schema.meetings.contactId, filters.contactId) : undefined
+    );
     const rows = await db
       .select()
       .from(schema.meetings)
-      .where(and(gte(schema.meetings.scheduledAt, since), lte(schema.meetings.scheduledAt, until)))
+      .where(where)
       .orderBy(desc(schema.meetings.scheduledAt))
       .limit(limit);
     for (const m of rows) {
       if (!m.scheduledAt) continue;
+      if (!contactMatch(m.contactId)) continue;
       events.push({
         id: `meeting:${m.id}`,
         timestamp: m.scheduledAt,
         type: "meeting",
+        category: "sales",
         title: m.eventName || "(meeting)",
         summary: m.inviteeName ? `with ${m.inviteeName}` : null,
         contactId: m.contactId,
         contactName: m.contactId ? contactName.get(m.contactId) ?? null : (m.inviteeName ?? null),
-        link: `/meetings/${m.id}/brief`,
-        badge: BADGES.meeting,
-      });
-    }
-  } else if (types.includes("meeting") && filters.contactId) {
-    const rows = await db
-      .select()
-      .from(schema.meetings)
-      .where(and(
-        gte(schema.meetings.scheduledAt, since),
-        lte(schema.meetings.scheduledAt, until),
-        eq(schema.meetings.contactId, filters.contactId)
-      ))
-      .orderBy(desc(schema.meetings.scheduledAt))
-      .limit(limit);
-    for (const m of rows) {
-      if (!m.scheduledAt) continue;
-      events.push({
-        id: `meeting:${m.id}`,
-        timestamp: m.scheduledAt,
-        type: "meeting",
-        title: m.eventName || "(meeting)",
-        summary: m.inviteeName ? `with ${m.inviteeName}` : null,
-        contactId: m.contactId,
-        contactName: m.contactId ? contactName.get(m.contactId) ?? null : null,
         link: `/meetings/${m.id}/brief`,
         badge: BADGES.meeting,
       });
@@ -147,10 +186,12 @@ export async function getHistory(filters: HistoryFilters = {}): Promise<HistoryE
       .limit(limit);
     for (const a of rows) {
       if (!a.createdAt) continue;
+      if (!contactMatch(a.contactId)) continue;
       events.push({
         id: `audit:${a.id}`,
         timestamp: a.createdAt,
         type: "audit",
+        category: "sales",
         title: `Audited ${a.url}`,
         summary: a.summary ?? null,
         contactId: a.contactId,
@@ -161,8 +202,36 @@ export async function getHistory(filters: HistoryFilters = {}): Promise<HistoryE
     }
   }
 
-  // 4) Tracker entries (Notion daily/weekly journal)
-  if (types.includes("tracker") && !filters.contactId) {
+  // 4) Deal closed — contacts.closedDate in range (Partnership / Lost / etc.)
+  if (types.includes("deal_closed")) {
+    const where = and(
+      isNotNull(schema.contacts.closedDate),
+      gte(schema.contacts.closedDate, since),
+      lte(schema.contacts.closedDate, until),
+      filters.contactId ? eq(schema.contacts.id, filters.contactId) : undefined
+    );
+    const rows = await db.select().from(schema.contacts).where(where).limit(limit);
+    for (const c of rows) {
+      if (!c.closedDate) continue;
+      if (filters.contactSearch && !(c.name ?? "").toLowerCase().includes(filters.contactSearch.toLowerCase())) continue;
+      const isWin = c.status === "Partnership";
+      events.push({
+        id: `deal_closed:${c.id}`,
+        timestamp: c.closedDate,
+        type: "deal_closed",
+        category: "sales",
+        title: isWin ? `🎉 Won: ${c.name}` : `Closed: ${c.name}`,
+        summary: c.status ?? null,
+        contactId: c.id,
+        contactName: c.name,
+        link: `/contacts/${c.id}`,
+        badge: BADGES.deal_closed,
+      });
+    }
+  }
+
+  // 5) Tracker entries (Notion sales journal)
+  if (types.includes("tracker") && !filters.contactId && !filters.contactSearch) {
     const rows = await db
       .select()
       .from(schema.trackerEntries)
@@ -175,6 +244,7 @@ export async function getHistory(filters: HistoryFilters = {}): Promise<HistoryE
         id: `tracker:${t.id}`,
         timestamp: t.createdAt,
         type: "tracker",
+        category: "sales",
         title: t.name || "(tracker entry)",
         summary: (t.bodyMarkdown ?? "").slice(0, 200).replace(/\n+/g, " ") || null,
         link: "/tracker",
@@ -183,8 +253,95 @@ export async function getHistory(filters: HistoryFilters = {}): Promise<HistoryE
     }
   }
 
-  // 5) Sync events (data flowing between systems)
-  if (types.includes("sync") && !filters.contactId) {
+  // 6) Daily KPIs logged
+  if (types.includes("kpi_logged") && !filters.contactId && !filters.contactSearch) {
+    const rows = await db
+      .select()
+      .from(schema.dailySalesKpis)
+      .where(and(
+        isNotNull(schema.dailySalesKpis.createdAt),
+        gte(schema.dailySalesKpis.createdAt, since),
+        lte(schema.dailySalesKpis.createdAt, until)
+      ))
+      .orderBy(desc(schema.dailySalesKpis.createdAt))
+      .limit(limit);
+    for (const k of rows) {
+      if (!k.createdAt) continue;
+      const parts: string[] = [];
+      if ((k.coldDmsSent ?? 0) > 0) parts.push(`${k.coldDmsSent} cold DMs`);
+      if ((k.followUpsSent ?? 0) > 0) parts.push(`${k.followUpsSent} follow-ups`);
+      if ((k.callsBooked ?? 0) > 0) parts.push(`${k.callsBooked} calls booked`);
+      if ((k.responses ?? 0) > 0) parts.push(`${k.responses} responses`);
+      if ((k.inboundLeads ?? 0) > 0) parts.push(`${k.inboundLeads} inbound`);
+      events.push({
+        id: `kpi_logged:${k.id}`,
+        timestamp: k.createdAt,
+        type: "kpi_logged",
+        category: "sales",
+        title: `Daily KPIs: ${k.date ? new Date(k.date).toISOString().slice(0, 10) : "—"}`,
+        summary: parts.length > 0 ? parts.join(" · ") : "no activity logged",
+        link: "/daily-sales",
+        badge: BADGES.kpi_logged,
+      });
+    }
+  }
+
+  // 7) Content created (new content_items in range)
+  if (types.includes("content_created") && !filters.contactId && !filters.contactSearch) {
+    const rows = await db
+      .select()
+      .from(schema.contentItems)
+      .where(and(
+        isNotNull(schema.contentItems.createdAt),
+        gte(schema.contentItems.createdAt, since),
+        lte(schema.contentItems.createdAt, until)
+      ))
+      .orderBy(desc(schema.contentItems.createdAt))
+      .limit(limit);
+    for (const c of rows) {
+      if (!c.createdAt) continue;
+      events.push({
+        id: `content_created:${c.id}`,
+        timestamp: c.createdAt,
+        type: "content_created",
+        category: "marketing",
+        title: `Content idea: ${c.title}`,
+        summary: [c.type, c.topics].filter(Boolean).join(" · ") || null,
+        link: c.notionPageId ? `https://www.notion.so/${c.notionPageId.replace(/-/g, "")}` : "/content",
+        badge: BADGES.content_created,
+      });
+    }
+  }
+
+  // 8) Content publishing — per-platform Publish Date + status === "Published ✨"
+  if (types.includes("content_published") && !filters.contactId && !filters.contactSearch) {
+    const rows = await db.select().from(schema.contentItems);
+    for (const c of rows) {
+      const platforms: Array<{ name: string; status: string | null; date: Date | null }> = [
+        { name: "LinkedIn", status: c.linkedinStatus, date: c.linkedinPublishDate },
+        { name: "X",        status: c.xStatus,        date: c.xPublishDate },
+        { name: "Facebook", status: c.facebookStatus, date: c.facebookPublishDate },
+      ];
+      for (const p of platforms) {
+        if (p.status !== "Published ✨") continue;
+        if (!p.date) continue;
+        if (p.date < since || p.date > until) continue;
+        events.push({
+          id: `content_published:${c.id}:${p.name}`,
+          timestamp: p.date,
+          type: "content_published",
+          category: "marketing",
+          title: `Published on ${p.name}`,
+          summary: c.title,
+          link: c.notionPageId ? `https://www.notion.so/${c.notionPageId.replace(/-/g, "")}` : "/content",
+          badge: BADGES.content_published,
+        });
+      }
+    }
+  }
+
+  // 9) Sync events
+  if (types.includes("sync") && !filters.contactId && !filters.contactSearch) {
     const rows = await db
       .select()
       .from(schema.syncLog)
@@ -197,12 +354,13 @@ export async function getHistory(filters: HistoryFilters = {}): Promise<HistoryE
       .limit(limit);
     for (const s of rows) {
       if (!s.finishedAt) continue;
-      // Skip noisy zero-row syncs
+      // Skip noisy zero-row syncs unless they're errors
       if (!s.error && (s.rowsChanged ?? 0) === 0) continue;
       events.push({
         id: `sync:${s.id}`,
         timestamp: s.finishedAt,
         type: "sync",
+        category: "system",
         title: `${s.entity} ${s.direction}`,
         summary: s.error ? `❌ ${s.error}` : `${s.rowsChanged} row${s.rowsChanged === 1 ? "" : "s"} changed`,
         link: "/settings",
@@ -211,36 +369,6 @@ export async function getHistory(filters: HistoryFilters = {}): Promise<HistoryE
     }
   }
 
-  // 6) Content publishing — content_items whose per-platform Status flipped to Published
-  if (types.includes("content_published") && !filters.contactId) {
-    // We don't have a history of status flips; use the publish dates as a proxy.
-    // "Published" = any platform has a publish date in range AND that platform's status === "Published ✨"
-    const rows = await db.select().from(schema.contentItems);
-    for (const c of rows) {
-      // Check each platform
-      const platforms: Array<{ name: string; status: string | null; date: Date | null }> = [
-        { name: "LinkedIn", status: c.linkedinStatus, date: c.linkedinPublishDate },
-        { name: "X", status: c.xStatus, date: c.xPublishDate },
-        { name: "Facebook", status: c.facebookStatus, date: c.facebookPublishDate },
-      ];
-      for (const p of platforms) {
-        if (p.status !== "Published ✨") continue;
-        if (!p.date) continue;
-        if (p.date < since || p.date > until) continue;
-        events.push({
-          id: `content_published:${c.id}:${p.name}`,
-          timestamp: p.date,
-          type: "content_published",
-          title: `Published on ${p.name}`,
-          summary: c.title,
-          link: c.notionPageId ? `https://www.notion.so/${c.notionPageId.replace(/-/g, "")}` : "/content",
-          badge: BADGES.content_published,
-        });
-      }
-    }
-  }
-
-  // Merge + sort
   events.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
   return events.slice(0, limit);
 }
