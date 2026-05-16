@@ -5,6 +5,8 @@ import { StageStepper } from "@/components/contacts/stage-stepper";
 import { SequenceWidget } from "@/components/contacts/sequence-widget";
 import { ActivitiesFeed } from "@/components/contacts/activities-feed";
 import { StageSuggestionsBanner } from "@/components/contacts/stage-suggestions-banner";
+import { NextAction } from "@/components/contacts/next-action";
+import { SourceAttribution } from "@/components/contacts/source-attribution";
 import { computeStageSuggestions } from "@/lib/stage-suggestions";
 import { fmtDate, daysAgo, parseJson } from "@/lib/utils";
 import { ExternalLink, Mail, MapPin, ArrowLeft, Globe } from "lucide-react";
@@ -48,6 +50,8 @@ export default async function ContactDetail({ params }: { params: Promise<{ id: 
         </div>
       </div>
 
+      <NextAction contactId={contact.id} />
+
       <StageSuggestionsBanner
         currentStage={contact.status}
         suggestions={stageSuggestions}
@@ -57,6 +61,9 @@ export default async function ContactDetail({ params }: { params: Promise<{ id: 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.5fr] gap-6 items-start">
         {/* Left: profile + sequence */}
         <div className="flex flex-col gap-4">
+          <div className="rounded-2xl border border-stone-200 bg-white p-4">
+            <SourceAttribution contactId={contact.id} currentSourceId={contact.sourceContentId} />
+          </div>
           <div className="rounded-2xl border border-stone-200 bg-white p-6 flex flex-col gap-5">
             <StageStepper status={contact.status} />
 

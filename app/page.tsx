@@ -18,6 +18,7 @@ import { NextMeetings } from "@/components/dashboard/next-meetings";
 import { InboxWidget } from "@/components/dashboard/inbox-widget";
 import { StuckWidget } from "@/components/dashboard/stuck-widget";
 import { DailySummary } from "@/components/dashboard/daily-summary";
+import { TodayQueue } from "@/components/dashboard/today-queue";
 import { db, schema } from "@/lib/db/client";
 import { syncStatus } from "@/lib/notion/sync";
 
@@ -59,6 +60,8 @@ export default async function Home() {
       </div>
 
       <DailySummary />
+
+      <TodayQueue />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Total contacts" value={stats.totalContacts} />

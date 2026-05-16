@@ -1,0 +1,1 @@
+ALTER TABLE `contacts` ADD `source_content_id` text;

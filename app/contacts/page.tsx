@@ -93,7 +93,8 @@ export default async function ContactsPage({
         )}
       </form>
 
-      <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
+      {/* Desktop table — sm+ */}
+      <div className="hidden sm:block rounded-xl border border-stone-200 bg-white overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-stone-50 text-xs uppercase tracking-wide text-stone-500">
             <tr>
@@ -106,13 +107,13 @@ export default async function ContactsPage({
               <th className="text-left px-4 py-2.5">
                 <Link href="/contacts?sort=status" className="hover:text-stone-900">Stage</Link>
               </th>
-              <th className="text-left px-4 py-2.5">Platform</th>
-              <th className="text-left px-4 py-2.5">Country</th>
-              <th className="text-left px-4 py-2.5">
+              <th className="text-left px-4 py-2.5 hidden md:table-cell">Platform</th>
+              <th className="text-left px-4 py-2.5 hidden md:table-cell">Country</th>
+              <th className="text-left px-4 py-2.5 hidden lg:table-cell">
                 <Link href="/contacts?sort=date" className="hover:text-stone-900">Status Date</Link>
               </th>
               <th className="text-left px-4 py-2.5">Age</th>
-              <th className="text-left px-4 py-2.5">Profession</th>
+              <th className="text-left px-4 py-2.5 hidden lg:table-cell">Profession</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-100">
@@ -147,17 +148,54 @@ export default async function ContactsPage({
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-stone-700">{c.platform || "—"}</td>
-                    <td className="px-4 py-3 text-stone-700">{c.country || "—"}</td>
-                    <td className="px-4 py-3 text-stone-500">{fmtDate(c.statusDate)}</td>
+                    <td className="px-4 py-3 text-stone-700 hidden md:table-cell">{c.platform || "—"}</td>
+                    <td className="px-4 py-3 text-stone-700 hidden md:table-cell">{c.country || "—"}</td>
+                    <td className="px-4 py-3 text-stone-500 hidden lg:table-cell">{fmtDate(c.statusDate)}</td>
                     <td className="px-4 py-3 text-stone-500">{age !== null ? `${age}d` : "—"}</td>
-                    <td className="px-4 py-3 text-stone-500">{professions.slice(0, 2).join(", ") || "—"}</td>
+                    <td className="px-4 py-3 text-stone-500 hidden lg:table-cell">{professions.slice(0, 2).join(", ") || "—"}</td>
                   </tr>
                 );
               })
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile card list — below sm */}
+      <div className="sm:hidden flex flex-col gap-2">
+        {rows.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-stone-300 bg-white p-8 text-center text-sm text-stone-500">
+            No contacts yet. Run Sync.
+          </div>
+        ) : (
+          rows.map((c) => {
+            const age = daysAgo(c.statusDate);
+            const icp = icpScores.get(c.id) ?? 0;
+            return (
+              <Link
+                key={c.id}
+                href={`/contacts/${c.id}`}
+                className="rounded-xl border border-stone-200 bg-white p-3 flex items-start gap-3 active:bg-stone-50"
+              >
+                <span className={`inline-flex flex-shrink-0 items-center justify-center w-10 h-8 rounded-md border text-xs font-medium tabular-nums ${icpColor(icp)}`}>
+                  {icp}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-stone-900 truncate">{c.name || "(no name)"}</div>
+                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                    {c.status && (
+                      <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${STAGE_COLORS[c.status as Stage] ?? "bg-stone-100 text-stone-800 border-stone-200"}`}>
+                        {c.status}
+                      </span>
+                    )}
+                    {c.platform && <span className="text-[10px] text-stone-500">{c.platform}</span>}
+                    {age !== null && <span className="text-[10px] text-stone-400">· {age}d</span>}
+                  </div>
+                </div>
+              </Link>
+            );
+          })
+        )}
       </div>
     </div>
   );

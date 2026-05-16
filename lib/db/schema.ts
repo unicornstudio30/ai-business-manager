@@ -55,6 +55,10 @@ export const contacts = sqliteTable(
     icpClassification: text("icp_classification"),     // e.g. "Hot — AI SaaS founder" / "Cold — not ICP"
     icpClassifiedAt: ts("icp_classified_at"),
 
+    // Attribution: which content piece (post, video, etc.) brought this contact in.
+    // Local-only — set manually in dashboard or auto when Apify pipeline is wired.
+    sourceContentId: text("source_content_id"),        // → content_items.id
+
     createdAt: now(),
     updatedAt: ts("updated_at").$defaultFn(() => new Date()),
     dirty: integer("dirty").notNull().default(0),

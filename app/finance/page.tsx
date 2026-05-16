@@ -2,10 +2,12 @@ import Link from "next/link";
 import { db, schema } from "@/lib/db/client";
 import { desc } from "drizzle-orm";
 import { financeSummary, revenueByMonth12 } from "@/lib/db/finance-summary";
+import { revenueBySource, type SourceRevenueRow } from "@/lib/db/revenue-by-source";
 import { fmtMoney } from "@/lib/finance";
 import { fmtDate } from "@/lib/utils";
 import { PROJECT_STATUS_COLORS, SERVICE_LINE_COLORS, type ProjectStatus, type ServiceLine } from "@/lib/projects";
 import { RevenueChart } from "@/components/finance/revenue-chart";
+import { Megaphone } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -21,11 +23,12 @@ function SummaryTile({ label, value, hint, tone }: { label: string; value: strin
 }
 
 export default async function FinancePage() {
-  const [projects, summary, byMonth, contacts] = await Promise.all([
+  const [projects, summary, byMonth, contacts, bySource] = await Promise.all([
     db.select().from(schema.projects).orderBy(desc(schema.projects.dueDate)),
     financeSummary(),
     revenueByMonth12(),
     db.select({ id: schema.contacts.id, name: schema.contacts.name }).from(schema.contacts),
+    revenueBySource(),
   ]);
 
   const contactName = new Map(contacts.map((c) => [c.id, c.name]));
@@ -55,7 +58,70 @@ export default async function FinancePage() {
         <PipelinePanel projects={pipeline} contactName={contactName} />
         <RetainersPanel projects={retainers} contactName={contactName} />
       </div>
+
+      <RevenueBySourcePanel rows={bySource} />
     </div>
+  );
+}
+
+function RevenueBySourcePanel({ rows }: { rows: SourceRevenueRow[] }) {
+  if (rows.length === 0) {
+    return null;
+  }
+  const attributed = rows.filter((r) => r.contentId !== null);
+  const totalAttributedAnnual = attributed.reduce(
+    (s, r) => s + r.totalPrice + r.totalMonthlyRetainer * 12,
+    0
+  );
+  return (
+    <section className="rounded-2xl border border-stone-200 bg-white p-6">
+      <div className="flex items-baseline justify-between mb-4">
+        <h2 className="text-sm font-semibold text-stone-900 flex items-center gap-2">
+          <Megaphone className="size-4 text-stone-400" /> Revenue by content source
+        </h2>
+        <span className="text-xs text-stone-500">
+          {attributed.length} attributed source{attributed.length === 1 ? "" : "s"} · {fmtMoney(totalAttributedAnnual)} annualized
+        </span>
+      </div>
+      <p className="text-xs text-stone-500 mb-4">
+        Which content piece originally brought each contact in. Set the source on any contact page (drop-down at the top of the profile).
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="text-xs uppercase tracking-wide text-stone-500">
+            <tr className="border-b border-stone-100">
+              <th className="text-left py-2 font-medium">Content source</th>
+              <th className="text-right py-2 font-medium">Contacts</th>
+              <th className="text-right py-2 font-medium">Projects</th>
+              <th className="text-right py-2 font-medium">One-time</th>
+              <th className="text-right py-2 font-medium">MRR</th>
+              <th className="text-right py-2 font-medium">12-mo total</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-stone-100">
+            {rows.map((r) => {
+              const annual = r.totalPrice + r.totalMonthlyRetainer * 12;
+              return (
+                <tr key={r.contentId ?? "__none__"} className="hover:bg-stone-50">
+                  <td className="py-2.5">
+                    {r.contentId ? (
+                      <span className="text-stone-800">{r.contentTitle || "(untitled)"}</span>
+                    ) : (
+                      <span className="text-stone-400 italic">— unattributed —</span>
+                    )}
+                  </td>
+                  <td className="py-2.5 text-right text-stone-700 tabular-nums">{r.contactCount}</td>
+                  <td className="py-2.5 text-right text-stone-700 tabular-nums">{r.projectCount}</td>
+                  <td className="py-2.5 text-right text-stone-700 tabular-nums">{fmtMoney(r.totalPrice)}</td>
+                  <td className="py-2.5 text-right text-green-700 tabular-nums">{fmtMoney(r.totalMonthlyRetainer)}/mo</td>
+                  <td className="py-2.5 text-right font-semibold text-stone-900 tabular-nums">{fmtMoney(annual)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
