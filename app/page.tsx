@@ -46,14 +46,20 @@ export default async function Home() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold text-stone-900">
-          {stats.totalContacts === 0 ? "Welcome to Unicorn Studio's CRM." : "I'm fully in! Here's a live summary of your CRM:"}
+        <div className="text-xs font-medium uppercase tracking-wider text-stone-500 mb-1">Dashboard</div>
+        <h1 className="text-3xl font-semibold tracking-tight text-stone-900">
+          {stats.totalContacts === 0 ? "Welcome to Unicorn Studio." : "Good morning, Saidur."}
         </h1>
+        <p className="text-sm text-stone-500 mt-1">
+          {stats.totalContacts === 0
+            ? "Connect Notion to see your CRM here."
+            : `${stats.totalContacts} contacts · ${stats.hotLeads} hot · ${stats.needFollowUp} need follow-up`}
+        </p>
         {notConfigured && (
-          <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900 shadow-elevation-1">
             <div className="font-medium mb-1">Notion not connected yet</div>
             <div className="text-amber-800">
-              Add <code className="px-1 bg-amber-100 rounded">NOTION_TOKEN</code> to <code className="px-1 bg-amber-100 rounded">.env.local</code> and share the 3 Unicorn databases with your integration. See README for the 5-minute setup.
+              Add <code className="px-1 bg-amber-100 rounded">NOTION_TOKEN</code> to <code className="px-1 bg-amber-100 rounded">.env.local</code> and share the 3 Unicorn databases with your integration.
             </div>
           </div>
         )}

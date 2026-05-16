@@ -21,22 +21,64 @@
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
     --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
+    --radius: 0.75rem;
   }
 }
 
 @layer base {
   * { @apply border-border; }
   body {
-    @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    @apply bg-stone-50 text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
   }
+  /* Smooth all interactive elements by default */
+  button, a, input, select, textarea {
+    @apply transition-all ease-material;
+  }
+  /* Typography scale */
+  h1 { @apply tracking-tight; }
+  h2 { @apply tracking-tight; }
 }
 
-/* Polished card look matching the inspiration screenshot */
-.stat-card {
-  @apply rounded-2xl border border-stone-200 bg-stone-50 p-6;
-}
-.activity-card {
-  @apply rounded-xl border border-stone-200 bg-white p-4 shadow-sm;
+@layer components {
+  /* Surface elevation tiers — use instead of ad-hoc rounded-xl border-stone-200 bg-white */
+  .surface {
+    @apply rounded-xl bg-white border border-stone-200/80 shadow-elevation-1;
+  }
+  .surface-hover {
+    @apply hover:shadow-elevation-2 hover:-translate-y-0.5 transition-all duration-200 ease-material;
+  }
+  .surface-flat {
+    @apply rounded-xl bg-stone-50/80 border border-stone-200/60;
+  }
+  .surface-raised {
+    @apply rounded-2xl bg-white border border-stone-200/80 shadow-elevation-2;
+  }
+
+  /* Legacy aliases — keep working while components migrate */
+  .stat-card {
+    @apply rounded-2xl bg-white border border-stone-200/80 shadow-elevation-1 p-6 transition-all duration-200 ease-material hover:shadow-elevation-2;
+  }
+  .activity-card {
+    @apply rounded-xl bg-white border border-stone-200/80 shadow-elevation-1 p-4 transition-all duration-200 ease-material hover:shadow-elevation-2;
+  }
+
+  /* Material-style buttons */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 py-2 text-sm font-medium text-white shadow-elevation-1 hover:shadow-elevation-3 hover:-translate-y-0.5 active:translate-y-0 active:shadow-elevation-1 disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-elevation-1 transition-all duration-200 ease-material;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-white border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 shadow-elevation-1 hover:bg-stone-50 hover:shadow-elevation-2 active:shadow-elevation-1 disabled:opacity-50 transition-all duration-200 ease-material;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium text-stone-600 hover:bg-stone-100 hover:text-stone-900 transition-colors duration-150 ease-material;
+  }
+
+  /* Sidebar nav item */
+  .nav-item {
+    @apply flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-stone-700 hover:bg-white hover:text-stone-900 hover:shadow-elevation-1 transition-all duration-150 ease-material;
+  }
+  .nav-item-active {
+    @apply bg-stone-900 text-white shadow-elevation-2 hover:bg-stone-900 hover:text-white;
+  }
 }

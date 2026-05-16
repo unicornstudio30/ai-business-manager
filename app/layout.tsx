@@ -11,13 +11,14 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-stone-100">
+      <body className="min-h-screen bg-stone-50">
         <div className="flex min-h-screen">
           <Sidebar />
-          <div className="flex-1 flex flex-col">
-            <header className="flex items-center justify-between border-b border-stone-200 bg-white px-6 py-3">
+          <div className="flex-1 flex flex-col min-w-0">
+            <header className="sticky top-0 z-40 flex items-center justify-between bg-white/85 backdrop-blur-md border-b border-stone-200/70 px-6 py-3 shadow-elevation-1">
               <div className="text-sm text-stone-500">
-                <span className="text-stone-900 font-semibold">Unicorn Studio</span> — Business Manager
+                <span className="text-stone-900 font-semibold tracking-tight">Unicorn Studio</span>
+                <span className="hidden sm:inline"> — Business Manager</span>
               </div>
               <SyncButton />
             </header>
