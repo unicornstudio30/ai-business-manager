@@ -32,6 +32,7 @@ function endOfDay(d: Date): Date {
 
 // Stage groupings from the 18-stage pipeline
 const CONNECTION_STAGES = ["1st message"];                                                                      // initial outreach
+const INMAIL_STAGE = "In-mail";                                                                                 // cold message, no connection request
 const ENGAGED_STAGES = ["Lead", "1st Lead Follow up", "2nd Lead Follow up"];
 const QUALIFIED_STAGE = "Qualified";
 const PROPOSAL_STAGE = "Proposal Sent";
@@ -51,6 +52,7 @@ export type DerivedKpis = {
 
   // Outreach (sent/done today, derived from statusDate)
   connectionsSent: { total: number; byPlatform: ByPlatform };
+  inmailsSent: { total: number; byPlatform: ByPlatform };
   followUpsSent: { total: number; byPlatform: ByPlatform };
   // Comments / engagement actions today, derived from Engage Touch increments
   // captured by the inferred-activities engine on Notion sync.
@@ -125,6 +127,7 @@ export async function getNotionDerivedKpis(forDate: Date): Promise<DerivedKpis> 
   // ─── Outreach actions today (derived from statusDate + current status) ───
 
   const connectionsSent = { total: 0, byPlatform: {} as ByPlatform };
+  const inmailsSent = { total: 0, byPlatform: {} as ByPlatform };
   const followUpsSent = { total: 0, byPlatform: {} as ByPlatform };
   const newConnectionsToday: DerivedKpis["newConnectionsToday"] = [];
   const newProposalsToday: DerivedKpis["newProposalsToday"] = [];
@@ -186,6 +189,11 @@ export async function getNotionDerivedKpis(forDate: Date): Promise<DerivedKpis> 
         connectionsSent.total++;
         bumpPlatform(connectionsSent.byPlatform, channel);
         newConnectionsToday.push({ id: c.id, name: c.name || "(no name)", platform: c.platform });
+      }
+      // InMail sent (Status = "In-mail" + statusDate = today)
+      if (status === INMAIL_STAGE) {
+        inmailsSent.total++;
+        bumpPlatform(inmailsSent.byPlatform, channel);
       }
       // Follow-up sent (any follow-up stage + statusDate = today)
       if (ALL_FOLLOW_UP_STAGES.includes(status)) {
@@ -302,6 +310,7 @@ export async function getNotionDerivedKpis(forDate: Date): Promise<DerivedKpis> 
   return {
     date: start,
     connectionsSent,
+    inmailsSent,
     followUpsSent,
     commentsToday,
     leadMagnetsSent,

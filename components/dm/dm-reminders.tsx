@@ -5,11 +5,33 @@
 // kpis.followUpsSent (any follow-up stage moved today). Both are derived from
 // Notion CRM status changes.
 
-import { AlertCircle, CheckCircle2, Send } from "lucide-react";
+import { AlertCircle, CheckCircle2, Gauge, Send } from "lucide-react";
 import type { DerivedKpis } from "@/lib/db/notion-derived-kpis";
-import { PLATFORM_LIMITS, target, PLATFORMS_ORDER, type PlatformKey } from "@/lib/sales-limits";
+import {
+  PLATFORM_LIMITS,
+  target,
+  perHour,
+  paceStatus,
+  PLATFORMS_ORDER,
+  type PlatformKey,
+  type PaceStatus,
+} from "@/lib/sales-limits";
+
+const PACE_CHIP: Record<PaceStatus, string> = {
+  behind: "bg-stone-100 text-stone-700",
+  on_pace: "bg-emerald-100 text-emerald-800",
+  over_pace: "bg-red-100 text-red-800",
+};
+
+const PACE_LABEL: Record<PaceStatus, string> = {
+  behind: "Below pace",
+  on_pace: "On pace",
+  over_pace: "Burst risk",
+};
 
 export function DmReminders({ kpis }: { kpis: DerivedKpis }) {
+  const now = new Date();
+
   // Platforms that have a DM target (everything in PLATFORM_LIMITS).
   const platforms: PlatformKey[] = PLATFORMS_ORDER.filter(
     (p) => (PLATFORM_LIMITS[p].actions as any).dm?.max
@@ -23,6 +45,8 @@ export function DmReminders({ kpis }: { kpis: DerivedKpis }) {
     const fuTgt = target(p, "follow_up");
     const tgt = dmTgt + fuTgt;
     const pct = tgt > 0 ? Math.round((total / tgt) * 100) : 0;
+    const hourly = perHour(p, "dm") + perHour(p, "follow_up");
+    const pace = paceStatus(total, p, "dm", now); // pace against DM hourly budget
     return {
       platform: p,
       label: PLATFORM_LIMITS[p].label,
@@ -33,6 +57,8 @@ export function DmReminders({ kpis }: { kpis: DerivedKpis }) {
       fuTgt,
       tgt,
       pct,
+      hourly,
+      pace,
     };
   }).filter((r) => r.tgt > 0);
 
@@ -80,10 +106,16 @@ export function DmReminders({ kpis }: { kpis: DerivedKpis }) {
           return (
             <div key={r.platform}>
               <div className="flex items-center justify-between text-[11px] mb-1">
-                <span className="text-stone-700 font-medium">{r.label}</span>
+                <span className="text-stone-700 font-medium truncate">{r.label}</span>
+                <span className={`inline-flex items-center gap-1 rounded px-1.5 py-px text-[10px] font-medium ${PACE_CHIP[r.pace]}`}>
+                  <Gauge className="size-2.5" /> {PACE_LABEL[r.pace]}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-[11px] mb-1">
                 <span className="tabular-nums text-stone-500">
                   {r.total} / {r.tgt}
                 </span>
+                <span className="tabular-nums text-stone-500">~{r.hourly}/hr</span>
               </div>
               <div className="h-1.5 rounded-full bg-stone-100 overflow-hidden">
                 <div

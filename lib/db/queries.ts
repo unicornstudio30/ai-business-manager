@@ -6,8 +6,11 @@ import {
   HOT_LEAD_STAGES,
   ACTIVE_CLIENT_STAGES,
   TERMINAL_STAGES,
+  NO_FOLLOW_UP_STAGES,
   STAGE_GROUPS,
 } from "../stages";
+
+const EXCLUDED_FROM_FOLLOW_UP = [...TERMINAL_STAGES, ...NO_FOLLOW_UP_STAGES];
 
 export async function getDashboardStats() {
   const [totals] = await db
@@ -36,7 +39,7 @@ export async function getDashboardStats() {
     .where(
       and(
         sql`(${schema.contacts.status} NOT IN (${sql.join(
-          TERMINAL_STAGES.map((s) => sql`${s}`),
+          EXCLUDED_FROM_FOLLOW_UP.map((s) => sql`${s}`),
           sql`, `
         )}))`,
         or(
@@ -79,7 +82,7 @@ export async function getNeedsFollowUp(days = 11, limit = 20) {
     .where(
       and(
         sql`(${schema.contacts.status} NOT IN (${sql.join(
-          TERMINAL_STAGES.map((s) => sql`${s}`),
+          EXCLUDED_FROM_FOLLOW_UP.map((s) => sql`${s}`),
           sql`, `
         )}))`,
         or(

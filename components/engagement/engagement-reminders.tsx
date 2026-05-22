@@ -2,19 +2,47 @@
 // Engagement counts come from notion-derived-kpis.commentsToday (Engage Touch
 // increments) per platform. Targets come from lib/sales-limits.ts.
 
-import { AlertCircle, CheckCircle2, Target } from "lucide-react";
+import { AlertCircle, CheckCircle2, Gauge, Target } from "lucide-react";
 import type { DerivedKpis } from "@/lib/db/notion-derived-kpis";
-import { PLATFORM_LIMITS, target, type PlatformKey, PLATFORMS_ORDER } from "@/lib/sales-limits";
+import { ACTIVE_HOURS, PLATFORM_LIMITS, activeHoursElapsed, type PlatformKey } from "@/lib/sales-limits";
 
-const PLATFORM_HAS_COMMENT_TARGET: PlatformKey[] = ["linkedin", "x", "instagram", "facebook", "reddit", "discord"];
+const PLATFORM_HAS_COMMENT_TARGET: PlatformKey[] = ["linkedin", "x", "instagram", "facebook", "reddit"];
 
 // We need a daily comment target per platform. PLATFORM_LIMITS no longer has
 // 'comment' (removed earlier since Engage Touch covers it), so we use a
-// simple per-platform target based on healthy outreach: 60% of the DM cap.
+// simple per-platform target based on healthy outreach: 40% of the DM cap.
 function commentTarget(p: PlatformKey): number {
   const dmMax = (PLATFORM_LIMITS[p].actions as any).dm?.max ?? 30;
-  return Math.floor(dmMax * 0.4);  // ~40% of DM volume as comments — moderate but consistent
+  return Math.floor(dmMax * 0.4);
 }
+
+// Hourly comment budget — spread across the active outreach window so
+// commenting doesn't burst-spike (commenting too fast also draws flags).
+function commentPerHour(p: PlatformKey): number {
+  return Math.max(1, Math.ceil(commentTarget(p) / ACTIVE_HOURS));
+}
+
+type CommentPace = "behind" | "on_pace" | "over_pace";
+function commentPace(count: number, p: PlatformKey, now: Date): CommentPace {
+  const ph = commentPerHour(p);
+  const expected = ph * activeHoursElapsed(now);
+  if (expected === 0) return "on_pace";
+  if (count < expected * 0.6) return "behind";
+  if (count > expected * 1.4) return "over_pace";
+  return "on_pace";
+}
+
+const PACE_CHIP: Record<CommentPace, string> = {
+  behind: "bg-stone-100 text-stone-700",
+  on_pace: "bg-emerald-100 text-emerald-800",
+  over_pace: "bg-red-100 text-red-800",
+};
+
+const PACE_LABEL: Record<CommentPace, string> = {
+  behind: "Below pace",
+  on_pace: "On pace",
+  over_pace: "Burst risk",
+};
 
 const CHANNEL_LABEL: Record<string, string> = {
   linkedin: "LinkedIn",
@@ -29,6 +57,7 @@ const CHANNEL_LABEL: Record<string, string> = {
 };
 
 export function EngagementReminders({ kpis }: { kpis: DerivedKpis }) {
+  const now = new Date();
   const today = kpis.commentsToday.total;
   const byPlatform = kpis.commentsToday.byPlatform;
 
@@ -37,7 +66,9 @@ export function EngagementReminders({ kpis }: { kpis: DerivedKpis }) {
     const count = (byPlatform as any)[p] ?? 0;
     const tgt = commentTarget(p);
     const pct = tgt > 0 ? Math.round((count / tgt) * 100) : 0;
-    return { platform: p, label: PLATFORM_LIMITS[p].label, count, target: tgt, pct };
+    const hourly = commentPerHour(p);
+    const pace = commentPace(count, p, now);
+    return { platform: p, label: PLATFORM_LIMITS[p].label, count, target: tgt, pct, hourly, pace };
   }).filter((p) => p.target > 0);
 
   const grandTarget = platformStatus.reduce((s, p) => s + p.target, 0);
@@ -84,10 +115,16 @@ export function EngagementReminders({ kpis }: { kpis: DerivedKpis }) {
           return (
             <div key={p.platform}>
               <div className="flex items-center justify-between text-[11px] mb-1">
-                <span className="text-stone-700 font-medium">{p.label}</span>
+                <span className="text-stone-700 font-medium truncate">{p.label}</span>
+                <span className={`inline-flex items-center gap-1 rounded px-1.5 py-px text-[10px] font-medium ${PACE_CHIP[p.pace]}`}>
+                  <Gauge className="size-2.5" /> {PACE_LABEL[p.pace]}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-[11px] mb-1">
                 <span className="tabular-nums text-stone-500">
                   {p.count} / {p.target}
                 </span>
+                <span className="tabular-nums text-stone-500">~{p.hourly}/hr</span>
               </div>
               <div className="h-1.5 rounded-full bg-stone-100 overflow-hidden">
                 <div

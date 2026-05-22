@@ -7,6 +7,7 @@ import {
   Users,
   Flame,
   MessageSquare,
+  UserPlus,
   AlertTriangle,
   Repeat2,
   CalendarClock,
@@ -27,11 +28,12 @@ import {
 
 const items = [
   { href: "/", label: "Dashboard", icon: Home },
-  { href: "/contacts", label: "Contacts", icon: Users },
-  { href: "/top-50", label: "Top 50", icon: Star },
+  { href: "/contacts", label: "CRM", icon: Users },
+  { href: "/connect", label: "Connect", icon: UserPlus },
+  { href: "/engagement", label: "Engage", icon: Flame },
   { href: "/dm", label: "DM", icon: MessageSquare },
+  { href: "/top-50", label: "Top 50", icon: Star },
   { href: "/stuck", label: "Stuck", icon: AlertTriangle },
-  { href: "/engagement", label: "Engagement", icon: Flame },
   { href: "/cadences", label: "Cadences", icon: Repeat2 },
   { href: "/meetings", label: "Meetings", icon: CalendarClock },
   { href: "/tracker", label: "Sales Tracker", icon: NotebookPen },

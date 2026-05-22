@@ -6,7 +6,9 @@ import Link from "next/link";
 import { ArrowUpRight, Flame, Sparkles, Star } from "lucide-react";
 import type { DerivedKpis } from "@/lib/db/notion-derived-kpis";
 import type { EngagementQueueByPlatform } from "@/lib/db/engagement-queue";
-import { PLATFORM_LIMITS, PLATFORMS_ORDER, type PlatformKey } from "@/lib/sales-limits";
+import { PLATFORM_LIMITS, type PlatformKey } from "@/lib/sales-limits";
+
+const ENGAGEMENT_PLATFORMS: PlatformKey[] = ["linkedin", "x", "instagram", "facebook", "reddit"];
 
 function commentTarget(p: PlatformKey): number {
   const dmMax = (PLATFORM_LIMITS[p].actions as any).dm?.max ?? 30;
@@ -20,7 +22,7 @@ export function EngagementWidget({
   kpis: DerivedKpis;
   queue: EngagementQueueByPlatform;
 }) {
-  const grandTarget = PLATFORMS_ORDER.reduce((s, p) => {
+  const grandTarget = ENGAGEMENT_PLATFORMS.reduce((s, p) => {
     const t = commentTarget(p);
     return s + (t > 0 ? t : 0);
   }, 0);
