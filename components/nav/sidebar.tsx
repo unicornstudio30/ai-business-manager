@@ -21,12 +21,14 @@ import {
   DollarSign,
   BarChart3,
   History as HistoryIcon,
+  Star,
   Settings as SettingsIcon,
 } from "lucide-react";
 
 const items = [
   { href: "/", label: "Dashboard", icon: Home },
   { href: "/contacts", label: "Contacts", icon: Users },
+  { href: "/top-50", label: "Top 50", icon: Star },
   { href: "/inbox", label: "Inbox", icon: Inbox },
   { href: "/stuck", label: "Stuck", icon: AlertTriangle },
   { href: "/engagement", label: "Engagement", icon: Flame },

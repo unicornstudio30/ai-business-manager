@@ -28,6 +28,7 @@ const date = (p: any): Date | null => {
   return isNaN(d.getTime()) ? null : d;
 };
 
+
 const created = (p: any): Date | null => {
   const s = p?.created_time;
   if (!s) return null;
@@ -75,6 +76,8 @@ export function notionToContact(page: PageObjectResponse): NewContact {
     closedReason: text(props["Closed Reason"]),
     latestAuditSummary: text(props["Latest Audit"]),
     relation: JSON.stringify(multiSelect(props["Relation"])),
+    // Top 50 = whether "Top 50" is one of the values in the Category multi-select.
+    top50: multiSelect(props["Category"]).includes("Top 50") ? 1 : 0,
     sequenceTrack: trackForPlatform(platform),
     lastTouchAt: date(props["Status Date"]) || new Date(page.last_edited_time),
     updatedAt: new Date(page.last_edited_time),
@@ -131,5 +134,8 @@ export function contactToNotionProperties(
     try { rel = c.relation ? JSON.parse(c.relation) : []; } catch { rel = []; }
     out["Relation"] = { multi_select: rel.map((name) => ({ name })) };
   }
+  // top50 is derived from Category multi-select on read — no separate push.
+  // To toggle Top 50, the web app would push a modified Category array,
+  // which the existing category mapping (if added) would handle.
   return out;
 }

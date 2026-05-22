@@ -65,6 +65,10 @@ export const contacts = sqliteTable(
     // auto-promotes status to "Lead" if currently below.
     relation: text("relation"),
 
+    // Top 50 long-term relationship list — checkbox from Notion CRM.
+    // /top-50 page surfaces these for CSV download (all + per platform).
+    top50: integer("top50").notNull().default(0),
+
     createdAt: now(),
     updatedAt: ts("updated_at").$defaultFn(() => new Date()),
     dirty: integer("dirty").notNull().default(0),
