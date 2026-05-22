@@ -1,14 +1,15 @@
+import Link from "next/link";
 import {
-  getKpiByDate,
-  suggestedCountsForDate,
   get7DaysOfKpis,
   platformBreakdownForDate,
   platformBreakdown7Days,
 } from "@/lib/db/daily-kpis";
-import { TodayCard } from "@/components/daily-sales/today-card";
-import { PlatformBreakdown } from "@/components/daily-sales/platform-breakdown";
+import { getStreak } from "@/lib/db/streak";
+import { StreakHero } from "@/components/daily-sales/streak-hero";
+import { PlatformCapsPanel } from "@/components/daily-sales/platform-caps";
+import { WinAnalysisPanel } from "@/components/daily-sales/win-analysis";
 import { Platform7DayGrid } from "@/components/daily-sales/platform-7day-grid";
-import { fmtDate } from "@/lib/utils";
+import { ExternalLink } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -26,34 +27,52 @@ const KPI_FIELDS: Array<{ key: string; label: string; emoji: string }> = [
 
 export default async function DailySalesPage() {
   const today = new Date();
-  const [todayRow, suggested, week, platformToday, platformWeek] = await Promise.all([
-    getKpiByDate(today),
-    suggestedCountsForDate(today),
+  const [week, platformToday, platformWeek, streak] = await Promise.all([
     get7DaysOfKpis(),
     platformBreakdownForDate(today),
     platformBreakdown7Days(),
+    getStreak(),
   ]);
+
+  const crmDbUrl = "https://www.notion.so/35d0b601369a80519256ec4232d5f6a8";
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-stone-900">Daily KPIs</h1>
-        <p className="text-sm text-stone-500 mt-1">
-          Track outreach numbers vs targets. "Apply suggested" pulls counts from
-          your activities (DMs sent, comments drafted, etc.) so you don't have
-          to manually count.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="text-xs font-medium uppercase tracking-wider text-stone-500 mb-1">Sales scorecard</div>
+          <h1 className="text-3xl font-semibold tracking-tight text-stone-900">Daily KPIs</h1>
+          <p className="text-sm text-stone-500 mt-1">
+            Read-only. All data derived from your Notion CRM activity (stage changes, status dates, Relation column).
+            Update everything in Notion — this dashboard reflects it.
+          </p>
+        </div>
+        <Link
+          href={crmDbUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn-secondary"
+        >
+          Open CRM in Notion <ExternalLink className="size-3.5" />
+        </Link>
       </div>
 
-      <TodayCard today={todayRow} suggested={suggested} />
+      {/* Gamification — streak + week sparkline */}
+      <StreakHero streak={streak} />
 
-      <PlatformBreakdown rows={platformToday} />
+      {/* Per-platform safety caps */}
+      <PlatformCapsPanel counts={platformToday} />
 
+      {/* Today's win analysis pulled from Sales Tracker daily entry */}
+      <WinAnalysisPanel />
+
+      {/* Per-platform 7-day grid */}
       <Platform7DayGrid days={platformWeek} />
 
+      {/* Last 7 days totals */}
       <section>
-        <h2 className="text-sm font-semibold text-stone-900 mb-3">Last 7 days</h2>
-        <div className="rounded-2xl border border-stone-200 bg-white overflow-x-auto">
+        <h2 className="text-sm font-semibold text-stone-900 mb-3">Last 7 days · scalar counters</h2>
+        <div className="surface overflow-x-auto">
           <table className="w-full text-sm min-w-[700px]">
             <thead className="bg-stone-50 text-xs uppercase tracking-wide text-stone-500">
               <tr>
@@ -99,7 +118,7 @@ export default async function DailySalesPage() {
           </table>
         </div>
         <p className="text-xs text-stone-500 mt-3">
-          Yellow rows = no data logged. Today is highlighted in violet.
+          Yellow rows = no CRM activity that day. Today highlighted violet. Counters derive from contact stage changes synced from Notion.
         </p>
       </section>
     </div>

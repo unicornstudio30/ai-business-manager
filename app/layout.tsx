@@ -3,6 +3,7 @@ import "./globals.css";
 import { Sidebar } from "@/components/nav/sidebar";
 import { SyncButton } from "@/components/sync-button";
 import { QuickLog } from "@/components/quick-log";
+import { ReminderBanner } from "@/components/reminder-banner";
 
 export const metadata: Metadata = {
   title: "Unicorn Studio — AI Business Manager",
@@ -16,6 +17,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <div className="flex min-h-screen">
           <Sidebar />
           <div className="flex-1 flex flex-col min-w-0">
+            <ReminderBanner />
             <header className="sticky top-0 z-40 flex items-center justify-between bg-white/85 backdrop-blur-md border-b border-stone-200/70 px-6 py-3 shadow-elevation-1">
               <div className="text-sm text-stone-500">
                 <span className="text-stone-900 font-semibold tracking-tight">Unicorn Studio</span>

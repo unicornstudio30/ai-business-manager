@@ -19,13 +19,15 @@ import { InboxWidget } from "@/components/dashboard/inbox-widget";
 import { StuckWidget } from "@/components/dashboard/stuck-widget";
 import { DailySummary } from "@/components/dashboard/daily-summary";
 import { TodayQueue } from "@/components/dashboard/today-queue";
+import { StreakHero } from "@/components/daily-sales/streak-hero";
+import { getStreak } from "@/lib/db/streak";
 import { db, schema } from "@/lib/db/client";
 import { syncStatus } from "@/lib/notion/sync";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const [stats, groups, hot, followUps, sync, funnel, trend, meetings, contacts, inbox, inboxC, stuck] = await Promise.all([
+  const [stats, groups, hot, followUps, sync, funnel, trend, meetings, contacts, inbox, inboxC, stuck, streak] = await Promise.all([
     getDashboardStats(),
     getStageGroupCounts(),
     getHotLeads(6),
@@ -38,6 +40,7 @@ export default async function Home() {
     inboxView(),
     inboxCounts(),
     stuckDeals(),
+    getStreak(),
   ]);
   const contactName = new Map(contacts.map((c) => [c.id, c.name]));
 
@@ -66,6 +69,8 @@ export default async function Home() {
       </div>
 
       <DailySummary />
+
+      <StreakHero streak={streak} />
 
       <TodayQueue />
 
