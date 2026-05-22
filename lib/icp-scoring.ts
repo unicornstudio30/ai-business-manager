@@ -74,7 +74,7 @@ const PLATFORM_WEIGHTS: Record<string, number> = {
   Reddit: 3,
 };
 
-// Relation multi-select weights — added Round 6.
+// Relation multi-select weights.
 // "lead magnet" (they accepted something specific) = strongest signal.
 // "Engager" (they engaged with our content) = second.
 // "Open Conversation" (we talked) = third.
@@ -82,6 +82,15 @@ const RELATION_WEIGHTS: Record<string, number> = {
   "lead magnet": 10,
   "Engager": 8,
   "Open Conversation": 6,
+};
+
+// Connection type — 1st-degree connection = warmer/easier to engage.
+// 2nd/3rd = colder, less leverage. Open profile = LinkedIn paid feature reach.
+const CONNECTION_TYPE_WEIGHTS: Record<string, number> = {
+  "1st": 8,
+  "Open profile": 5,
+  "2nd": 2,
+  "3rd": 0,
 };
 
 export type IcpBreakdown = {
@@ -92,9 +101,10 @@ export type IcpBreakdown = {
   platformScore: number;
   contactabilityScore: number;
   relationScore: number;
+  connectionTypeScore: number;
 };
 
-export function computeIcpScore(contact: Pick<Contact, "profession" | "position" | "country" | "platform" | "websiteUrl" | "contactUrl" | "email" | "relation">): IcpBreakdown {
+export function computeIcpScore(contact: Pick<Contact, "profession" | "position" | "country" | "platform" | "websiteUrl" | "contactUrl" | "email" | "relation" | "connectionType">): IcpBreakdown {
   // Profession
   const professions = parseJson<string[]>(contact.profession, []);
   const profMax = professions.reduce((max, p) => Math.max(max, PROFESSION_WEIGHTS[p] ?? 0), 0);
@@ -124,9 +134,19 @@ export function computeIcpScore(contact: Pick<Contact, "profession" | "position"
   const relations = parseJson<string[]>(contact.relation, []);
   const relationScore = Math.min(20, relations.reduce((sum, r) => sum + (RELATION_WEIGHTS[r] ?? 0), 0));
 
+  // Connection type — Notion's "Connection type" multi-select stored as comma-joined.
+  // Pick the highest-weighted value present (1st > Open profile > 2nd > 3rd).
+  const connectionTypes = contact.connectionType
+    ? contact.connectionType.split(",").map((s) => s.trim()).filter(Boolean)
+    : [];
+  const connectionTypeScore = Math.min(
+    10,
+    connectionTypes.reduce((max, t) => Math.max(max, CONNECTION_TYPE_WEIGHTS[t] ?? 0), 0)
+  );
+
   const score = Math.min(
     100,
-    professionScore + positionScore + countryScore + platformScore + contactabilityScore + relationScore
+    professionScore + positionScore + countryScore + platformScore + contactabilityScore + relationScore + connectionTypeScore
   );
 
   return {
@@ -137,6 +157,7 @@ export function computeIcpScore(contact: Pick<Contact, "profession" | "position"
     platformScore,
     contactabilityScore,
     relationScore,
+    connectionTypeScore,
   };
 }
 

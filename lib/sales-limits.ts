@@ -57,6 +57,15 @@ export const PLATFORM_LIMITS = {
       follow_up: { max: 10,  label: "Follow-ups" },
     },
   },
+  discord: {
+    label: "Discord",
+    color: "violet",
+    actions: {
+      dm:        { max: 20,  label: "DMs (sensitive to spam)" },
+      comment:   { max: 50,  label: "Messages in channels" },
+      follow_up: { max: 10,  label: "Follow-ups" },
+    },
+  },
   email: {
     label: "Cold Email",
     color: "amber",
@@ -75,7 +84,7 @@ export const TARGET_PCT = 0.75;
 // Warmup mode (new accounts < 30 days, or after restriction): 25% of max.
 export const WARMUP_PCT = 0.25;
 
-export const PLATFORMS_ORDER: PlatformKey[] = ["linkedin", "x", "instagram", "facebook", "reddit", "email"];
+export const PLATFORMS_ORDER: PlatformKey[] = ["linkedin", "x", "instagram", "facebook", "reddit", "discord", "email"];
 
 export function target(platform: PlatformKey, action: ActionKey, isWarmup = false): number {
   const max = (PLATFORM_LIMITS[platform].actions as any)[action]?.max;

@@ -23,6 +23,7 @@ function channelToPlatform(channel: string): PlatformKey | null {
     case "instagram": return "instagram";
     case "facebook": return "facebook";
     case "reddit": return "reddit";
+    case "discord": return "discord";
     case "email": return "email";
     default: return null;
   }

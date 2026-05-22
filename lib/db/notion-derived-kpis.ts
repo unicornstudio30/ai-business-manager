@@ -93,6 +93,13 @@ export type DerivedKpis = {
 
   // Conversion rate (today)
   responseRate: number | null;    // responses / connectionsSent
+
+  // Multi-channel pursuit (contacts where Cross outreach has 2+ values)
+  multiChannelContacts: { id: string; name: string; channels: string[]; status: string }[];
+
+  // Sequence step distribution — how many contacts are at each engageTouch (1-5)
+  // Helps spot where prospects stall in the cadence.
+  engageTouchDistribution: Record<string, number>;  // {"0": 12, "1": 8, "2": 5, ...}
 };
 
 function platformOf(p: string | null): InboxChannel | null {
@@ -133,6 +140,10 @@ export async function getNotionDerivedKpis(forDate: Date): Promise<DerivedKpis> 
   const pipeline = { total: 0, cold: 0, engaged: 0, qualified: 0, proposal: 0, booking: 0, closed: 0 };
 
   const followUpsOverdue: DerivedKpis["followUpsOverdue"] = [];
+
+  // NEW: cross-outreach + engage touch distribution
+  const multiChannelContacts: DerivedKpis["multiChannelContacts"] = [];
+  const engageTouchDistribution: Record<string, number> = {};
 
   for (const c of contacts) {
     const status = c.status ?? "";
@@ -203,6 +214,27 @@ export async function getNotionDerivedKpis(forDate: Date): Promise<DerivedKpis> 
       else if (LOSS_STAGES.includes(status)) dealsLost++;
     }
 
+    // ─ Cross outreach: contacts with 2+ channels in Notion's Cross outreach multi-select ─
+    if (c.crossOutreach) {
+      try {
+        const channels: string[] = JSON.parse(c.crossOutreach);
+        if (Array.isArray(channels) && channels.length >= 2 && status !== WIN_STAGE && !LOSS_STAGES.includes(status)) {
+          multiChannelContacts.push({
+            id: c.id,
+            name: c.name || "(no name)",
+            channels,
+            status,
+          });
+        }
+      } catch { /* ignore non-JSON */ }
+    }
+
+    // ─ Engage Touch distribution (only count contacts still in active pipeline) ─
+    if (status && status !== WIN_STAGE && !LOSS_STAGES.includes(status)) {
+      const touch = String(c.engageTouch ?? 0);
+      engageTouchDistribution[touch] = (engageTouchDistribution[touch] ?? 0) + 1;
+    }
+
     // ─ Overdue follow-ups (followUpDate < today + status not closed/won) ─
     if (fud && fud < start && status !== WIN_STAGE && !LOSS_STAGES.includes(status)) {
       const daysLate = Math.floor((start.getTime() - fud.getTime()) / 86400000);
@@ -242,6 +274,9 @@ export async function getNotionDerivedKpis(forDate: Date): Promise<DerivedKpis> 
   const totalOutcomes = responsesReceived + qualifications + proposalsSent + bookings + callsHeld + dealsWon + dealsLost;
   const responseRate = connectionsSent.total === 0 ? null : Math.round((responsesReceived / connectionsSent.total) * 100);
 
+  // Sort multi-channel by count desc
+  multiChannelContacts.sort((a, b) => b.channels.length - a.channels.length);
+
   return {
     date: start,
     connectionsSent,
@@ -265,5 +300,7 @@ export async function getNotionDerivedKpis(forDate: Date): Promise<DerivedKpis> 
     totalActions,
     totalOutcomes,
     responseRate,
+    multiChannelContacts,
+    engageTouchDistribution,
   };
 }

@@ -253,6 +253,77 @@ export function DerivedKpisPanel({ kpis }: { kpis: DerivedKpis }) {
         </section>
       </div>
 
+      {/* Sequence step distribution + multi-channel contacts */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Engage Touch distribution */}
+        <section className="surface p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-stone-900">Sequence step distribution</h3>
+            <span className="text-[11px] text-stone-400">where contacts are stalling</span>
+          </div>
+          {(() => {
+            const dist = kpis.engageTouchDistribution;
+            const steps = ["0", "1", "2", "3", "4", "5"];
+            const max = Math.max(1, ...steps.map((s) => dist[s] ?? 0));
+            return (
+              <div className="flex items-end gap-2 h-24">
+                {steps.map((s) => {
+                  const count = dist[s] ?? 0;
+                  const h = Math.max(4, Math.round((count / max) * 80));
+                  return (
+                    <div key={s} className="flex-1 flex flex-col items-center gap-1">
+                      <div className="text-[10px] tabular-nums text-stone-700">{count}</div>
+                      <div
+                        className={`w-full rounded-t-sm ${count > 0 ? "bg-violet-400" : "bg-stone-200"}`}
+                        style={{ height: `${h}px` }}
+                      />
+                      <div className="text-[10px] text-stone-500">{s === "0" ? "—" : `Step ${s}`}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+          <div className="text-[11px] text-stone-400 mt-2">
+            Tall bars at low steps = lots of contacts not yet contacted. Tall at step 4–5 = sequence working but no conversion.
+          </div>
+        </section>
+
+        {/* Multi-channel pursuit */}
+        <section className="surface p-4">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-stone-900">Multi-channel pursuit</h3>
+            <span className="text-xs text-stone-400 tabular-nums">{kpis.multiChannelContacts.length}</span>
+          </div>
+          <div className="text-[11px] text-stone-500 mb-2">
+            Active contacts with 2+ Cross outreach channels in Notion (you're working them across platforms).
+          </div>
+          {kpis.multiChannelContacts.length === 0 ? (
+            <div className="text-xs text-stone-400">No multi-channel pursuits yet — fill the Cross outreach column in Notion to flag them.</div>
+          ) : (
+            <ul className="flex flex-col gap-1">
+              {kpis.multiChannelContacts.slice(0, 5).map((m) => (
+                <li key={m.id} className="text-xs flex items-center gap-2">
+                  <Link href={`/contacts/${m.id}`} className="text-stone-800 hover:underline truncate">
+                    {m.name}
+                  </Link>
+                  <span className="text-stone-400">·</span>
+                  <span className="text-stone-500">{m.status}</span>
+                  <span className="ml-auto flex gap-1">
+                    {m.channels.map((ch) => (
+                      <span key={ch} className="rounded bg-stone-100 px-1 py-0 text-[10px] text-stone-700">{ch}</span>
+                    ))}
+                  </span>
+                </li>
+              ))}
+              {kpis.multiChannelContacts.length > 5 && (
+                <li className="text-[10px] text-stone-400">+{kpis.multiChannelContacts.length - 5} more</li>
+              )}
+            </ul>
+          )}
+        </section>
+      </div>
+
       {/* Overdue follow-ups */}
       {kpis.followUpsOverdue.length > 0 && (
         <section className="rounded-2xl border border-amber-200 bg-amber-50/40 p-4">
