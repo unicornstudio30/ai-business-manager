@@ -5,10 +5,12 @@ import {
   platformBreakdown7Days,
 } from "@/lib/db/daily-kpis";
 import { getStreak } from "@/lib/db/streak";
+import { getNotionDerivedKpis } from "@/lib/db/notion-derived-kpis";
 import { StreakHero } from "@/components/daily-sales/streak-hero";
 import { PlatformCapsPanel } from "@/components/daily-sales/platform-caps";
 import { WinAnalysisPanel } from "@/components/daily-sales/win-analysis";
 import { Platform7DayGrid } from "@/components/daily-sales/platform-7day-grid";
+import { DerivedKpisPanel } from "@/components/daily-sales/derived-kpis-panel";
 import { ExternalLink } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -27,11 +29,12 @@ const KPI_FIELDS: Array<{ key: string; label: string; emoji: string }> = [
 
 export default async function DailySalesPage() {
   const today = new Date();
-  const [week, platformToday, platformWeek, streak] = await Promise.all([
+  const [week, platformToday, platformWeek, streak, derived] = await Promise.all([
     get7DaysOfKpis(),
     platformBreakdownForDate(today),
     platformBreakdown7Days(),
     getStreak(),
+    getNotionDerivedKpis(today),
   ]);
 
   const crmDbUrl = "https://www.notion.so/35d0b601369a80519256ec4232d5f6a8";
@@ -59,6 +62,9 @@ export default async function DailySalesPage() {
 
       {/* Gamification — streak + week sparkline */}
       <StreakHero streak={streak} />
+
+      {/* COMPREHENSIVE Notion-derived KPIs (input/output/pipeline/events/overdue) */}
+      <DerivedKpisPanel kpis={derived} />
 
       {/* Per-platform safety caps */}
       <PlatformCapsPanel counts={platformToday} />
