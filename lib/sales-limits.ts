@@ -13,8 +13,6 @@ export const PLATFORM_LIMITS = {
     actions: {
       connect:    { max: 40,  label: "Connection requests" },
       dm:         { max: 100, label: "DMs to connections" },
-      inmail:     { max: 30,  label: "InMails" },
-      comment:    { max: 50,  label: "Comments" },
       follow_up:  { max: 30,  label: "Follow-ups" },
     },
   },
@@ -24,7 +22,6 @@ export const PLATFORM_LIMITS = {
     actions: {
       dm:        { max: 250, label: "DMs" },
       connect:   { max: 400, label: "Follows" },     // X = follows instead of connect
-      comment:   { max: 50,  label: "Comments/replies (per hr cap)" },
       follow_up: { max: 30,  label: "Follow-ups" },
     },
   },
@@ -34,7 +31,6 @@ export const PLATFORM_LIMITS = {
     actions: {
       dm:        { max: 150, label: "DMs" },
       connect:   { max: 200, label: "Follows" },
-      comment:   { max: 150, label: "Unique comments" },
       follow_up: { max: 30,  label: "Follow-ups" },
     },
   },
@@ -44,7 +40,6 @@ export const PLATFORM_LIMITS = {
     actions: {
       connect:   { max: 40,  label: "Friend requests" },
       dm:        { max: 30,  label: "Cold DMs" },
-      comment:   { max: 30,  label: "Comments" },
       follow_up: { max: 20,  label: "Follow-ups" },
     },
   },
@@ -53,7 +48,6 @@ export const PLATFORM_LIMITS = {
     color: "rose",
     actions: {
       dm:        { max: 30,  label: "DMs" },
-      comment:   { max: 100, label: "Comments" },
       follow_up: { max: 10,  label: "Follow-ups" },
     },
   },
@@ -62,7 +56,6 @@ export const PLATFORM_LIMITS = {
     color: "violet",
     actions: {
       dm:        { max: 20,  label: "DMs (sensitive to spam)" },
-      comment:   { max: 50,  label: "Messages in channels" },
       follow_up: { max: 10,  label: "Follow-ups" },
     },
   },

@@ -52,6 +52,9 @@ export type DerivedKpis = {
   // Outreach (sent/done today, derived from statusDate)
   connectionsSent: { total: number; byPlatform: ByPlatform };
   followUpsSent: { total: number; byPlatform: ByPlatform };
+  // Comments / engagement actions today, derived from Engage Touch increments
+  // captured by the inferred-activities engine on Notion sync.
+  commentsToday: { total: number; byPlatform: ByPlatform };
   leadMagnetsSent: number;
   conversationsOpened: number;
   responsesReceived: number;
@@ -270,7 +273,26 @@ export async function getNotionDerivedKpis(forDate: Date): Promise<DerivedKpis> 
     }
   }
 
-  const totalActions = connectionsSent.total + followUpsSent.total + leadMagnetsSent + conversationsOpened;
+  // ─── Comments today = Engage Touch increments today ───
+  // The inferred-activities engine emits a dm_sent activity each time
+  // Engage Touch ticks up on a synced contact. We count those (filtered by
+  // content prefix to exclude manually-logged DMs) as "engagement actions".
+  const touchActivities = await db
+    .select()
+    .from(schema.activities)
+    .where(and(
+      gte(schema.activities.createdAt, start),
+      lt(schema.activities.createdAt, end),
+      eq(schema.activities.type, "dm_sent")
+    ));
+  const commentsToday = { total: 0, byPlatform: {} as ByPlatform };
+  for (const a of touchActivities) {
+    if (!a.content?.includes("Engage Touch")) continue;
+    commentsToday.total++;
+    if (a.channel) bumpPlatform(commentsToday.byPlatform, a.channel as InboxChannel);
+  }
+
+  const totalActions = connectionsSent.total + followUpsSent.total + commentsToday.total + leadMagnetsSent + conversationsOpened;
   const totalOutcomes = responsesReceived + qualifications + proposalsSent + bookings + callsHeld + dealsWon + dealsLost;
   const responseRate = connectionsSent.total === 0 ? null : Math.round((responsesReceived / connectionsSent.total) * 100);
 
@@ -281,6 +303,7 @@ export async function getNotionDerivedKpis(forDate: Date): Promise<DerivedKpis> 
     date: start,
     connectionsSent,
     followUpsSent,
+    commentsToday,
     leadMagnetsSent,
     conversationsOpened,
     responsesReceived,

@@ -87,7 +87,7 @@ export function DerivedKpisPanel({ kpis }: { kpis: DerivedKpis }) {
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="rounded-lg bg-stone-50/60 border border-stone-200/60 px-2 py-1.5">
-              <div className="text-[10px] uppercase tracking-wide text-stone-500">Connections</div>
+              <div className="text-[10px] uppercase tracking-wide text-stone-500">1st messages</div>
               <div className="text-base font-semibold tabular-nums text-stone-900">{kpis.connectionsSent.total}</div>
               <PlatformList map={kpis.connectionsSent.byPlatform} />
             </div>
@@ -95,6 +95,11 @@ export function DerivedKpisPanel({ kpis }: { kpis: DerivedKpis }) {
               <div className="text-[10px] uppercase tracking-wide text-stone-500">Follow-ups</div>
               <div className="text-base font-semibold tabular-nums text-stone-900">{kpis.followUpsSent.total}</div>
               <PlatformList map={kpis.followUpsSent.byPlatform} />
+            </div>
+            <div className="rounded-lg bg-stone-50/60 border border-stone-200/60 px-2 py-1.5" title="Derived from Engage Touch increments in Notion CRM">
+              <div className="text-[10px] uppercase tracking-wide text-stone-500">Comments / engagement</div>
+              <div className="text-base font-semibold tabular-nums text-stone-900">{kpis.commentsToday.total}</div>
+              <PlatformList map={kpis.commentsToday.byPlatform} />
             </div>
             <div className="rounded-lg bg-stone-50/60 border border-stone-200/60 px-2 py-1.5">
               <div className="text-[10px] uppercase tracking-wide text-stone-500">Lead magnets</div>
