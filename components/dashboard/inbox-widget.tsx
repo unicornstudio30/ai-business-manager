@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowUpRight, Inbox } from "lucide-react";
+import { ArrowUpRight, MessageSquare } from "lucide-react";
 import { CHANNEL_LABELS, CHANNEL_COLORS, type InboxChannel } from "@/lib/inbox";
 import type { InboxItem } from "@/lib/db/inbox-view";
 
@@ -11,9 +11,9 @@ export function InboxWidget({ items, total, byChannel }: { items: InboxItem[]; t
     <div className="rounded-2xl border border-stone-200 bg-white p-6">
       <div className="flex items-baseline justify-between mb-1">
         <div className="text-sm font-semibold text-stone-900 flex items-center gap-2">
-          <Inbox className="size-4 text-stone-400" /> Inbox
+          <MessageSquare className="size-4 text-stone-400" /> DM
         </div>
-        <Link href="/inbox" className="text-xs text-stone-500 hover:text-stone-900 flex items-center gap-1">
+        <Link href="/dm" className="text-xs text-stone-500 hover:text-stone-900 flex items-center gap-1">
           See all <ArrowUpRight className="size-3" />
         </Link>
       </div>
@@ -24,7 +24,7 @@ export function InboxWidget({ items, total, byChannel }: { items: InboxItem[]; t
           {channels.map(([ch, n]) => (
             <Link
               key={ch}
-              href={`/inbox?channel=${ch}`}
+              href={`/dm?channel=${ch}`}
               className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${CHANNEL_COLORS[ch as InboxChannel] ?? "bg-stone-100 text-stone-800 border-stone-200"}`}
             >
               {CHANNEL_LABELS[ch as InboxChannel] ?? ch} · {n}

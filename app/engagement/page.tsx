@@ -1,84 +1,52 @@
-import { listEngagementQueue, getTodayCounts, DAILY_TARGETS } from "@/lib/db/engagement";
+// /engagement — purely the daily engagement (commenting) workflow.
+// DMs, follow-ups, and inbox now live under /dm.
+//
+// Three blocks:
+//   1. EngagementReminders   — today's engagement targets per platform
+//   2. EngagementQueuePlatform — who to comment on TODAY, grouped by platform,
+//      with profile links + Notion edit links + per-platform CSV downloads
+//   3. PlatformEngagementSection — long-term engagement health per platform
+//      (highly engaged / touched / cold)
+
+import { getNotionDerivedKpis } from "@/lib/db/notion-derived-kpis";
 import { getEngagementByPlatform } from "@/lib/db/engagement-by-platform";
-import { EngagementRow } from "@/components/engagement/engagement-row";
-import { DailyProgress } from "@/components/engagement/daily-progress";
+import { getEngagementQueueByPlatform } from "@/lib/db/engagement-queue";
+import { EngagementReminders } from "@/components/engagement/engagement-reminders";
+import { EngagementQueuePlatform } from "@/components/engagement/engagement-queue-platform";
 import { PlatformEngagementSection } from "@/components/engagement/platform-engagement";
 
 export const dynamic = "force-dynamic";
 
-export default async function EngagementPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ scope?: string }>;
-}) {
-  const sp = await searchParams;
-  const onlyHot = sp.scope !== "all";
+export default async function EngagementPage() {
+  const today = new Date();
 
-  const [queue, counts, byPlatform] = await Promise.all([
-    listEngagementQueue({ onlyHot, limit: 100 }),
-    getTodayCounts(),
+  const [kpis, queue, byPlatform] = await Promise.all([
+    getNotionDerivedKpis(today),
+    getEngagementQueueByPlatform(),
     getEngagementByPlatform(),
   ]);
 
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <div className="text-xs font-medium uppercase tracking-wider text-stone-500 mb-1">Daily outreach</div>
-        <h1 className="text-3xl font-semibold tracking-tight text-stone-900">Engagement &amp; Outreach</h1>
+        <div className="text-xs font-medium uppercase tracking-wider text-stone-500 mb-1">
+          Comment on prospects · earn the conversation
+        </div>
+        <h1 className="text-3xl font-semibold tracking-tight text-stone-900">Engagement</h1>
         <p className="text-sm text-stone-500 mt-1">
-          Daily queue ranked by ICP fit + per-platform engagement levels derived from Notion CRM.
+          Daily commenting workflow. DMs and follow-ups live under{" "}
+          <a href="/dm" className="text-violet-700 hover:underline">DM</a>.
         </p>
       </div>
 
-      <DailyProgress counts={counts} targets={DAILY_TARGETS} />
+      {/* 1. Daily engagement targets + per-platform progress */}
+      <EngagementReminders kpis={kpis} />
 
-      {/* Per-platform engagement breakdown with CSV downloads */}
+      {/* 2. Today's prioritized queue by platform with profile/Notion links + CSV */}
+      <EngagementQueuePlatform data={queue} />
+
+      {/* 3. Long-term engagement health (touched/cold) */}
       <PlatformEngagementSection data={byPlatform} />
-
-      {/* Existing queue */}
-      <section>
-        <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
-          <h2 className="text-sm font-semibold text-stone-900">Daily queue</h2>
-          <div className="flex items-center gap-2">
-            <a
-              href="/engagement"
-              className={`text-sm rounded-md px-3 py-1.5 ${onlyHot ? "bg-stone-900 text-white" : "text-stone-600 hover:bg-stone-100"}`}
-            >
-              Hot leads only ({onlyHot ? queue.length : "—"})
-            </a>
-            <a
-              href="/engagement?scope=all"
-              className={`text-sm rounded-md px-3 py-1.5 ${!onlyHot ? "bg-stone-900 text-white" : "text-stone-600 hover:bg-stone-100"}`}
-            >
-              All contacts ({!onlyHot ? queue.length : "—"})
-            </a>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-3">
-          {queue.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-stone-300 bg-white p-12 text-center text-sm text-stone-500">
-              No contacts match. Try switching to "All contacts" or add prospects in Notion.
-            </div>
-          ) : (
-            queue.map(({ contact, score, lastActivity }) => (
-              <EngagementRow
-                key={contact.id}
-                id={contact.id}
-                name={contact.name}
-                stage={contact.status}
-                status={contact.status}
-                platform={contact.platform}
-                remarks={contact.remarks}
-                contactUrl={contact.contactUrl}
-                notionPageId={contact.notionPageId}
-                score={score}
-                lastActivity={lastActivity}
-              />
-            ))
-          )}
-        </div>
-      </section>
     </div>
   );
 }
