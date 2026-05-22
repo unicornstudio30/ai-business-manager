@@ -42,6 +42,7 @@ import { generateNextMessage } from "@/lib/ai/next-message";
 import { getStuckSuggestion } from "@/lib/ai/stuck-suggestion";
 import { getDailySummary } from "@/lib/ai/daily-summary";
 import { classifyContact } from "@/lib/ai/classify-icp";
+import { draftComment } from "@/lib/ai/comment-draft";
 import { getHistory, type HistoryEventType } from "@/lib/db/history";
 
 // JSON-serialize a result wrapping it as MCP text content.
@@ -555,6 +556,29 @@ export function buildMcpServer(): McpServer {
         limit,
       });
       return ok({ count: events.length, events });
+    }
+  );
+
+  server.registerTool(
+    "comment_draft",
+    {
+      title: "Draft Comment for Prospect's Post",
+      description:
+        "Drafts an ACA comment on a prospect's social post in Saidur's voice. " +
+        "Provide either postText (paste the post body) OR postUrl. Optionally " +
+        "pass contact_id so the LLM knows who you're addressing. " +
+        "Use when Taplio/Tweethunter isn't available or you want a quick draft.",
+      inputSchema: {
+        postText: z.string().optional().describe("The post body text. Preferred over postUrl when available."),
+        postUrl: z.string().optional().describe("URL of the post (used as fallback if no text)"),
+        contact_id: z.string().optional().describe("Contact ULID — adds the prospect's profile context"),
+        extraContext: z.string().optional().describe("Optional one-liner of extra context (e.g., 'they just raised seed')"),
+      },
+    },
+    async ({ postText, postUrl, contact_id, extraContext }) => {
+      const result = await draftComment({ postText, postUrl, contactId: contact_id, extraContext });
+      if (!result) return ok({ error: "OPENROUTER_API_KEY not set or no post content provided" });
+      return ok(result);
     }
   );
 

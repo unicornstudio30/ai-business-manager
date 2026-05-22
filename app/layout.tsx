@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Sidebar } from "@/components/nav/sidebar";
 import { SyncButton } from "@/components/sync-button";
+import { QuickLog } from "@/components/quick-log";
 
 export const metadata: Metadata = {
   title: "Unicorn Studio — AI Business Manager",
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <main className="flex-1 p-6 md:p-8 max-w-[1400px] w-full">{children}</main>
           </div>
         </div>
+        <QuickLog />
       </body>
     </html>
   );
