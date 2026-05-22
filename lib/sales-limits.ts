@@ -29,7 +29,8 @@ export const PLATFORM_LIMITS = {
     label: "X (Twitter)",
     color: "stone",
     actions: {
-      dm:        { max: 250, perHour: 30, label: "DMs" },
+      dm:        { max: 250, perHour: 30, label: "DMs (mutuals/open inbox)" },
+      inmail:    { max: 30,  perHour: 4,  label: "Cold DMs (non-followers)" },
       connect:   { max: 400, perHour: 50, label: "Follows" },
       follow_up: { max: 30,  perHour: 4,  label: "Follow-ups" },
     },
@@ -38,7 +39,8 @@ export const PLATFORM_LIMITS = {
     label: "Instagram",
     color: "pink",
     actions: {
-      dm:        { max: 150, perHour: 18, label: "DMs" },
+      dm:        { max: 150, perHour: 18, label: "DMs (mutuals)" },
+      inmail:    { max: 20,  perHour: 3,  label: "Cold DMs (non-follows)" },
       connect:   { max: 200, perHour: 25, label: "Follows" },
       follow_up: { max: 30,  perHour: 4,  label: "Follow-ups" },
     },
@@ -48,7 +50,8 @@ export const PLATFORM_LIMITS = {
     color: "indigo",
     actions: {
       connect:   { max: 40,  perHour: 5,  label: "Friend requests" },
-      dm:        { max: 30,  perHour: 4,  label: "Cold DMs" },
+      dm:        { max: 80,  perHour: 10, label: "DMs to friends" },
+      inmail:    { max: 15,  perHour: 2,  label: "Cold DMs (non-friends)" },
       follow_up: { max: 20,  perHour: 3,  label: "Follow-ups" },
     },
   },
@@ -56,7 +59,8 @@ export const PLATFORM_LIMITS = {
     label: "Reddit",
     color: "rose",
     actions: {
-      dm:        { max: 30,  perHour: 4,  label: "DMs" },
+      dm:        { max: 30,  perHour: 4,  label: "DMs (replied/known)" },
+      inmail:    { max: 15,  perHour: 2,  label: "Cold DMs (first touch)" },
       follow_up: { max: 10,  perHour: 2,  label: "Follow-ups" },
     },
   },
@@ -64,7 +68,8 @@ export const PLATFORM_LIMITS = {
     label: "Discord",
     color: "violet",
     actions: {
-      dm:        { max: 20,  perHour: 3,  label: "DMs (sensitive to spam)" },
+      dm:        { max: 20,  perHour: 3,  label: "DMs (mutual servers)" },
+      inmail:    { max: 10,  perHour: 2,  label: "Cold DMs (no mutuals)" },
       follow_up: { max: 10,  perHour: 2,  label: "Follow-ups" },
     },
   },
@@ -72,7 +77,8 @@ export const PLATFORM_LIMITS = {
     label: "WhatsApp",
     color: "green",
     actions: {
-      dm:        { max: 30,  perHour: 4,  label: "DMs (personal, ban-sensitive)" },
+      dm:        { max: 30,  perHour: 4,  label: "DMs (existing chats)" },
+      inmail:    { max: 10,  perHour: 2,  label: "Cold (no prior chat)" },
       follow_up: { max: 20,  perHour: 3,  label: "Follow-ups to existing chats" },
     },
   },
@@ -81,6 +87,7 @@ export const PLATFORM_LIMITS = {
     color: "violet",
     actions: {
       dm:        { max: 30,  perHour: 4,  label: "DMs in workspaces" },
+      inmail:    { max: 15,  perHour: 2,  label: "Cold (cross-workspace)" },
       follow_up: { max: 15,  perHour: 2,  label: "Follow-ups" },
     },
   },
@@ -88,7 +95,8 @@ export const PLATFORM_LIMITS = {
     label: "Cold Email",
     color: "amber",
     actions: {
-      dm:        { max: 40,  perHour: 6,  label: "Cold emails sent" },
+      dm:        { max: 40,  perHour: 6,  label: "Warm replies" },
+      inmail:    { max: 40,  perHour: 6,  label: "Cold first sends" },
       follow_up: { max: 40,  perHour: 6,  label: "Follow-up emails" },
     },
   },
@@ -96,6 +104,13 @@ export const PLATFORM_LIMITS = {
 
 export type PlatformKey = keyof typeof PLATFORM_LIMITS;
 export type ActionKey = "dm" | "connect" | "comment" | "follow_up" | "inmail";
+
+// Runtime-overridable shape — populated from app_settings overrides on top of
+// PLATFORM_LIMITS. See lib/outreach-config.ts for how this is built.
+export type EffectiveAction = { max: number; perHour: number; label: string };
+export type EffectivePlatform = { label: string; color: string; actions: Partial<Record<ActionKey, EffectiveAction>> };
+export type EffectiveLimits = Partial<Record<PlatformKey, EffectivePlatform>>;
+export type ActiveWindow = { startHour: number; endHour: number };
 
 // Daily targets at 75% of platform max (leave 25% safety buffer).
 export const TARGET_PCT = 0.75;
@@ -111,41 +126,55 @@ export const ACTIVE_WINDOW_START_HOUR = 10;     // 10 AM
 export const ACTIVE_WINDOW_END_HOUR   = 23;     // 11 PM (exclusive)
 export const ACTIVE_HOURS = ACTIVE_WINDOW_END_HOUR - ACTIVE_WINDOW_START_HOUR;
 
-export function target(platform: PlatformKey, action: ActionKey, isWarmup = false): number {
-  const max = (PLATFORM_LIMITS[platform].actions as any)[action]?.max;
+// Read max+perHour for an action. Prefers the runtime-overridden limits when
+// provided; falls back to static PLATFORM_LIMITS.
+function actionCfg(platform: PlatformKey, action: ActionKey, limits?: EffectiveLimits) {
+  if (limits) {
+    const a = limits[platform]?.actions?.[action];
+    if (a) return a;
+  }
+  return (PLATFORM_LIMITS[platform].actions as any)[action] ?? null;
+}
+
+export function target(platform: PlatformKey, action: ActionKey, isWarmup = false, limits?: EffectiveLimits): number {
+  const max = actionCfg(platform, action, limits)?.max;
   if (!max) return 0;
   return Math.floor(max * (isWarmup ? WARMUP_PCT : TARGET_PCT));
 }
 
-export function maxFor(platform: PlatformKey, action: ActionKey): number {
-  return (PLATFORM_LIMITS[platform].actions as any)[action]?.max ?? 0;
+export function maxFor(platform: PlatformKey, action: ActionKey, limits?: EffectiveLimits): number {
+  return actionCfg(platform, action, limits)?.max ?? 0;
 }
 
 // Hourly pacing budget — soft target, not a hard cap. Warmup halves it.
-export function perHour(platform: PlatformKey, action: ActionKey, isWarmup = false): number {
-  const ph = (PLATFORM_LIMITS[platform].actions as any)[action]?.perHour ?? 0;
+export function perHour(platform: PlatformKey, action: ActionKey, isWarmup = false, limits?: EffectiveLimits): number {
+  const ph = actionCfg(platform, action, limits)?.perHour ?? 0;
   return isWarmup ? Math.max(1, Math.floor(ph * 0.5)) : ph;
 }
 
 // Status of a single counter against its target/max.
 // safe (green) = below target. warn (amber) = between target and 90% of max. danger (red) = ≥90% of max.
 export type CapStatus = "safe" | "warn" | "danger";
-export function capStatus(count: number, platform: PlatformKey, action: ActionKey, isWarmup = false): CapStatus {
-  const t = target(platform, action, isWarmup);
-  const m = maxFor(platform, action);
+export function capStatus(count: number, platform: PlatformKey, action: ActionKey, isWarmup = false, limits?: EffectiveLimits): CapStatus {
+  const t = target(platform, action, isWarmup, limits);
+  const m = maxFor(platform, action, limits);
   if (count >= m * 0.9) return "danger";
   if (count >= t) return "warn";
   return "safe";
 }
 
 // Hourly pacing status — compares actions-so-far-today against the pace we
-// "should" have at this hour-of-day, based on the active window above.
-// Behind = safe, on-pace = ok, over-pace = burst risk.
+// "should" have at this hour-of-day, based on the active window. Behind = safe,
+// on-pace = ok, over-pace = burst risk. Default window comes from constants
+// above; pass a custom window to respect runtime overrides.
 export type PaceStatus = "behind" | "on_pace" | "over_pace";
 
-export function activeHoursElapsed(now: Date = new Date()): number {
+const DEFAULT_WINDOW: ActiveWindow = { startHour: ACTIVE_WINDOW_START_HOUR, endHour: ACTIVE_WINDOW_END_HOUR };
+
+export function activeHoursElapsed(now: Date = new Date(), window: ActiveWindow = DEFAULT_WINDOW): number {
   const hour = now.getHours();
-  return Math.max(0, Math.min(ACTIVE_HOURS, hour - ACTIVE_WINDOW_START_HOUR + 1));
+  const span = Math.max(0, window.endHour - window.startHour);
+  return Math.max(0, Math.min(span, hour - window.startHour + 1));
 }
 
 export function paceStatus(
@@ -153,11 +182,13 @@ export function paceStatus(
   platform: PlatformKey,
   action: ActionKey,
   now: Date = new Date(),
-  isWarmup = false
+  isWarmup = false,
+  limits?: EffectiveLimits,
+  window: ActiveWindow = DEFAULT_WINDOW
 ): PaceStatus {
-  const ph = perHour(platform, action, isWarmup);
+  const ph = perHour(platform, action, isWarmup, limits);
   if (ph === 0) return "on_pace";
-  const expected = ph * activeHoursElapsed(now);
+  const expected = ph * activeHoursElapsed(now, window);
   if (count < expected * 0.6) return "behind";
   if (count > expected * 1.4) return "over_pace";
   return "on_pace";

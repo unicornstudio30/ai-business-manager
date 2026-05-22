@@ -6,11 +6,15 @@ import {
 } from "@/lib/db/daily-kpis";
 import { getStreak } from "@/lib/db/streak";
 import { getNotionDerivedKpis } from "@/lib/db/notion-derived-kpis";
+import { getEffectiveOutreachLimits } from "@/lib/outreach-config";
 import { StreakHero } from "@/components/daily-sales/streak-hero";
 import { PlatformCapsPanel } from "@/components/daily-sales/platform-caps";
 import { WinAnalysisPanel } from "@/components/daily-sales/win-analysis";
 import { Platform7DayGrid } from "@/components/daily-sales/platform-7day-grid";
 import { DerivedKpisPanel } from "@/components/daily-sales/derived-kpis-panel";
+import { ConnectReminders } from "@/components/connect/connect-reminders";
+import { EngagementReminders } from "@/components/engagement/engagement-reminders";
+import { DmReminders } from "@/components/dm/dm-reminders";
 import { ExternalLink } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -29,12 +33,13 @@ const KPI_FIELDS: Array<{ key: string; label: string; emoji: string }> = [
 
 export default async function DailySalesPage() {
   const today = new Date();
-  const [week, platformToday, platformWeek, streak, derived] = await Promise.all([
+  const [week, platformToday, platformWeek, streak, derived, effective] = await Promise.all([
     get7DaysOfKpis(),
     platformBreakdownForDate(today),
     platformBreakdown7Days(),
     getStreak(),
     getNotionDerivedKpis(today),
+    getEffectiveOutreachLimits(),
   ]);
 
   const crmDbUrl = "https://www.notion.so/35d0b601369a80519256ec4232d5f6a8";
@@ -66,8 +71,19 @@ export default async function DailySalesPage() {
       {/* COMPREHENSIVE Notion-derived KPIs (input/output/pipeline/events/overdue) */}
       <DerivedKpisPanel kpis={derived} />
 
+      {/* Per-target detail with daily + hourly pacing — separate sub-rows per
+          platform for Connect, Engage, and DM (Connected DM / InMail / Follow-ups). */}
+      <ConnectReminders kpis={derived} limits={effective.limits} activeWindow={effective.activeWindow} />
+      <EngagementReminders kpis={derived} limits={effective.limits} activeWindow={effective.activeWindow} />
+      <DmReminders kpis={derived} limits={effective.limits} activeWindow={effective.activeWindow} />
+
       {/* Per-platform safety caps */}
-      <PlatformCapsPanel counts={platformToday} />
+      <PlatformCapsPanel
+        counts={platformToday}
+        connectByPlatform={derived.connectionsSent.byPlatform}
+        inmailByPlatform={derived.inmailsSent.byPlatform}
+        limits={effective.limits}
+      />
 
       {/* Today's win analysis pulled from Sales Tracker daily entry */}
       <WinAnalysisPanel />

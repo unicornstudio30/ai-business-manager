@@ -25,6 +25,8 @@ import {
   type PlatformKey,
   type ActionKey,
   type PaceStatus,
+  type EffectiveLimits,
+  type ActiveWindow,
 } from "@/lib/sales-limits";
 
 type Row = {
@@ -45,40 +47,59 @@ const PACE_TONE: Record<PaceStatus, { text: string; chip: string; label: string 
   over_pace: { text: "text-red-700",     chip: "bg-red-100 text-red-800",         label: "Burst risk" },
 };
 
-export function ConnectReminders({ kpis }: { kpis: DerivedKpis }) {
+function fmtHour(h: number): string {
+  const hr = ((h + 11) % 12) + 1;
+  const ap = h < 12 || h === 24 ? "am" : "pm";
+  return `${hr}${ap}`;
+}
+function formatWindow(w?: ActiveWindow): string {
+  const start = w?.startHour ?? 10;
+  const end = w?.endHour ?? 23;
+  return `${fmtHour(start)}–${fmtHour(end)}`;
+}
+
+export function ConnectReminders({
+  kpis,
+  limits,
+  activeWindow,
+}: {
+  kpis: DerivedKpis;
+  limits?: EffectiveLimits;
+  activeWindow?: ActiveWindow;
+}) {
   const now = new Date();
 
   const rows: Row[] = [];
   for (const p of PLATFORMS_ORDER) {
-    const cfg = PLATFORM_LIMITS[p].actions as any;
-    // Connect-style action (LinkedIn "connect", Facebook "connect" = friend req,
-    // IG/X "connect" = follow). Skip platforms with no connect action.
+    const cfg = (limits?.[p]?.actions ?? PLATFORM_LIMITS[p].actions) as any;
     if (cfg.connect?.max) {
       const count = (kpis.connectionsSent.byPlatform as any)[p] ?? 0;
+      const t = target(p, "connect", false, limits);
       rows.push({
         platform: p,
         action: "connect",
         label: `${PLATFORM_LIMITS[p].label} · ${cfg.connect.label}`,
         count,
-        dailyTarget: target(p, "connect"),
-        dailyMax: maxFor(p, "connect"),
-        hourly: perHour(p, "connect"),
-        pace: paceStatus(count, p, "connect", now),
-        dailyPct: target(p, "connect") > 0 ? Math.round((count / target(p, "connect")) * 100) : 0,
+        dailyTarget: t,
+        dailyMax: maxFor(p, "connect", limits),
+        hourly: perHour(p, "connect", false, limits),
+        pace: paceStatus(count, p, "connect", now, false, limits, activeWindow),
+        dailyPct: t > 0 ? Math.round((count / t) * 100) : 0,
       });
     }
     if (cfg.inmail?.max) {
       const count = (kpis.inmailsSent.byPlatform as any)[p] ?? 0;
+      const t = target(p, "inmail", false, limits);
       rows.push({
         platform: p,
         action: "inmail",
         label: `${PLATFORM_LIMITS[p].label} · ${cfg.inmail.label}`,
         count,
-        dailyTarget: target(p, "inmail"),
-        dailyMax: maxFor(p, "inmail"),
-        hourly: perHour(p, "inmail"),
-        pace: paceStatus(count, p, "inmail", now),
-        dailyPct: target(p, "inmail") > 0 ? Math.round((count / target(p, "inmail")) * 100) : 0,
+        dailyTarget: t,
+        dailyMax: maxFor(p, "inmail", limits),
+        hourly: perHour(p, "inmail", false, limits),
+        pace: paceStatus(count, p, "inmail", now, false, limits, activeWindow),
+        dailyPct: t > 0 ? Math.round((count / t) * 100) : 0,
       });
     }
   }
@@ -161,8 +182,9 @@ export function ConnectReminders({ kpis }: { kpis: DerivedKpis }) {
       </div>
 
       <div className="mt-3 text-[11px] text-stone-500">
-        Daily target = 75% of platform max. Hourly pace is the budget per active hour (10am–11pm)
-        — staying near it spreads outreach across the day and reduces ban risk vs burst-sending.
+        Daily target = 75% of platform max. Hourly pace is the budget per active hour
+        ({formatWindow(activeWindow)}) — staying near it spreads outreach across the day and reduces
+        ban risk vs burst-sending.
       </div>
     </section>
   );

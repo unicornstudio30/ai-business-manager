@@ -12,7 +12,9 @@ import {
   capStatus,
   type PlatformKey,
   type ActionKey,
+  type EffectiveLimits,
 } from "@/lib/sales-limits";
+import type { ByPlatform } from "@/lib/db/notion-derived-kpis";
 import { ExternalLink } from "lucide-react";
 
 // Map InboxChannel (from platformBreakdownForDate) → PlatformKey
@@ -62,16 +64,18 @@ function CapBar({
   action,
   count,
   isWarmup,
+  limits,
 }: {
   platform: PlatformKey;
   action: ActionKey;
   count: number;
   isWarmup?: boolean;
+  limits?: EffectiveLimits;
 }) {
-  const t = target(platform, action, isWarmup);
-  const m = maxFor(platform, action);
+  const t = target(platform, action, isWarmup, limits);
+  const m = maxFor(platform, action, limits);
   if (m === 0) return null;
-  const status = capStatus(count, platform, action, isWarmup);
+  const status = capStatus(count, platform, action, isWarmup, limits);
   const pctOfMax = Math.min(100, Math.round((count / m) * 100));
   const pctOfTarget = t === 0 ? 0 : Math.min(100, Math.round((count / t) * 100));
   const label = (PLATFORM_LIMITS[platform].actions as any)[action]?.label ?? action;
@@ -98,7 +102,19 @@ function CapBar({
   );
 }
 
-export function PlatformCapsPanel({ counts, isWarmup }: { counts: PlatformCountsForCaps[]; isWarmup?: boolean }) {
+export function PlatformCapsPanel({
+  counts,
+  connectByPlatform,
+  inmailByPlatform,
+  isWarmup,
+  limits,
+}: {
+  counts: PlatformCountsForCaps[];
+  connectByPlatform?: ByPlatform;
+  inmailByPlatform?: ByPlatform;
+  isWarmup?: boolean;
+  limits?: EffectiveLimits;
+}) {
   // Index by platform key for fast lookup
   const byPlatform = new Map<PlatformKey, PlatformCountsForCaps>();
   for (const c of counts) {
@@ -132,14 +148,17 @@ export function PlatformCapsPanel({ counts, isWarmup }: { counts: PlatformCounts
               <div className="flex flex-col gap-2">
                 {actionKeys.map((action) => {
                   let count = 0;
-                  if (data) {
+                  if (action === "connect") {
+                    count = (connectByPlatform as any)?.[p] ?? 0;
+                  } else if (action === "inmail") {
+                    count = (inmailByPlatform as any)?.[p] ?? 0;
+                  } else if (data) {
                     if (action === "dm") count = data.dms;
                     else if (action === "comment") count = data.comments;
                     else if (action === "follow_up") count = data.followUps;
-                    else if (action === "connect" || action === "inmail") count = 0;
                   }
                   return (
-                    <CapBar key={action} platform={p} action={action} count={count} isWarmup={isWarmup} />
+                    <CapBar key={action} platform={p} action={action} count={count} isWarmup={isWarmup} limits={limits} />
                   );
                 })}
               </div>

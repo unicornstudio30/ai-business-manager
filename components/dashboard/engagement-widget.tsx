@@ -6,24 +6,26 @@ import Link from "next/link";
 import { ArrowUpRight, Flame, Sparkles, Star } from "lucide-react";
 import type { DerivedKpis } from "@/lib/db/notion-derived-kpis";
 import type { EngagementQueueByPlatform } from "@/lib/db/engagement-queue";
-import { PLATFORM_LIMITS, type PlatformKey } from "@/lib/sales-limits";
+import { PLATFORM_LIMITS, type EffectiveLimits, type PlatformKey } from "@/lib/sales-limits";
 
 const ENGAGEMENT_PLATFORMS: PlatformKey[] = ["linkedin", "x", "instagram", "facebook", "reddit"];
 
-function commentTarget(p: PlatformKey): number {
-  const dmMax = (PLATFORM_LIMITS[p].actions as any).dm?.max ?? 30;
+function commentTarget(p: PlatformKey, limits?: EffectiveLimits): number {
+  const dmMax = (limits?.[p]?.actions ?? (PLATFORM_LIMITS[p].actions as any)).dm?.max ?? 30;
   return Math.floor(dmMax * 0.4);
 }
 
 export function EngagementWidget({
   kpis,
   queue,
+  limits,
 }: {
   kpis: DerivedKpis;
   queue: EngagementQueueByPlatform;
+  limits?: EffectiveLimits;
 }) {
   const grandTarget = ENGAGEMENT_PLATFORMS.reduce((s, p) => {
-    const t = commentTarget(p);
+    const t = commentTarget(p, limits);
     return s + (t > 0 ? t : 0);
   }, 0);
   const grandTotal = kpis.commentsToday.total;

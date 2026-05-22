@@ -141,6 +141,13 @@
       "when": 1779430117576,
       "tag": "0019_adorable_lethal_legion",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1779453845931,
+      "tag": "0020_app_settings",
+      "breakpoints": true
     }
   ]
 }

@@ -300,9 +300,10 @@ export async function getNotionDerivedKpis(forDate: Date): Promise<DerivedKpis> 
     if (a.channel) bumpPlatform(commentsToday.byPlatform, a.channel as InboxChannel);
   }
 
-  const totalActions = connectionsSent.total + followUpsSent.total + commentsToday.total + leadMagnetsSent + conversationsOpened;
+  const totalActions = connectionsSent.total + inmailsSent.total + followUpsSent.total + commentsToday.total + leadMagnetsSent + conversationsOpened;
   const totalOutcomes = responsesReceived + qualifications + proposalsSent + bookings + callsHeld + dealsWon + dealsLost;
-  const responseRate = connectionsSent.total === 0 ? null : Math.round((responsesReceived / connectionsSent.total) * 100);
+  const firstTouches = connectionsSent.total + inmailsSent.total;
+  const responseRate = firstTouches === 0 ? null : Math.round((responsesReceived / firstTouches) * 100);
 
   // Sort multi-channel by count desc
   multiChannelContacts.sort((a, b) => b.channels.length - a.channels.length);

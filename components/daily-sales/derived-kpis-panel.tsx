@@ -86,10 +86,15 @@ export function DerivedKpisPanel({ kpis }: { kpis: DerivedKpis }) {
             <span className="ml-auto text-2xl font-semibold tabular-nums text-stone-900">{kpis.totalActions}</span>
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="rounded-lg bg-stone-50/60 border border-stone-200/60 px-2 py-1.5">
-              <div className="text-[10px] uppercase tracking-wide text-stone-500">1st messages</div>
+            <div className="rounded-lg bg-stone-50/60 border border-stone-200/60 px-2 py-1.5" title="Contacts moved to '1st message' status today — DMs to already-connected people">
+              <div className="text-[10px] uppercase tracking-wide text-stone-500">1st messages (connected)</div>
               <div className="text-base font-semibold tabular-nums text-stone-900">{kpis.connectionsSent.total}</div>
               <PlatformList map={kpis.connectionsSent.byPlatform} />
+            </div>
+            <div className="rounded-lg bg-stone-50/60 border border-stone-200/60 px-2 py-1.5" title="Contacts moved to 'In-mail' status today — cold first message to non-connections">
+              <div className="text-[10px] uppercase tracking-wide text-stone-500">InMails (cold)</div>
+              <div className="text-base font-semibold tabular-nums text-stone-900">{kpis.inmailsSent.total}</div>
+              <PlatformList map={kpis.inmailsSent.byPlatform} />
             </div>
             <div className="rounded-lg bg-stone-50/60 border border-stone-200/60 px-2 py-1.5">
               <div className="text-[10px] uppercase tracking-wide text-stone-500">Follow-ups</div>
@@ -120,7 +125,7 @@ export function DerivedKpisPanel({ kpis }: { kpis: DerivedKpis }) {
             {kpis.responseRate === null ? "—" : `${kpis.responseRate}%`}
           </div>
           <div className="text-[10px] text-stone-400 mt-0.5">
-            {kpis.responsesReceived} / {kpis.connectionsSent.total} today
+            {kpis.responsesReceived} / {kpis.connectionsSent.total + kpis.inmailsSent.total} today
           </div>
         </section>
 

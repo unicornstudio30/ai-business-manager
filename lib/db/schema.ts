@@ -384,6 +384,14 @@ export const aiCache = sqliteTable("ai_cache", {
   expiresAt: ts("expires_at").notNull(),
 });
 
+// Generic key/value app settings. JSON values keyed by name.
+// First user: outreach limits + active window overrides (see lib/outreach-config.ts).
+export const appSettings = sqliteTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value"),
+  updatedAt: ts("updated_at").$defaultFn(() => new Date()),
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Type exports
 // ─────────────────────────────────────────────────────────────────────────────

@@ -10,6 +10,7 @@ import { MessageSquare } from "lucide-react";
 import { inboxView } from "@/lib/db/inbox-view";
 import { getDmHistory } from "@/lib/db/dm-history";
 import { getNotionDerivedKpis } from "@/lib/db/notion-derived-kpis";
+import { getEffectiveOutreachLimits } from "@/lib/outreach-config";
 import { CHANNEL_LABELS, INBOX_CHANNELS, type InboxChannel } from "@/lib/inbox";
 import { InboxRow } from "@/components/inbox/inbox-row";
 import { DmReminders } from "@/components/dm/dm-reminders";
@@ -26,10 +27,11 @@ export default async function DmPage({
   const selectedChannel = (sp.channel as InboxChannel | undefined) ?? undefined;
 
   const today = new Date();
-  const [kpis, inboxAll, historyAll] = await Promise.all([
+  const [kpis, inboxAll, historyAll, effective] = await Promise.all([
     getNotionDerivedKpis(today),
     inboxView(),
     getDmHistory({ limit: 100 }),
+    getEffectiveOutreachLimits(),
   ]);
 
   const inboxItems = selectedChannel ? inboxAll.filter((i) => i.channel === selectedChannel) : inboxAll;
@@ -56,7 +58,7 @@ export default async function DmPage({
       </div>
 
       {/* 1. Today's DM targets per platform */}
-      <DmReminders kpis={kpis} />
+      <DmReminders kpis={kpis} limits={effective.limits} activeWindow={effective.activeWindow} />
 
       {/* Channel filter — applies to both inbox and history below */}
       <div className="flex flex-wrap items-center gap-2 border-b border-stone-200 pb-3">

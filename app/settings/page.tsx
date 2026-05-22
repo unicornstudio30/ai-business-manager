@@ -1,14 +1,21 @@
 import { syncStatus } from "@/lib/notion/sync";
 import { fmtDateTime } from "@/lib/utils";
 import { NotionColumnsSetup } from "@/components/settings/notion-columns-setup";
+import { OutreachLimitsForm } from "@/components/settings/outreach-limits-form";
+import { getOutreachConfig, buildEffectiveLimits } from "@/lib/outreach-config";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const status = await syncStatus();
+  const [status, outreachConfig] = await Promise.all([syncStatus(), getOutreachConfig()]);
+  // The form needs the defaults (labels + baseline numbers) AND the current
+  // saved overrides so it can pre-populate the inputs.
+  const effective = buildEffectiveLimits({}); // pure defaults, no overrides applied
   return (
     <div className="flex flex-col gap-5 max-w-3xl">
       <h1 className="text-2xl font-semibold text-stone-900">Settings</h1>
+
+      <OutreachLimitsForm defaults={effective as any} initial={outreachConfig} />
 
       <section className="rounded-xl border border-stone-200 bg-white p-6">
         <div className="text-sm font-semibold text-stone-900 mb-3">Notion integration</div>

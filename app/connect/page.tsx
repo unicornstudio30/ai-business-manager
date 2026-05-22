@@ -16,6 +16,7 @@
 import { UserPlus } from "lucide-react";
 import { getNotionDerivedKpis } from "@/lib/db/notion-derived-kpis";
 import { getConnectQueueByPlatform } from "@/lib/db/connect-queue";
+import { getEffectiveOutreachLimits } from "@/lib/outreach-config";
 import { ConnectReminders } from "@/components/connect/connect-reminders";
 import { ConnectQueuePlatform } from "@/components/connect/connect-queue-platform";
 
@@ -23,9 +24,10 @@ export const dynamic = "force-dynamic";
 
 export default async function ConnectPage() {
   const today = new Date();
-  const [kpis, queue] = await Promise.all([
+  const [kpis, queue, effective] = await Promise.all([
     getNotionDerivedKpis(today),
     getConnectQueueByPlatform(),
+    getEffectiveOutreachLimits(),
   ]);
 
   return (
@@ -45,7 +47,7 @@ export default async function ConnectPage() {
         </p>
       </div>
 
-      <ConnectReminders kpis={kpis} />
+      <ConnectReminders kpis={kpis} limits={effective.limits} activeWindow={effective.activeWindow} />
 
       <ConnectQueuePlatform data={queue} />
     </div>

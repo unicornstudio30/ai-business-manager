@@ -26,11 +26,12 @@ import { db, schema } from "@/lib/db/client";
 import { syncStatus } from "@/lib/notion/sync";
 import { getNotionDerivedKpis } from "@/lib/db/notion-derived-kpis";
 import { getEngagementQueueByPlatform } from "@/lib/db/engagement-queue";
+import { getEffectiveOutreachLimits } from "@/lib/outreach-config";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const [stats, groups, hot, followUps, sync, funnel, trend, meetings, contacts, inbox, inboxC, stuck, streak, kpis, engagementQueue] = await Promise.all([
+  const [stats, groups, hot, followUps, sync, funnel, trend, meetings, contacts, inbox, inboxC, stuck, streak, kpis, engagementQueue, effective] = await Promise.all([
     getDashboardStats(),
     getStageGroupCounts(),
     getHotLeads(6),
@@ -46,6 +47,7 @@ export default async function Home() {
     getStreak(),
     getNotionDerivedKpis(new Date()),
     getEngagementQueueByPlatform(),
+    getEffectiveOutreachLimits(),
   ]);
   const contactName = new Map(contacts.map((c) => [c.id, c.name]));
 
@@ -88,7 +90,7 @@ export default async function Home() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <InboxWidget items={inbox} total={inboxC.total} byChannel={inboxC.byChannel} />
-        <EngagementWidget kpis={kpis} queue={engagementQueue} />
+        <EngagementWidget kpis={kpis} queue={engagementQueue} limits={effective.limits} />
         <StuckWidget items={stuck} />
         <NextMeetings meetings={meetings} contactName={contactName} />
       </div>

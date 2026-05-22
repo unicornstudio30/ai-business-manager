@@ -11,6 +11,7 @@
 import { getNotionDerivedKpis } from "@/lib/db/notion-derived-kpis";
 import { getEngagementByPlatform } from "@/lib/db/engagement-by-platform";
 import { getEngagementQueueByPlatform } from "@/lib/db/engagement-queue";
+import { getEffectiveOutreachLimits } from "@/lib/outreach-config";
 import { EngagementReminders } from "@/components/engagement/engagement-reminders";
 import { EngagementQueuePlatform } from "@/components/engagement/engagement-queue-platform";
 import { PlatformEngagementSection } from "@/components/engagement/platform-engagement";
@@ -20,10 +21,11 @@ export const dynamic = "force-dynamic";
 export default async function EngagementPage() {
   const today = new Date();
 
-  const [kpis, queue, byPlatform] = await Promise.all([
+  const [kpis, queue, byPlatform, effective] = await Promise.all([
     getNotionDerivedKpis(today),
     getEngagementQueueByPlatform(),
     getEngagementByPlatform(),
+    getEffectiveOutreachLimits(),
   ]);
 
   return (
@@ -40,7 +42,7 @@ export default async function EngagementPage() {
       </div>
 
       {/* 1. Daily engagement targets + per-platform progress */}
-      <EngagementReminders kpis={kpis} />
+      <EngagementReminders kpis={kpis} limits={effective.limits} activeWindow={effective.activeWindow} />
 
       {/* 2. Today's prioritized queue by platform with profile/Notion links + CSV */}
       <EngagementQueuePlatform data={queue} />
