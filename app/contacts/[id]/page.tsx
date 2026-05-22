@@ -47,6 +47,17 @@ export default async function ContactDetail({ params }: { params: Promise<{ id: 
               ✨ {contact.icpClassification}
             </span>
           )}
+          {(() => {
+            try {
+              const rel = contact.relation ? (JSON.parse(contact.relation) as string[]) : [];
+              if (rel.length === 0) return null;
+              return rel.map((r) => (
+                <span key={r} className="rounded-md bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-xs text-emerald-800" title="Notion CRM Relation">
+                  🤝 {r}
+                </span>
+              ));
+            } catch { return null; }
+          })()}
         </div>
       </div>
 

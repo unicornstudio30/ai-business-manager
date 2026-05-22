@@ -1,0 +1,1 @@
+ALTER TABLE `contacts` ADD `lead_magnet` text;

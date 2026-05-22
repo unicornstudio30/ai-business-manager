@@ -74,6 +74,16 @@ const PLATFORM_WEIGHTS: Record<string, number> = {
   Reddit: 3,
 };
 
+// Relation multi-select weights — added Round 6.
+// "lead magnet" (they accepted something specific) = strongest signal.
+// "Engager" (they engaged with our content) = second.
+// "Open Conversation" (we talked) = third.
+const RELATION_WEIGHTS: Record<string, number> = {
+  "lead magnet": 10,
+  "Engager": 8,
+  "Open Conversation": 6,
+};
+
 export type IcpBreakdown = {
   score: number;
   professionScore: number;
@@ -81,9 +91,10 @@ export type IcpBreakdown = {
   countryScore: number;
   platformScore: number;
   contactabilityScore: number;
+  relationScore: number;
 };
 
-export function computeIcpScore(contact: Pick<Contact, "profession" | "position" | "country" | "platform" | "websiteUrl" | "contactUrl" | "email">): IcpBreakdown {
+export function computeIcpScore(contact: Pick<Contact, "profession" | "position" | "country" | "platform" | "websiteUrl" | "contactUrl" | "email" | "relation">): IcpBreakdown {
   // Profession
   const professions = parseJson<string[]>(contact.profession, []);
   const profMax = professions.reduce((max, p) => Math.max(max, PROFESSION_WEIGHTS[p] ?? 0), 0);
@@ -109,9 +120,13 @@ export function computeIcpScore(contact: Pick<Contact, "profession" | "position"
   if (contact.websiteUrl) contactabilityScore += 6;
   contactabilityScore = Math.min(20, contactabilityScore);
 
+  // Relation — relationship warmth signal from Notion multi-select. Caps at 20.
+  const relations = parseJson<string[]>(contact.relation, []);
+  const relationScore = Math.min(20, relations.reduce((sum, r) => sum + (RELATION_WEIGHTS[r] ?? 0), 0));
+
   const score = Math.min(
     100,
-    professionScore + positionScore + countryScore + platformScore + contactabilityScore
+    professionScore + positionScore + countryScore + platformScore + contactabilityScore + relationScore
   );
 
   return {
@@ -121,6 +136,7 @@ export function computeIcpScore(contact: Pick<Contact, "profession" | "position"
     countryScore,
     platformScore,
     contactabilityScore,
+    relationScore,
   };
 }
 

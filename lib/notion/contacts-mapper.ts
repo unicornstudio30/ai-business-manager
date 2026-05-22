@@ -74,6 +74,7 @@ export function notionToContact(page: PageObjectResponse): NewContact {
     remarks: text(props["Remarks"]),
     closedReason: text(props["Closed Reason"]),
     latestAuditSummary: text(props["Latest Audit"]),
+    relation: JSON.stringify(multiSelect(props["Relation"])),
     sequenceTrack: trackForPlatform(platform),
     lastTouchAt: date(props["Status Date"]) || new Date(page.last_edited_time),
     updatedAt: new Date(page.last_edited_time),
@@ -124,6 +125,11 @@ export function contactToNotionProperties(
   }
   if (c.latestAuditSummary !== undefined) {
     out["Latest Audit"] = { rich_text: [{ text: { content: c.latestAuditSummary || "" } }] };
+  }
+  if (c.relation !== undefined) {
+    let rel: string[] = [];
+    try { rel = c.relation ? JSON.parse(c.relation) : []; } catch { rel = []; }
+    out["Relation"] = { multi_select: rel.map((name) => ({ name })) };
   }
   return out;
 }

@@ -15,6 +15,7 @@
 // "[Inferred]" so they're distinguishable in the Activities feed.
 
 import { db, schema } from "../db/client";
+import { eq } from "drizzle-orm";
 import { platformToChannel } from "../inbox";
 import type { Contact } from "../db/schema";
 
@@ -84,7 +85,48 @@ export async function emitInferredActivities(
       emitted++;
     }
 
-    // 4) Closed deals — emit closed_reason placeholder (just a marker, no content)
+    // (continued below)
+  }
+
+  // 4) Relation multi-select changed — detect newly-added values
+  const parseRel = (s: string | null | undefined): string[] => {
+    if (!s) return [];
+    try { const r = JSON.parse(s); return Array.isArray(r) ? r : []; } catch { return []; }
+  };
+  const prevRel = new Set(parseRel(prev.relation));
+  const nextRel = new Set(parseRel(next.relation));
+  const added: string[] = [];
+  for (const r of nextRel) if (!prevRel.has(r)) added.push(r);
+
+  if (added.length > 0) {
+    await db.insert(schema.activities).values({
+      contactId,
+      type: "note",
+      content: `[Inferred from Notion] Relation added: ${added.join(", ")}`,
+      channel,
+      createdAt: stamp,
+    });
+    emitted++;
+
+    // Auto-promote to "Lead" if lead magnet was added AND status is below "Lead"
+    if (added.includes("lead magnet")) {
+      const BELOW_LEAD = new Set(["Prospect", "1st message", "1st Prospect Follow-up", "2nd Prospect Follow up"]);
+      if (BELOW_LEAD.has(next.status ?? "")) {
+        await db
+          .update(schema.contacts)
+          .set({
+            status: "Lead",
+            statusDate: stamp,
+            dirty: 1,                      // push back to Notion on next sync
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.contacts.id, contactId));
+      }
+    }
+  }
+
+  if (prevStatus !== nextStatus) {
+    // 5) Closed deals — emit closed_reason placeholder (just a marker, no content)
     if (
       (nextStatus === "Partnership" ||
         nextStatus === "Lost" ||

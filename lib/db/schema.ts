@@ -59,6 +59,12 @@ export const contacts = sqliteTable(
     // Local-only — set manually in dashboard or auto when Apify pipeline is wired.
     sourceContentId: text("source_content_id"),        // → content_items.id
 
+    // Relation multi-select from Notion: how we built this contact's relationship.
+    // JSON array of: "lead magnet" | "Open Conversation" | "Engager".
+    // Feeds into lead scoring. When "lead magnet" is added, inferred-activities
+    // auto-promotes status to "Lead" if currently below.
+    relation: text("relation"),
+
     createdAt: now(),
     updatedAt: ts("updated_at").$defaultFn(() => new Date()),
     dirty: integer("dirty").notNull().default(0),
@@ -269,6 +275,8 @@ export const financeEntries = sqliteTable("finance_entries", {
 export const dailySalesKpis = sqliteTable("daily_sales_kpis", {
   id: id(),
   date: ts("date").notNull(),
+
+  // Legacy scalar counters — kept for backwards compat with dashboard/scorecard
   coldDmsSent: integer("cold_dms_sent").default(0),
   coldEmailsSent: integer("cold_emails_sent").default(0),
   followUpsSent: integer("follow_ups_sent").default(0),
@@ -278,6 +286,25 @@ export const dailySalesKpis = sqliteTable("daily_sales_kpis", {
   commentsOnProspects: integer("comments_on_prospects").default(0),
   newProspects: integer("new_prospects").default(0),
   inboundLeads: integer("inbound_leads").default(0),
+
+  // NEW: Per-platform per-action breakdown as JSON.
+  // Shape: { linkedin: { dm: 5, connect: 10, comment: 15, follow_up: 3 }, x: {...}, facebook: {...}, instagram: {...}, reddit: {...}, email: { dm: 8, follow_up: 2 } }
+  // Updated via 1-tap +1 buttons on /daily-sales.
+  breakdown: text("breakdown"),
+
+  // NEW: Other outreach counters (not per-platform)
+  leadMagnetsSent: integer("lead_magnets_sent").default(0),
+  engagerDms: integer("engager_dms").default(0),                  // DMs to people who engaged with my posts
+
+  // NEW: Revenue metrics (stored in cents)
+  revenueGenerated: integer("revenue_generated").default(0),
+  pipelineAdded: integer("pipeline_added").default(0),
+  avgDealSize: integer("avg_deal_size").default(0),
+
+  // NEW: Win analysis + sales notes as JSON.
+  // Shape: { bestChannel, bestMessage, bestTimeOfDay, lossReason, objectionsFaced, improvementNeeded, hotLeadsTomorrow, workingTemplates, objectionHandlers, competitorIntel }
+  winAnalysis: text("win_analysis"),
+
   notes: text("notes"),
   createdAt: now(),
   updatedAt: ts("updated_at").$defaultFn(() => new Date()),

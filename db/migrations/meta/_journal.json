@@ -127,6 +127,20 @@
       "when": 1778922983594,
       "tag": "0017_tough_madame_masque",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1779429476073,
+      "tag": "0018_slow_marvel_apes",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1779430117576,
+      "tag": "0019_adorable_lethal_legion",
+      "breakpoints": true
     }
   ]
 }
