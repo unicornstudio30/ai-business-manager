@@ -16,6 +16,7 @@ import { inboxView, inboxCounts } from "@/lib/db/inbox-view";
 import { stuckDeals } from "@/lib/db/stuck-deals";
 import { NextMeetings } from "@/components/dashboard/next-meetings";
 import { InboxWidget } from "@/components/dashboard/inbox-widget";
+import { EngagementWidget } from "@/components/dashboard/engagement-widget";
 import { StuckWidget } from "@/components/dashboard/stuck-widget";
 import { DailySummary } from "@/components/dashboard/daily-summary";
 import { TodayQueue } from "@/components/dashboard/today-queue";
@@ -23,11 +24,13 @@ import { StreakHero } from "@/components/daily-sales/streak-hero";
 import { getStreak } from "@/lib/db/streak";
 import { db, schema } from "@/lib/db/client";
 import { syncStatus } from "@/lib/notion/sync";
+import { getNotionDerivedKpis } from "@/lib/db/notion-derived-kpis";
+import { getEngagementQueueByPlatform } from "@/lib/db/engagement-queue";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const [stats, groups, hot, followUps, sync, funnel, trend, meetings, contacts, inbox, inboxC, stuck, streak] = await Promise.all([
+  const [stats, groups, hot, followUps, sync, funnel, trend, meetings, contacts, inbox, inboxC, stuck, streak, kpis, engagementQueue] = await Promise.all([
     getDashboardStats(),
     getStageGroupCounts(),
     getHotLeads(6),
@@ -41,6 +44,8 @@ export default async function Home() {
     inboxCounts(),
     stuckDeals(),
     getStreak(),
+    getNotionDerivedKpis(new Date()),
+    getEngagementQueueByPlatform(),
   ]);
   const contactName = new Map(contacts.map((c) => [c.id, c.name]));
 
@@ -81,8 +86,9 @@ export default async function Home() {
         <StatCard label="Need follow-up" value={stats.needFollowUp} tone="amber" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <InboxWidget items={inbox} total={inboxC.total} byChannel={inboxC.byChannel} />
+        <EngagementWidget kpis={kpis} queue={engagementQueue} />
         <StuckWidget items={stuck} />
         <NextMeetings meetings={meetings} contactName={contactName} />
       </div>
