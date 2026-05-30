@@ -8,6 +8,7 @@
 
 import { db, schema } from "./client";
 import { gte, lte, desc, eq, and, isNotNull } from "drizzle-orm";
+import { platformToChannel, type InboxChannel } from "../inbox";
 
 export type HistoryEventType =
   // sales
@@ -59,6 +60,7 @@ export type HistoryEvent = {
   summary?: string | null;
   contactId?: string | null;
   contactName?: string | null;
+  platform?: InboxChannel | null;   // normalized channel slug (linkedin, x, …) when known
   link?: string;
   badge: { label: string; tone: "stone" | "violet" | "blue" | "emerald" | "amber" | "rose" | "indigo" };
 };
@@ -66,6 +68,7 @@ export type HistoryEvent = {
 export type HistoryFilters = {
   types?: HistoryEventType[];        // if empty array passed, returns 0 events; if undefined, defaults to ALL_TYPES
   activitySubtypes?: string[];       // restrict activity events to these subtypes (e.g., ["dm_sent","comment_drafted"])
+  platform?: InboxChannel;           // restrict to events on this channel (uses event.platform)
   since?: Date;
   until?: Date;
   contactId?: string;
@@ -120,11 +123,16 @@ export async function getHistory(filters: HistoryFilters = {}): Promise<HistoryE
 
   const events: HistoryEvent[] = [];
 
-  // Preload contacts so every event can carry a contact name
+  // Preload contacts so every event can carry a contact name + platform
   const contactRows = await db
-    .select({ id: schema.contacts.id, name: schema.contacts.name })
+    .select({ id: schema.contacts.id, name: schema.contacts.name, platform: schema.contacts.platform })
     .from(schema.contacts);
   const contactName = new Map(contactRows.map((c) => [c.id, c.name]));
+  const contactPlatform = new Map(contactRows.map((c) => [c.id, platformToChannel(c.platform)]));
+  function platformFor(contactId: string | null | undefined): InboxChannel | null {
+    if (!contactId) return null;
+    return contactPlatform.get(contactId) ?? null;
+  }
   const contactMatch = (id: string | null | undefined): boolean => {
     if (filters.contactId && id !== filters.contactId) return false;
     if (filters.contactSearch) {
@@ -164,6 +172,8 @@ export async function getHistory(filters: HistoryFilters = {}): Promise<HistoryE
         summary: (a.content ?? "").slice(0, 200).replace(/\n+/g, " ") || null,
         contactId: a.contactId,
         contactName: name,
+        // Activity may carry an explicit channel; fall back to contact's platform.
+        platform: (a.channel as InboxChannel | null) ?? platformFor(a.contactId),
         link: a.contactId ? `/contacts/${a.contactId}` : undefined,
         badge: BADGES.activity,
       });
@@ -195,6 +205,7 @@ export async function getHistory(filters: HistoryFilters = {}): Promise<HistoryE
         summary: m.inviteeName ? `with ${m.inviteeName}` : null,
         contactId: m.contactId,
         contactName: m.contactId ? contactName.get(m.contactId) ?? null : (m.inviteeName ?? null),
+        platform: platformFor(m.contactId),
         link: `/meetings/${m.id}/brief`,
         badge: BADGES.meeting,
       });
@@ -226,6 +237,7 @@ export async function getHistory(filters: HistoryFilters = {}): Promise<HistoryE
         summary: a.summary ?? null,
         contactId: a.contactId,
         contactName: a.contactId ? contactName.get(a.contactId) ?? null : null,
+        platform: platformFor(a.contactId),
         link: "/audits",
         badge: BADGES.audit,
       });
@@ -254,6 +266,7 @@ export async function getHistory(filters: HistoryFilters = {}): Promise<HistoryE
         summary: c.status ?? null,
         contactId: c.id,
         contactName: c.name,
+        platform: platformToChannel(c.platform),
         link: `/contacts/${c.id}`,
         badge: BADGES.deal_closed,
       });
@@ -347,10 +360,10 @@ export async function getHistory(filters: HistoryFilters = {}): Promise<HistoryE
   if (types.includes("content_published") && !filters.contactId && !filters.contactSearch) {
     const rows = await db.select().from(schema.contentItems);
     for (const c of rows) {
-      const platforms: Array<{ name: string; status: string | null; date: Date | null }> = [
-        { name: "LinkedIn", status: c.linkedinStatus, date: c.linkedinPublishDate },
-        { name: "X",        status: c.xStatus,        date: c.xPublishDate },
-        { name: "Facebook", status: c.facebookStatus, date: c.facebookPublishDate },
+      const platforms: Array<{ name: string; channel: InboxChannel; status: string | null; date: Date | null }> = [
+        { name: "LinkedIn", channel: "linkedin", status: c.linkedinStatus, date: c.linkedinPublishDate },
+        { name: "X",        channel: "x",        status: c.xStatus,        date: c.xPublishDate },
+        { name: "Facebook", channel: "facebook", status: c.facebookStatus, date: c.facebookPublishDate },
       ];
       for (const p of platforms) {
         if (p.status !== "Published ✨") continue;
@@ -363,6 +376,7 @@ export async function getHistory(filters: HistoryFilters = {}): Promise<HistoryE
           category: "marketing",
           title: `Published on ${p.name}`,
           summary: c.title,
+          platform: p.channel,
           link: c.notionPageId ? `https://www.notion.so/${c.notionPageId.replace(/-/g, "")}` : "/content",
           badge: BADGES.content_published,
         });
@@ -399,6 +413,13 @@ export async function getHistory(filters: HistoryFilters = {}): Promise<HistoryE
     }
   }
 
-  events.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-  return events.slice(0, limit);
+  // Platform filter — applied across all event types after collection.
+  // Events without a known platform (tracker, kpi_logged, content_created, sync)
+  // are dropped when a platform is selected so the user sees only on-platform work.
+  const platformFiltered = filters.platform
+    ? events.filter((e) => e.platform === filters.platform)
+    : events;
+
+  platformFiltered.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  return platformFiltered.slice(0, limit);
 }

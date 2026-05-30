@@ -6,6 +6,7 @@
 // (platform, action), then POSTs the whole config back.
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Save, RotateCcw, CheckCircle2, AlertCircle } from "lucide-react";
 
 type ActionEntry = { max: number; perHour: number; label: string; defaultMax: number; defaultPerHour: number };
@@ -47,6 +48,7 @@ function buildState(defaults: Props["defaults"], initial: Props["initial"]): {
 }
 
 export function OutreachLimitsForm({ defaults, initial }: Props) {
+  const router = useRouter();
   const [state, setState] = useState(() => buildState(defaults, initial));
   const [pending, startTransition] = useTransition();
   const [status, setStatus] = useState<{ kind: "ok" | "err"; msg: string } | null>(null);
@@ -130,7 +132,11 @@ export function OutreachLimitsForm({ defaults, initial }: Props) {
           setStatus({ kind: "err", msg: `Save failed (HTTP ${res.status})` });
           return;
         }
-        setStatus({ kind: "ok", msg: "Saved. Refresh other tabs to see the new targets." });
+        // Refresh /settings so the inputs pick up the new server-rendered state.
+        // The API handler already revalidated /connect, /dm, /daily-sales, etc.
+        // — next navigation to those routes will re-render with the new limits.
+        router.refresh();
+        setStatus({ kind: "ok", msg: "Saved. New targets apply across Connect, Engage, DM, Daily KPIs now." });
       } catch (e: any) {
         setStatus({ kind: "err", msg: e?.message ?? "Save failed" });
       }

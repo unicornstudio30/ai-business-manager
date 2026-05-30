@@ -12,6 +12,13 @@ import {
 } from "@/lib/db/history";
 import { getOutreachSummary } from "@/lib/db/outreach-summary";
 import { OutreachSummaryPanel } from "@/components/history/outreach-summary";
+import { CHANNEL_LABELS, CHANNEL_COLORS, INBOX_CHANNELS, type InboxChannel } from "@/lib/inbox";
+
+// Channels worth surfacing as filter pills (skip "comment" + "other" — they
+// rarely match a single event source and just add noise to the pill row).
+const PLATFORM_FILTER_CHANNELS: InboxChannel[] = [
+  "linkedin", "x", "instagram", "facebook", "reddit", "discord", "whatsapp", "slack", "email",
+];
 
 export const dynamic = "force-dynamic";
 
@@ -71,6 +78,7 @@ type PageProps = {
     range?: string;
     q?: string;       // contact search
     sub?: string;     // activity subtype filter (comma-separated)
+    plat?: string;    // platform filter (single channel slug, e.g. "linkedin")
   }>;
 };
 
@@ -104,6 +112,12 @@ export default async function HistoryPage({ searchParams }: PageProps) {
 
   const contactSearch = sp.q?.trim() || undefined;
 
+  // Platform filter — single channel at a time. Validate against our channel list.
+  const platformFilter: InboxChannel | undefined =
+    sp.plat && (INBOX_CHANNELS as readonly string[]).includes(sp.plat)
+      ? (sp.plat as InboxChannel)
+      : undefined;
+
   // Activity subtype filter: when on Sales (or All) tab, lets you narrow to just
   // dm_sent or comment_drafted etc. Undefined → all subtypes.
   const activitySubtypes: string[] | undefined = sp.sub === undefined
@@ -116,6 +130,7 @@ export default async function HistoryPage({ searchParams }: PageProps) {
     getHistory({
       types: activeTypes,
       activitySubtypes,
+      platform: platformFilter,
       since,
       contactSearch,
       limit: 300,
@@ -142,6 +157,7 @@ export default async function HistoryPage({ searchParams }: PageProps) {
       type: sp.type,
       q: contactSearch,
       sub: sp.sub,
+      plat: platformFilter,
       ...overrides,
     };
     for (const [k, v] of Object.entries(merged)) {
@@ -307,6 +323,38 @@ export default async function HistoryPage({ searchParams }: PageProps) {
         </div>
       )}
 
+      {/* Platform pills — narrow to events on a single channel. Sales, marketing,
+          and content_published events all carry a normalized platform; events
+          without one (tracker, KPI log, sync, content idea) drop out when a
+          platform is selected. */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[10px] uppercase tracking-wide text-stone-400 mr-1">Platform:</span>
+        <Link
+          href={buildUrl({ plat: undefined })}
+          className={`text-[11px] px-2 py-0.5 rounded-md border transition-all ${
+            !platformFilter
+              ? "bg-stone-900 text-white border-stone-900"
+              : "bg-white text-stone-500 border-stone-200 hover:border-stone-300"
+          }`}
+        >
+          All
+        </Link>
+        {PLATFORM_FILTER_CHANNELS.map((ch) => {
+          const isOn = platformFilter === ch;
+          return (
+            <Link
+              key={ch}
+              href={buildUrl({ plat: isOn ? undefined : ch })}
+              className={`text-[11px] px-2 py-0.5 rounded-md border transition-all ${
+                isOn ? CHANNEL_COLORS[ch] : "bg-white text-stone-500 border-stone-200 hover:border-stone-300"
+              }`}
+            >
+              {CHANNEL_LABELS[ch]}
+            </Link>
+          );
+        })}
+      </div>
+
       {/* Events list */}
       {activeTypes.length === 0 ? (
         <div className="surface p-12 text-center">
@@ -316,7 +364,9 @@ export default async function HistoryPage({ searchParams }: PageProps) {
       ) : events.length === 0 ? (
         <div className="surface p-12 text-center">
           <p className="text-sm text-stone-600 mb-1">
-            No {cat === "all" ? "" : cat + " "}events in the last {days} days{contactSearch ? ` matching "${contactSearch}"` : ""}.
+            No {cat === "all" ? "" : cat + " "}events in the last {days} days
+            {platformFilter ? ` on ${CHANNEL_LABELS[platformFilter]}` : ""}
+            {contactSearch ? ` matching "${contactSearch}"` : ""}.
           </p>
           <p className="text-xs text-stone-500">Try a wider date range or different filters.</p>
         </div>
@@ -363,6 +413,13 @@ function EventRow({ event }: { event: HistoryEvent }) {
       >
         {event.badge.label}
       </span>
+      {event.platform && (
+        <span
+          className={`flex-shrink-0 inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${CHANNEL_COLORS[event.platform]}`}
+        >
+          {CHANNEL_LABELS[event.platform]}
+        </span>
+      )}
       <div className="flex-1 min-w-0">
         <div className="text-sm text-stone-900 font-medium truncate">{event.title}</div>
         {event.summary && (

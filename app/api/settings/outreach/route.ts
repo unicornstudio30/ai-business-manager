@@ -5,8 +5,13 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { getOutreachConfig, saveOutreachConfig, type OutreachConfig } from "@/lib/outreach-config";
 import { PLATFORM_LIMITS, type PlatformKey, type ActionKey } from "@/lib/sales-limits";
+
+// Pages whose server-rendered output bakes in outreach limits.
+// Invalidated after every successful save so subsequent navigations re-render.
+const REVALIDATE_PATHS = ["/", "/connect", "/engagement", "/dm", "/daily-sales", "/settings"];
 
 const VALID_PLATFORMS = new Set(Object.keys(PLATFORM_LIMITS));
 const VALID_ACTIONS = new Set<ActionKey>(["dm", "connect", "comment", "follow_up", "inmail"]);
@@ -59,5 +64,6 @@ export async function POST(req: NextRequest) {
     overrides,
   };
   await saveOutreachConfig(config);
+  for (const p of REVALIDATE_PATHS) revalidatePath(p);
   return NextResponse.json({ ok: true, config });
 }
