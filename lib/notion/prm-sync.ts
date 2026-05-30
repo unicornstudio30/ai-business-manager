@@ -17,10 +17,7 @@ export type PrmSyncResult = {
 };
 
 export async function syncPrmFromNotion(): Promise<PrmSyncResult> {
-  const cfg = await getPrmConfig();
-  if (!cfg || !cfg.dataSourceId) {
-    return { pulled: 0, inserted: 0, updated: 0, unchanged: 0, error: "PRM not configured" };
-  }
+  const cfg = getPrmConfig();
 
   const startedAt = new Date();
   const n = notion();

@@ -3,9 +3,8 @@
 // Each row links to /networking/[id] for detail + the Write Message wizard.
 
 import Link from "next/link";
-import { Search, Network, ExternalLink, AlertCircle, Calendar } from "lucide-react";
+import { Search, Network, ExternalLink, Calendar } from "lucide-react";
 import { listNetworkingContacts, getNetworkingStats } from "@/lib/db/networking-contacts";
-import { getPrmConfig } from "@/lib/notion/prm-config";
 import { PrmSyncButton } from "@/components/networking/sync-button";
 import { fmtDate } from "@/lib/utils";
 
@@ -21,10 +20,9 @@ export default async function NetworkingPage({ searchParams }: PageProps) {
   const stage = sp.stage || undefined;
   const relationship = sp.rel || undefined;
 
-  const [contacts, stats, prmCfg] = await Promise.all([
+  const [contacts, stats] = await Promise.all([
     listNetworkingContacts({ search, stage, relationship, limit: 200 }),
     getNetworkingStats(),
-    getPrmConfig(),
   ]);
 
   function buildUrl(overrides: Record<string, string | undefined>): string {
@@ -55,32 +53,10 @@ export default async function NetworkingPage({ searchParams }: PageProps) {
             Write Message wizard on any contact to draft a personalized outreach in seconds.
           </p>
         </div>
-        {prmCfg && <PrmSyncButton />}
+        <PrmSyncButton />
       </div>
 
-      {!prmCfg && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-5">
-          <div className="flex items-center gap-2 text-sm font-semibold text-amber-900 mb-2">
-            <AlertCircle className="size-4" /> Notion PRM not connected
-          </div>
-          <p className="text-sm text-amber-800 mb-3">
-            Connect your Notion Personal Relationship Manager database in{" "}
-            <Link href="/settings" className="font-medium underline">
-              Settings
-            </Link>{" "}
-            to start syncing networking contacts.
-          </p>
-          <ol className="text-xs text-amber-800 space-y-1 list-decimal list-inside">
-            <li>Open your PRM database in Notion.</li>
-            <li>Click <strong>⋯</strong> → <strong>Add connections</strong> → Unicorn Studio Business Manager.</li>
-            <li>Paste the URL into Settings → Networking PRM database.</li>
-          </ol>
-        </div>
-      )}
-
-      {prmCfg && (
-        <>
-          <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <StatTile label="Total contacts" value={stats.total} />
             <StatTile label="Overdue follow-ups" value={stats.overdueFollowUps} tone="amber" />
             <StatTile label="Stages" value={stats.byStage.length} />
@@ -202,7 +178,6 @@ export default async function NetworkingPage({ searchParams }: PageProps) {
                           href={notionUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
                           className="text-stone-400 hover:text-stone-900 flex-shrink-0"
                           title="Open in Notion"
                         >
@@ -244,8 +219,6 @@ export default async function NetworkingPage({ searchParams }: PageProps) {
               })}
             </div>
           )}
-        </>
-      )}
     </div>
   );
 }

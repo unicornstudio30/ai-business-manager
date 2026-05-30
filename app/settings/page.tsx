@@ -2,18 +2,12 @@ import { syncStatus } from "@/lib/notion/sync";
 import { fmtDateTime } from "@/lib/utils";
 import { NotionColumnsSetup } from "@/components/settings/notion-columns-setup";
 import { OutreachLimitsForm } from "@/components/settings/outreach-limits-form";
-import { PrmSetup } from "@/components/settings/prm-setup";
 import { getOutreachConfig, buildEffectiveLimits } from "@/lib/outreach-config";
-import { getPrmConfig } from "@/lib/notion/prm-config";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const [status, outreachConfig, prmConfig] = await Promise.all([
-    syncStatus(),
-    getOutreachConfig(),
-    getPrmConfig(),
-  ]);
+  const [status, outreachConfig] = await Promise.all([syncStatus(), getOutreachConfig()]);
   // The form needs the defaults (labels + baseline numbers) AND the current
   // saved overrides so it can pre-populate the inputs.
   const effective = buildEffectiveLimits({}); // pure defaults, no overrides applied
@@ -22,8 +16,6 @@ export default async function SettingsPage() {
       <h1 className="text-2xl font-semibold text-stone-900">Settings</h1>
 
       <OutreachLimitsForm defaults={effective as any} initial={outreachConfig} />
-
-      <PrmSetup initial={{ configured: !!prmConfig, databaseId: prmConfig?.databaseId, dataSourceId: prmConfig?.dataSourceId, rawUrl: prmConfig?.rawUrl }} />
 
       <section className="rounded-xl border border-stone-200 bg-white p-6">
         <div className="text-sm font-semibold text-stone-900 mb-3">Notion integration</div>
