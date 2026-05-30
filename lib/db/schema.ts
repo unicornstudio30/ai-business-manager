@@ -392,12 +392,99 @@ export const appSettings = sqliteTable("app_settings", {
   updatedAt: ts("updated_at").$defaultFn(() => new Date()),
 });
 
+// Personal Relationship Manager — networking contacts mirrored from a Notion
+// PRM database. Separate from the Sales CRM `contacts` table so networking
+// (friends, peers, advisors, founders, partners) lives in its own lifecycle.
+export const networkingContacts = sqliteTable("networking_contacts", {
+  id: id(),
+  notionPageId: text("notion_page_id").unique(),
+  notionLastSyncedAt: ts("notion_last_synced_at"),
+  notionLastEditedAt: ts("notion_last_edited_at"),
+
+  name: text("name").notNull().default(""),
+  // High-level relationship lens — "friend", "peer", "advisor", "founder", etc.
+  relationship: text("relationship"),
+  // Where you met / first connected
+  source: text("source"),
+  // Profile / platform links (LinkedIn most common, but kept generic)
+  profileUrl: text("profile_url"),
+  email: text("email"),
+  phone: text("phone"),
+  platform: text("platform"),
+  location: text("location"),
+
+  // Lightweight personal context for the wizard's recipient summary
+  profession: text("profession"),
+  company: text("company"),
+  role: text("role"),
+  interests: text("interests"),          // JSON array of strings
+  tags: text("tags"),                    // JSON array
+
+  // Pipeline / lifecycle on the networking side
+  stage: text("stage"),                  // free-text or enum: Start / Maintain / Focus / etc.
+  lastContactAt: ts("last_contact_at"),
+  nextFollowUpAt: ts("next_follow_up_at"),
+
+  // Free-form notes / coaching text
+  notes: text("notes"),
+
+  createdAt: now(),
+  updatedAt: ts("updated_at").$defaultFn(() => new Date()),
+  dirty: integer("dirty").notNull().default(0),
+}, (t) => ({
+  nameIdx: index("networking_contacts_name_idx").on(t.name),
+  stageIdx: index("networking_contacts_stage_idx").on(t.stage),
+  followUpIdx: index("networking_contacts_follow_up_idx").on(t.nextFollowUpAt),
+}));
+
+// Messages drafted via the Write Message wizard, threaded to a networking contact.
+// Stores all wizard inputs so a message can be re-edited later, plus the three
+// generated variants (Short / Standard / Detailed) and the user's chosen one.
+export const networkingMessages = sqliteTable("networking_messages", {
+  id: id(),
+  contactId: text("contact_id").notNull(),    // → networking_contacts.id
+
+  // Wizard inputs (all optional except topic)
+  purpose: text("purpose"),                   // step 2
+  contextChips: text("context_chips"),        // JSON array (max 3)
+  contextDetail: text("context_detail"),
+  ctaChips: text("cta_chips"),                // JSON array (max 3)
+  tone: text("tone"),
+  framework: text("framework"),               // ACA, AIDA, PAS, FAB, BAB, QUEST, etc.
+  channel: text("channel"),                   // Inbox / Email / Other
+  language: text("language"),                 // English / Bengali / Other
+  topic: text("topic"),
+
+  // Generated output (single LLM call returns three lengths)
+  generatedShort: text("generated_short"),
+  generatedStandard: text("generated_standard"),
+  generatedDetailed: text("generated_detailed"),
+  chosenVariant: text("chosen_variant"),      // 'short' | 'standard' | 'detailed'
+
+  // Quality + lifecycle
+  strengthScore: integer("strength_score"),   // 0-100, computed from inputs
+  status: text("status").notNull().default("draft"),  // draft | sent | responded
+  sentAt: ts("sent_at"),
+  responseAt: ts("response_at"),
+  responseType: text("response_type"),        // positive | negative | none
+
+  createdAt: now(),
+  updatedAt: ts("updated_at").$defaultFn(() => new Date()),
+}, (t) => ({
+  contactIdx: index("networking_messages_contact_idx").on(t.contactId),
+  statusIdx: index("networking_messages_status_idx").on(t.status),
+}));
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Type exports
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type Contact = typeof contacts.$inferSelect;
 export type NewContact = typeof contacts.$inferInsert;
+export type NetworkingContact = typeof networkingContacts.$inferSelect;
+export type NewNetworkingContact = typeof networkingContacts.$inferInsert;
+export type NetworkingMessage = typeof networkingMessages.$inferSelect;
+export type NewNetworkingMessage = typeof networkingMessages.$inferInsert;
 export type Activity = typeof activities.$inferSelect;
 export type NewActivity = typeof activities.$inferInsert;
 export type Project = typeof projects.$inferSelect;

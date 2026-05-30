@@ -29,7 +29,7 @@ npm run dev
 
 ### Connect Notion (5-minute one-time setup)
 
-1. Go to https://www.notion.so/profile/integrations → New integration → name it "Unicorn Studio Manager".
+1. Go to https://www.notion.so/profile/integrations → New integration → name it "Unicorn Studio Business Manager".
 2. Copy the **Internal Integration Token** (`secret_...`).
 3. Paste it into `.env.local` as `NOTION_TOKEN=secret_...`.
 4. In Notion, open each of your 3 databases — **Sales CRM**, **Sales tracker**, **Content Calendar** — click `…` → **Add connections** → select your integration.

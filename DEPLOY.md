@@ -29,7 +29,7 @@ Should print `✓ migrations applied successfully!`.
 
 ## 3. Notion integration (~3 min)
 
-1. https://www.notion.so/profile/integrations → **+ New integration** → name it `Unicorn Studio Manager` → submit.
+1. https://www.notion.so/profile/integrations → **+ New integration** → name it `Unicorn Studio Business Manager` → submit.
 2. Copy the **Internal Integration Token** (`ntn_...`). This is `NOTION_TOKEN`.
 3. **Share each of the 3 databases with the integration** (this step is required — without it sync returns 404):
    - Open **Unicorn Studio's Sales CRM** → click `···` (top-right) → **Add connections** → select your integration.

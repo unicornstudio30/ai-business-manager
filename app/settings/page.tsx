@@ -2,12 +2,18 @@ import { syncStatus } from "@/lib/notion/sync";
 import { fmtDateTime } from "@/lib/utils";
 import { NotionColumnsSetup } from "@/components/settings/notion-columns-setup";
 import { OutreachLimitsForm } from "@/components/settings/outreach-limits-form";
+import { PrmSetup } from "@/components/settings/prm-setup";
 import { getOutreachConfig, buildEffectiveLimits } from "@/lib/outreach-config";
+import { getPrmConfig } from "@/lib/notion/prm-config";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const [status, outreachConfig] = await Promise.all([syncStatus(), getOutreachConfig()]);
+  const [status, outreachConfig, prmConfig] = await Promise.all([
+    syncStatus(),
+    getOutreachConfig(),
+    getPrmConfig(),
+  ]);
   // The form needs the defaults (labels + baseline numbers) AND the current
   // saved overrides so it can pre-populate the inputs.
   const effective = buildEffectiveLimits({}); // pure defaults, no overrides applied
@@ -16,6 +22,8 @@ export default async function SettingsPage() {
       <h1 className="text-2xl font-semibold text-stone-900">Settings</h1>
 
       <OutreachLimitsForm defaults={effective as any} initial={outreachConfig} />
+
+      <PrmSetup initial={{ configured: !!prmConfig, databaseId: prmConfig?.databaseId, dataSourceId: prmConfig?.dataSourceId, rawUrl: prmConfig?.rawUrl }} />
 
       <section className="rounded-xl border border-stone-200 bg-white p-6">
         <div className="text-sm font-semibold text-stone-900 mb-3">Notion integration</div>
@@ -30,7 +38,7 @@ export default async function SettingsPage() {
           <div className="rounded-lg bg-stone-50 p-4 text-sm text-stone-700 leading-relaxed">
             <div className="font-medium mb-2">5-minute setup:</div>
             <ol className="list-decimal list-inside space-y-1.5 text-stone-700">
-              <li>Go to <a className="text-blue-600 hover:underline" href="https://www.notion.so/profile/integrations" target="_blank" rel="noopener noreferrer">notion.so/profile/integrations</a> → New integration → name it &ldquo;Unicorn Studio Manager&rdquo;.</li>
+              <li>Go to <a className="text-blue-600 hover:underline" href="https://www.notion.so/profile/integrations" target="_blank" rel="noopener noreferrer">notion.so/profile/integrations</a> → New integration → name it &ldquo;Unicorn Studio Business Manager&rdquo;.</li>
               <li>Copy the Internal Integration Token.</li>
               <li>Create <code className="px-1.5 py-0.5 bg-stone-200 rounded">.env.local</code> in this project with: <code className="block mt-1 px-2 py-1 bg-stone-200 rounded text-xs">NOTION_TOKEN=secret_...</code></li>
               <li>In Notion, open each of your 3 databases — Sales CRM, Sales tracker, Content Calendar — click &hellip; → Add connections → select your integration.</li>
