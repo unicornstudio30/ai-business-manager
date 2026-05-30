@@ -20,6 +20,25 @@ type Props = {
   };
 };
 
+// Which dashboard tab(s) each action key shows on. Used to label every row in
+// the form so the user can see at a glance where an edit will take effect.
+const TABS_FOR_ACTION: Record<string, string[]> = {
+  connect: ["Connect"],
+  inmail: ["Connect", "DM"],
+  dm: ["DM"],
+  follow_up: ["DM"],
+  comment: ["Engage"],
+};
+const TAB_COLORS: Record<string, string> = {
+  Connect: "bg-emerald-50 text-emerald-800 border-emerald-200",
+  DM: "bg-blue-50 text-blue-800 border-blue-200",
+  Engage: "bg-violet-50 text-violet-800 border-violet-200",
+};
+
+function tabsForAction(actionKey: string): string[] {
+  return TABS_FOR_ACTION[actionKey] ?? [];
+}
+
 function buildState(defaults: Props["defaults"], initial: Props["initial"]): {
   startHour: number;
   endHour: number;
@@ -150,7 +169,11 @@ export function OutreachLimitsForm({ defaults, initial }: Props) {
           <div className="text-sm font-semibold text-stone-900">Outreach limits &amp; pacing</div>
           <p className="text-xs text-stone-500 mt-1 max-w-xl">
             Daily max + hourly budget per platform per action. Daily target is auto-derived as 75% of max
-            (25% safety buffer). The active window controls hourly-pace expectations across Connect, Engage, and DM.
+            (25% safety buffer). Active window controls hourly-pace expectations.
+            Each row is tagged with the tab it shows on:{" "}
+            <span className="inline-flex items-center rounded px-1 py-px text-[9px] font-medium border bg-emerald-50 text-emerald-800 border-emerald-200">Connect</span>{" "}
+            <span className="inline-flex items-center rounded px-1 py-px text-[9px] font-medium border bg-blue-50 text-blue-800 border-blue-200">DM</span>{" "}
+            <span className="inline-flex items-center rounded px-1 py-px text-[9px] font-medium border bg-violet-50 text-violet-800 border-violet-200">Engage</span>.
           </p>
         </div>
         <button
@@ -221,8 +244,19 @@ export function OutreachLimitsForm({ defaults, initial }: Props) {
                     return (
                       <tr key={ak}>
                         <td className="py-1.5">
-                          <div className="text-xs font-medium text-stone-800">{a.label}</div>
-                          <div className="text-[10px] text-stone-400">
+                          <div className="text-xs font-medium text-stone-800 flex items-center gap-1.5 flex-wrap">
+                            <span>{a.label}</span>
+                            {tabsForAction(ak).map((tab) => (
+                              <span
+                                key={tab}
+                                className={`inline-flex items-center rounded px-1.5 py-px text-[9px] font-medium border ${TAB_COLORS[tab] ?? "bg-stone-100 text-stone-700 border-stone-200"}`}
+                                title={`Shows on the ${tab} tab and Daily KPIs`}
+                              >
+                                {tab}
+                              </span>
+                            ))}
+                          </div>
+                          <div className="text-[10px] text-stone-400 mt-0.5">
                             default: {a.defaultMax} / day · ~{a.defaultPerHour}/hr
                           </div>
                         </td>
