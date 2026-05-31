@@ -3,7 +3,7 @@
 // Each row links to /networking/[id] for detail + the Write Message wizard.
 
 import Link from "next/link";
-import { Search, Network, ExternalLink, Calendar } from "lucide-react";
+import { Search, Network, ExternalLink, Calendar, Send } from "lucide-react";
 import { listNetworkingContacts, getNetworkingStats } from "@/lib/db/networking-contacts";
 import { getNetworkingAnalytics } from "@/lib/db/networking-analytics";
 import { PrmSyncButton } from "@/components/networking/sync-button";
@@ -56,7 +56,15 @@ export default async function NetworkingPage({ searchParams }: PageProps) {
             Write Message wizard on any contact to draft a personalized outreach in seconds.
           </p>
         </div>
-        <PrmSyncButton />
+        <div className="flex items-center gap-2">
+          <Link
+            href="/networking/next-draft"
+            className="inline-flex items-center gap-1.5 rounded-md border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-800 hover:bg-violet-100"
+          >
+            <Send className="size-3.5" /> Next-draft queue
+          </Link>
+          <PrmSyncButton />
+        </div>
       </div>
 
       <NetworkingAnalyticsDashboard data={analytics} />

@@ -45,6 +45,13 @@ import { classifyContact } from "@/lib/ai/classify-icp";
 import { draftComment } from "@/lib/ai/comment-draft";
 import { getHistory, type HistoryEventType } from "@/lib/db/history";
 
+// Networking (PRM) — for the Claude-UI message drafting workflow
+import { listNetworkingContacts, getNetworkingContact } from "@/lib/db/networking-contacts";
+import { getMessagesForContact, getLastMessageForContact, createMessage, updateMessage } from "@/lib/db/networking-messages";
+import { getNetworkingNextDrafts } from "@/lib/db/networking-next-drafts";
+import { FRAMEWORKS } from "@/lib/ai/write-message";
+import { parseJson } from "@/lib/utils";
+
 // JSON-serialize a result wrapping it as MCP text content.
 function ok(data: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
@@ -597,6 +604,249 @@ export function buildMcpServer(): McpServer {
       const result = await classifyContact(contact_id);
       if (!result) return ok({ error: "OPENROUTER_API_KEY not set or contact not found", contact_id });
       return ok(result);
+    }
+  );
+
+  // ────────────────────────────────────────────────────────────────────────
+  // NETWORKING (PRM) — message-drafting workflow for Claude UI
+  // ────────────────────────────────────────────────────────────────────────
+  // These tools let Claude (in the chat UI, using the user's subscription)
+  // pull next-touch context from the PRM, draft the message inline, and save
+  // the three variants back to networking_messages. The app then displays
+  // the drafts on /networking/[id] for review + send.
+
+  server.registerTool(
+    "networking_next_drafts",
+    {
+      title: "Networking · Next Drafts Queue",
+      description:
+        "Cadence-style queue: which networking (PRM) contacts to message NEXT, ordered by " +
+        "priority — overdue follow-ups first, then due-today, then going-cold (30d+), then " +
+        "never-messaged. Returns id + name + reason + days since last contact. Use this to pick " +
+        "who to draft for, then call networking_message_context for the chosen id.",
+      inputSchema: {
+        limit: z.number().int().min(1).max(50).optional().default(15),
+      },
+    },
+    async ({ limit }) => {
+      const q = await getNetworkingNextDrafts(limit ?? 15);
+      return ok({
+        totals: q.totals,
+        items: q.items.map((i) => ({
+          id: i.contact.id,
+          name: i.contact.name,
+          relationship: i.contact.relationship,
+          stage: i.contact.stage,
+          platform: i.contact.platform,
+          reason: i.reason,
+          priority: i.priority,
+          days_since_contact: i.daysSinceContact,
+          days_until_follow_up: i.daysUntilFollowUp,
+          has_drafted_before: i.hasDraftedBefore,
+          notion_url: i.notionUrl,
+        })),
+      });
+    }
+  );
+
+  server.registerTool(
+    "networking_message_context",
+    {
+      title: "Networking · Message Context for Drafting",
+      description:
+        "Returns everything needed to draft a message to a networking contact: full PRM profile " +
+        "(role, position, company, location, interests, notes, recent post), last message sent to " +
+        "them (if any), and the framework guides Claude can pick from. After Claude generates the " +
+        "3 variants (short/standard/detailed), call save_networking_draft to persist them.",
+      inputSchema: {
+        contact_id: z.string().describe("Networking contact id (ULID)"),
+      },
+    },
+    async ({ contact_id }) => {
+      const contact = await getNetworkingContact(contact_id);
+      if (!contact) return ok({ error: "Contact not found", contact_id });
+
+      const lastMsg = await getLastMessageForContact(contact_id);
+      const messages = await getMessagesForContact(contact_id);
+      const interests = parseJson<string[]>(contact.interests, []);
+      const tags = parseJson<string[]>(contact.tags, []);
+
+      // Pick the chosen variant of the last message (or fall back to standard)
+      let lastMessageBody: string | null = null;
+      if (lastMsg) {
+        const chosen = lastMsg.chosenVariant ?? "standard";
+        lastMessageBody =
+          (chosen === "short" && lastMsg.generatedShort) ||
+          (chosen === "detailed" && lastMsg.generatedDetailed) ||
+          lastMsg.generatedStandard ||
+          null;
+      }
+
+      return ok({
+        contact: {
+          id: contact.id,
+          name: contact.name,
+          relationship: contact.relationship,
+          role: contact.role,
+          position: contact.position,
+          company: contact.company,
+          profession: contact.profession,
+          location: contact.location,
+          platform: contact.platform,
+          stage: contact.stage,
+          source: contact.source,
+          email: contact.email,
+          phone: contact.phone,
+          profile_url: contact.profileUrl,
+          interests,
+          tags,
+          notes: contact.notes,
+          recent_post: contact.recentPost,
+          recent_post_url: contact.recentPostUrl,
+          last_contact_at: contact.lastContactAt?.toISOString().slice(0, 10) ?? null,
+          next_follow_up_at: contact.nextFollowUpAt?.toISOString().slice(0, 10) ?? null,
+        },
+        last_message_to_this_contact: lastMessageBody,
+        previous_drafts_count: messages.length,
+        framework_options: FRAMEWORKS.map((f) => ({ id: f.id, label: f.label, when: f.help })),
+        sender: { name: "Saidur Rahaman", org: "Unicorn Studio" },
+        instructions:
+          "Draft 3 variants (short ~25-45 words, standard ~60-100, detailed ~120-200) sharing the same " +
+          "intent + ask, differing only in length. Personalize: use their name and any specific detail " +
+          "from their profile / recent post. If recent_post is set, quote or reference one sharp detail " +
+          "from it — don't paraphrase the whole post. Tone should match the relationship. " +
+          "Then call save_networking_draft with all three variants.",
+      });
+    }
+  );
+
+  server.registerTool(
+    "save_networking_draft",
+    {
+      title: "Networking · Save Drafted Message",
+      description:
+        "Persist a Claude-drafted networking message (3 variants) to the app. Appears in the " +
+        "contact's Message History feed on /networking/[id]. Status defaults to 'draft' — the " +
+        "user reviews + sends from their actual social media, then can call mark_networking_message_sent.",
+      inputSchema: {
+        contact_id: z.string().describe("Networking contact id"),
+        short: z.string().describe("Short variant, ~25-45 words"),
+        standard: z.string().describe("Standard variant, ~60-100 words"),
+        detailed: z.string().describe("Detailed variant, ~120-200 words"),
+        framework: z.string().optional().describe("ACA, AIDA, PAS, FAB, BAB, QUEST, or Casual"),
+        tone: z.string().optional().describe("e.g. Friendly, Professional, Direct, Casual"),
+        channel: z.string().optional().describe("DM / Inbox, Email, WhatsApp, etc."),
+        language: z.string().optional().describe("English / Bengali / Other"),
+        purpose: z.string().optional().describe("Why you're reaching out"),
+        topic: z.string().optional().describe("Subject / one-liner for this message"),
+        context_chips: z.array(z.string()).optional().describe("Up to 3 context tags"),
+        cta_chips: z.array(z.string()).optional().describe("Up to 3 call-to-action chips"),
+        recent_post_used: z.string().optional().describe("The recent post you grounded the message in (for record-keeping)"),
+      },
+    },
+    async (args) => {
+      const contact = await getNetworkingContact(args.contact_id);
+      if (!contact) return ok({ error: "Contact not found", contact_id: args.contact_id });
+
+      const saved = await createMessage({
+        contactId: args.contact_id,
+        purpose: args.purpose ?? null,
+        contextChips: args.context_chips && args.context_chips.length > 0 ? JSON.stringify(args.context_chips.slice(0, 3)) : null,
+        contextDetail: args.recent_post_used ?? null,
+        ctaChips: args.cta_chips && args.cta_chips.length > 0 ? JSON.stringify(args.cta_chips.slice(0, 3)) : null,
+        tone: args.tone ?? null,
+        framework: args.framework ?? null,
+        channel: args.channel ?? null,
+        language: args.language ?? "English",
+        topic: args.topic ?? null,
+        generatedShort: args.short,
+        generatedStandard: args.standard,
+        generatedDetailed: args.detailed,
+        status: "draft",
+      });
+      return ok({
+        ok: true,
+        message_id: saved.id,
+        contact_id: args.contact_id,
+        contact_name: contact.name,
+        view_url: `/networking/${args.contact_id}`,
+      });
+    }
+  );
+
+  server.registerTool(
+    "mark_networking_message_sent",
+    {
+      title: "Networking · Mark Drafted Message as Sent",
+      description:
+        "Mark a drafted message as actually sent (after you copy it into LinkedIn / X / Email). " +
+        "Optionally records which variant you used.",
+      inputSchema: {
+        message_id: z.string().describe("Message id returned by save_networking_draft"),
+        chosen_variant: z.enum(["short", "standard", "detailed"]).optional(),
+      },
+    },
+    async ({ message_id, chosen_variant }) => {
+      const updated = await updateMessage(message_id, {
+        status: "sent",
+        sentAt: new Date(),
+        chosenVariant: chosen_variant ?? null,
+      });
+      if (!updated) return ok({ error: "Message not found", message_id });
+      return ok({ ok: true, message_id, status: "sent", chosen_variant: chosen_variant ?? null });
+    }
+  );
+
+  server.registerTool(
+    "list_networking_contacts",
+    {
+      title: "Networking · List Contacts",
+      description: "List PRM contacts with optional search, stage, or relationship filter. Sorted most-recent first.",
+      inputSchema: {
+        search: z.string().optional().describe("Substring match on name / company / profession"),
+        stage: z.string().optional(),
+        relationship: z.string().optional(),
+        limit: z.number().int().min(1).max(100).optional().default(30),
+      },
+    },
+    async (args) => {
+      const rows = await listNetworkingContacts({
+        search: args.search,
+        stage: args.stage,
+        relationship: args.relationship,
+        limit: args.limit ?? 30,
+      });
+      return ok({
+        count: rows.length,
+        contacts: rows.map((c) => ({
+          id: c.id,
+          name: c.name,
+          relationship: c.relationship,
+          role: c.role,
+          position: c.position,
+          company: c.company,
+          stage: c.stage,
+          platform: c.platform,
+          last_contact_at: c.lastContactAt?.toISOString().slice(0, 10) ?? null,
+        })),
+      });
+    }
+  );
+
+  server.registerTool(
+    "get_networking_contact",
+    {
+      title: "Networking · Get Contact + Message History",
+      description: "Full PRM record for one contact + every draft + sent message tied to them.",
+      inputSchema: {
+        contact_id: z.string(),
+      },
+    },
+    async ({ contact_id }) => {
+      const contact = await getNetworkingContact(contact_id);
+      if (!contact) return ok({ error: "Contact not found", contact_id });
+      const messages = await getMessagesForContact(contact_id);
+      return ok({ contact, messages });
     }
   );
 
