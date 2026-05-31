@@ -8,11 +8,21 @@ export const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 export const isOpenRouterConfigured = () => !!OPENROUTER_API_KEY;
 
 // Free models we use. Override per-call if you want.
-// Check https://openrouter.ai/models?pricing=free for the current catalog — it shifts.
+// The OpenRouter free catalog shifts — verify with:
+//   curl https://openrouter.ai/api/v1/models | jq '.data[] | select(.pricing.prompt=="0") | .id'
+// Free tier limits (no account credit): ~20 req/min per model, ~50/day total.
+// Add a one-time $10 credit at https://openrouter.ai/credits to unlock the
+// extended free tier (much higher daily quota); the models stay free.
 export const MODELS = {
-  fast: "deepseek/deepseek-v4-flash:free",                          // classifier, short suggestions
-  prose: "openai/gpt-oss-120b:free",                                // narrative summaries
-  vision: "google/gemini-2.5-flash-image:free",                     // OCR / image understanding
+  fast: "deepseek/deepseek-v4-flash:free",                          // classifier, short suggestions — 1M ctx
+  prose: "openai/gpt-oss-120b:free",                                // narrative summaries — 131k ctx
+  vision: "nvidia/nemotron-nano-12b-v2-vl:free",                    // OCR / screenshot parsing — 128k ctx
+} as const;
+
+// Fallbacks if a primary model is unavailable / rate-limited.
+export const FALLBACK_MODELS = {
+  vision: ["google/gemma-4-26b-a4b-it:free", "moonshotai/kimi-k2.6:free"],
+  prose: ["meta-llama/llama-3.3-70b-instruct:free", "qwen/qwen3-next-80b-a3b-instruct:free", "z-ai/glm-4.5-air:free"],
 } as const;
 
 type ChatOpts = {
