@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import type { NetworkingContact } from "@/lib/db/schema";
 import { parseJson } from "@/lib/utils";
+import { ProfileParseModal, type ParsedProfile } from "./profile-parse-modal";
 
 const STEPS = ["Recipient", "Purpose", "Context", "Call to action", "Tone & framework", "Channel & language", "Topic"];
 
@@ -115,8 +116,18 @@ export function WriteMessageWizard({ contact }: { contact: NetworkingContact }) 
   const [pending, startTransition] = useTransition();
   const [generated, setGenerated] = useState<Generated | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
 
   const score = strengthScore(state, contact);
+
+  // When the parse modal returns extracted data, prefill the wizard fields
+  // that are still empty. Recent post always wins (highest leverage).
+  function applyParsedProfile(p: ParsedProfile) {
+    setState((s) => ({
+      ...s,
+      recentPost: p.recentPost || p.recentActivity || s.recentPost,
+    }));
+  }
 
   function toggleChip(field: "contextChips" | "ctaChips", chip: string) {
     setState((s) => {
@@ -219,6 +230,7 @@ export function WriteMessageWizard({ contact }: { contact: NetworkingContact }) 
                 onDetail={(v) => setState({ ...state, contextDetail: v.slice(0, 12000) })}
                 onRecentPost={(v) => setState({ ...state, recentPost: v.slice(0, 4000) })}
                 onRecentPostUrl={(v) => setState({ ...state, recentPostUrl: v })}
+                onOpenParseModal={() => setProfileModalOpen(true)}
               />
             )}
             {step === 3 && (
@@ -322,6 +334,13 @@ export function WriteMessageWizard({ contact }: { contact: NetworkingContact }) 
           </div>
         </>
       )}
+
+      <ProfileParseModal
+        open={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
+        onParsed={applyParsedProfile}
+        defaultUrl={contact.profileUrl}
+      />
     </section>
   );
 }
@@ -439,6 +458,7 @@ function StepContext({
   onDetail,
   onRecentPost,
   onRecentPostUrl,
+  onOpenParseModal,
 }: {
   chips: string[];
   detail: string;
@@ -449,6 +469,7 @@ function StepContext({
   onDetail: (v: string) => void;
   onRecentPost: (v: string) => void;
   onRecentPostUrl: (v: string) => void;
+  onOpenParseModal: () => void;
 }) {
   const notionPost = contact.recentPost;
   const notionPostUrl = contact.recentPostUrl;
@@ -491,11 +512,10 @@ function StepContext({
           </label>
           <button
             type="button"
-            disabled
-            title="Coming soon — auto-fetch from LinkedIn / X via Apify"
-            className="inline-flex items-center gap-1 rounded-md border border-stone-300 bg-white px-2 py-0.5 text-[10px] text-stone-400 cursor-not-allowed"
+            onClick={onOpenParseModal}
+            className="inline-flex items-center gap-1 rounded-md border border-violet-300 bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-800 hover:bg-violet-100"
           >
-            <Download className="size-3" /> Auto-fetch (soon)
+            <Download className="size-3" /> Fetch from profile
           </button>
         </div>
         <p className="text-[11px] text-stone-600 mb-2">
