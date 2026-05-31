@@ -1,5 +1,4 @@
 import { StatCard } from "@/components/dashboard/stat-card";
-import { ProgressCard } from "@/components/dashboard/progress-card";
 import { StageBreakdown } from "@/components/dashboard/stage-breakdown";
 import { HotLeadsList } from "@/components/dashboard/hot-leads-list";
 import { FollowUpList } from "@/components/dashboard/follow-up-list";
@@ -17,6 +16,7 @@ import { inboxView, inboxCounts } from "@/lib/db/inbox-view";
 import { stuckDeals } from "@/lib/db/stuck-deals";
 import { NextMeetings } from "@/components/dashboard/next-meetings";
 import { InboxWidget } from "@/components/dashboard/inbox-widget";
+import { ConnectWidget } from "@/components/dashboard/connect-widget";
 import { EngagementWidget } from "@/components/dashboard/engagement-widget";
 import { StuckWidget } from "@/components/dashboard/stuck-widget";
 import { DailySummary } from "@/components/dashboard/daily-summary";
@@ -27,13 +27,14 @@ import { db, schema } from "@/lib/db/client";
 import { syncStatus } from "@/lib/notion/sync";
 import { getNotionDerivedKpis } from "@/lib/db/notion-derived-kpis";
 import { getEngagementQueueByPlatform } from "@/lib/db/engagement-queue";
+import { getConnectQueueByPlatform } from "@/lib/db/connect-queue";
 import { getEffectiveOutreachLimits } from "@/lib/outreach-config";
 import { PLATFORM_LIMITS, PLATFORMS_ORDER, target, type PlatformKey } from "@/lib/sales-limits";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const [stats, groups, hot, followUps, sync, funnel, trend, meetings, allUpcomingMeetings, contacts, inbox, inboxC, stuck, streak, kpis, engagementQueue, effective] = await Promise.all([
+  const [stats, groups, hot, followUps, sync, funnel, trend, meetings, allUpcomingMeetings, contacts, inbox, inboxC, stuck, streak, kpis, engagementQueue, connectQueue, effective] = await Promise.all([
     getDashboardStats(),
     getStageGroupCounts(),
     getHotLeads(6),
@@ -50,6 +51,7 @@ export default async function Home() {
     getStreak(),
     getNotionDerivedKpis(new Date()),
     getEngagementQueueByPlatform(),
+    getConnectQueueByPlatform(),
     getEffectiveOutreachLimits(),
   ]);
   const contactName = new Map(contacts.map((c) => [c.id, c.name]));
@@ -76,9 +78,6 @@ export default async function Home() {
     const dmMax = (effective.limits[p]?.actions?.dm?.max ?? (PLATFORM_LIMITS[p].actions as any).dm?.max ?? 0);
     engageTarget += Math.floor(dmMax * 0.4);
   }
-  const connectCount = kpis.connectionsSent.total;
-  const engageCount = kpis.commentsToday.total;
-  const dmCount = kpis.connectionsSent.total + kpis.followUpsSent.total + kpis.inmailsSent.total;
 
   return (
     <div className="flex flex-col gap-6">
@@ -117,16 +116,23 @@ export default async function Home() {
         <StatCard label="Stuck deals" value={stuck.length} tone="amber" />
       </div>
 
-      {/* Row 2 — today's outreach progress against safe limits */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <ProgressCard label="Connect" count={connectCount} target={connectTarget} href="/connect" tone="emerald" />
-        <ProgressCard label="Engage" count={engageCount} target={engageTarget} href="/engagement" tone="violet" />
-        <ProgressCard label="DM" count={dmCount} target={dmTarget} href="/dm" tone="blue" />
+      {/* Row 2 — Connect / Engage / DM. Each card = today's progress + the next
+          contacts to action. Replaces the prior split between standalone progress
+          tiles and separate inbox/engagement widgets. */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <ConnectWidget kpis={kpis} queue={connectQueue} target={connectTarget} />
+        <EngagementWidget kpis={kpis} queue={engagementQueue} target={engageTarget} />
+        <InboxWidget
+          items={inbox}
+          total={inboxC.total}
+          byChannel={inboxC.byChannel}
+          kpis={kpis}
+          target={dmTarget}
+        />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <InboxWidget items={inbox} total={inboxC.total} byChannel={inboxC.byChannel} />
-        <EngagementWidget kpis={kpis} queue={engagementQueue} limits={effective.limits} />
+      {/* Row 3 — ops / health */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <StuckWidget items={stuck} />
         <NextMeetings meetings={meetings} contactName={contactName} />
       </div>
