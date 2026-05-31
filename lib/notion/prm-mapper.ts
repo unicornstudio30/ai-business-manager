@@ -77,13 +77,18 @@ const CANDIDATES = {
   location: ["Location", "City", "Country", "Where"],
   profession: ["Profession", "Job", "Industry"],
   company: ["Company", "Organization", "Org", "Workplace"],
-  role: ["Role", "Title", "Position", "Job Title"],
+  // Role = broad function (e.g. "Engineering"); Position = specific title.
+  // If only one is set in Notion, both fields will read from it.
+  role: ["Role", "Job Function"],
+  position: ["Position", "Title", "Job Title"],
   interests: ["Interests", "Topics", "Focus", "Focus Areas"],
   tags: ["Tags", "Labels"],
   stage: ["Stage", "Pipeline", "Status", "State"],
   lastContactAt: ["Last Contact", "Last Contacted", "Last Touch", "Last Activity"],
   nextFollowUpAt: ["Next Follow-up", "Follow-up", "Follow-up Date", "Next Touch", "Next Action"],
   notes: ["Notes", "Notes / Context", "Background", "About", "Bio", "Description"],
+  recentPost: ["Recent Post", "Latest Post", "Recent Activity", "Last Post"],
+  recentPostUrl: ["Recent Post URL", "Latest Post URL", "Post Link", "Post URL"],
 };
 
 export function notionToNetworkingContact(page: PageObjectResponse): NewNetworkingContact {
@@ -107,12 +112,15 @@ export function notionToNetworkingContact(page: PageObjectResponse): NewNetworki
     profession: pickText(props, CANDIDATES.profession) || pickSelect(props, CANDIDATES.profession),
     company: pickText(props, CANDIDATES.company) || pickSelect(props, CANDIDATES.company),
     role: pickText(props, CANDIDATES.role) || pickSelect(props, CANDIDATES.role),
+    position: pickText(props, CANDIDATES.position) || pickSelect(props, CANDIDATES.position),
     interests: interestsArr.length > 0 ? JSON.stringify(interestsArr) : null,
     tags: tagsArr.length > 0 ? JSON.stringify(tagsArr) : null,
     stage: pickSelect(props, CANDIDATES.stage),
     lastContactAt: pickDate(props, CANDIDATES.lastContactAt),
     nextFollowUpAt: pickDate(props, CANDIDATES.nextFollowUpAt),
     notes: pickText(props, CANDIDATES.notes),
+    recentPost: pickText(props, CANDIDATES.recentPost),
+    recentPostUrl: pickText(props, CANDIDATES.recentPostUrl),
     updatedAt: new Date(page.last_edited_time),
     dirty: 0,
   };

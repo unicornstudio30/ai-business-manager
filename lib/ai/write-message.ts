@@ -22,10 +22,14 @@ export type WriteMessageInputs = {
   contextDetail?: string | null;
   ctaChips?: string[];                 // step 4
   tone?: string | null;                // step 5
-  framework?: string | null;           // step 5b (new) — see FRAMEWORKS
+  framework?: string | null;           // step 5b — see FRAMEWORKS
   channel?: string | null;             // step 6
   language?: string | null;
   topic?: string | null;               // step 7
+  // Recent post / social activity to anchor the message in. Falls back to
+  // contact.recentPost if not supplied per-message.
+  recentPost?: string | null;
+  recentPostUrl?: string | null;
   // Optional: previous message to this contact (for thread continuity)
   lastMessage?: string | null;
   // Sender identity injected into the prompt
@@ -62,13 +66,19 @@ const FRAMEWORK_GUIDE: Record<string, string> = {
 function recipientSummary(c: NetworkingContact): string {
   const parts: string[] = [];
   parts.push(`Name: ${c.name}`);
-  if (c.role) parts.push(`Role: ${c.role}`);
+  if (c.role) parts.push(`Role / function: ${c.role}`);
+  if (c.position) parts.push(`Position / title: ${c.position}`);
   if (c.company) parts.push(`Company: ${c.company}`);
   if (c.profession) parts.push(`Profession: ${c.profession}`);
   if (c.location) parts.push(`Location: ${c.location}`);
+  if (c.email) parts.push(`Email: ${c.email}`);
+  if (c.phone) parts.push(`Phone: ${c.phone}`);
+  if (c.profileUrl) parts.push(`Profile URL: ${c.profileUrl}`);
   if (c.relationship) parts.push(`Relationship to me: ${c.relationship}`);
   if (c.source) parts.push(`How we met: ${c.source}`);
   if (c.platform) parts.push(`Primary platform: ${c.platform}`);
+  if (c.stage) parts.push(`Networking stage: ${c.stage}`);
+  if (c.lastContactAt) parts.push(`Last contacted: ${c.lastContactAt.toISOString().slice(0, 10)}`);
   if (c.interests) {
     try {
       const arr = JSON.parse(c.interests);
@@ -81,7 +91,7 @@ function recipientSummary(c: NetworkingContact): string {
       if (Array.isArray(arr) && arr.length > 0) parts.push(`Tags: ${arr.join(", ")}`);
     } catch {}
   }
-  if (c.notes) parts.push(`Personal notes: ${c.notes.slice(0, 400)}`);
+  if (c.notes) parts.push(`Personal notes: ${c.notes.slice(0, 600)}`);
   return parts.join("\n");
 }
 
@@ -91,9 +101,14 @@ function buildPrompt(input: WriteMessageInputs): { system: string; user: string 
   const frameworkGuide = FRAMEWORK_GUIDE[framework] || FRAMEWORK_GUIDE.Casual;
   const language = input.language || "English";
 
+  // Recent post: prefer per-message override, fall back to contact column.
+  const recentPost = input.recentPost ?? r.recentPost ?? null;
+  const recentPostUrl = input.recentPostUrl ?? r.recentPostUrl ?? null;
+
   const system = [
     `You are an expert relationship-builder writing a personalized outreach message on behalf of ${input.senderName || "the sender"}${input.senderOrg ? ` (${input.senderOrg})` : ""}.`,
-    `Write in ${language}. Use the recipient's name and any specific personal details from their profile.`,
+    `Write in ${language}. Use the recipient's name and the specific details from their profile and (if provided) their recent post.`,
+    "When a recent post is supplied, reference something concrete from it — a phrase, claim, or angle — so the recipient knows you actually read it. Don't paraphrase the whole thing; quote or refer to one sharp detail.",
     "Tone must be human and specific — never generic, never salesy, never templated.",
     "Output a single JSON object with three keys: \"short\", \"standard\", \"detailed\". Each is a message body string (no subject line, no signature).",
     "  - short:     1-2 sentences, ~25-45 words. For a quick DM ping.",
@@ -106,6 +121,9 @@ function buildPrompt(input: WriteMessageInputs): { system: string; user: string 
     `## Recipient profile`,
     recipientSummary(r),
     "",
+    recentPost
+      ? `## Their recent post / activity\n${recentPost.slice(0, 1500)}${recentPostUrl ? `\nSource: ${recentPostUrl}` : ""}\n`
+      : "",
     input.lastMessage ? `## Most recent message I sent this person\n${input.lastMessage.slice(0, 800)}\n` : "",
     `## My intent`,
     input.purpose ? `- Purpose: ${input.purpose}` : "",
@@ -171,25 +189,29 @@ export async function generateMessageVariants(
 // does not affect generation. Range 0–100.
 export function computeStrengthScore(input: Partial<WriteMessageInputs>): number {
   let score = 0;
-  // Required-ish
-  if (input.recipient?.name) score += 10;
-  if (input.relationship) score += 10;
-  if (input.purpose) score += 15;
+  // Recipient grounding
+  if (input.recipient?.name) score += 8;
+  if (input.relationship) score += 7;
+  // Recent post is the highest-leverage signal — anchors the message in something concrete
+  const post = input.recentPost ?? input.recipient?.recentPost;
+  if (post && post.length > 30) score += 15;
+  // Intent
+  if (input.purpose) score += 12;
   // Context
   const cc = input.contextChips?.length ?? 0;
-  if (cc > 0) score += 5;
-  if (cc >= 2) score += 5;
-  if (cc >= 3) score += 5;
-  if (input.contextDetail && input.contextDetail.length > 30) score += 10;
+  if (cc > 0) score += 4;
+  if (cc >= 2) score += 3;
+  if (cc >= 3) score += 3;
+  if (input.contextDetail && input.contextDetail.length > 30) score += 8;
   // CTA
   const ca = input.ctaChips?.length ?? 0;
   if (ca > 0) score += 10;
   // Tone + framework
-  if (input.tone) score += 10;
+  if (input.tone) score += 8;
   if (input.framework) score += 5;
   // Channel + language + topic
-  if (input.channel) score += 5;
-  if (input.language) score += 5;
+  if (input.channel) score += 3;
+  if (input.language) score += 4;
   if (input.topic && input.topic.length > 3) score += 10;
   return Math.max(0, Math.min(100, score));
 }

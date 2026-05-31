@@ -69,6 +69,8 @@ export async function POST(req: NextRequest) {
     channel: body.channel || null,
     language: body.language || "English",
     topic: body.topic || null,
+    recentPost: body.recentPost || null,
+    recentPostUrl: body.recentPostUrl || null,
     lastMessage: lastBody,
     senderName: "Saidur Rahaman",
     senderOrg: "Unicorn Studio",

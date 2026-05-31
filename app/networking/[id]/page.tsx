@@ -4,7 +4,7 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Calendar, ExternalLink, Mail, Phone, MapPin, Briefcase, Tag } from "lucide-react";
+import { ArrowLeft, Calendar, ExternalLink, Mail, Phone, MapPin, Briefcase, Tag, FileText } from "lucide-react";
 import { getNetworkingContact } from "@/lib/db/networking-contacts";
 import { getMessagesForContact } from "@/lib/db/networking-messages";
 import { WriteMessageWizard } from "@/components/networking/write-message-wizard";
@@ -102,6 +102,9 @@ export default async function NetworkingContactPage({ params }: PageProps) {
         {contact.location && (
           <Fact icon={<MapPin className="size-3.5" />} label="Location">{contact.location}</Fact>
         )}
+        {contact.position && (
+          <Fact icon={<Briefcase className="size-3.5" />} label="Position">{contact.position}</Fact>
+        )}
         {contact.profession && (
           <Fact icon={<Briefcase className="size-3.5" />} label="Profession">{contact.profession}</Fact>
         )}
@@ -149,6 +152,28 @@ export default async function NetworkingContactPage({ params }: PageProps) {
           <div className="sm:col-span-2">
             <div className="text-[10px] uppercase tracking-wide text-stone-500 mb-1">Notes</div>
             <div className="text-xs text-stone-700 whitespace-pre-wrap leading-relaxed">{contact.notes}</div>
+          </div>
+        )}
+        {contact.recentPost && (
+          <div className="sm:col-span-2 rounded-lg border border-violet-200 bg-violet-50/30 p-3">
+            <div className="text-[10px] uppercase tracking-wide text-violet-700 mb-1 flex items-center gap-1">
+              <FileText className="size-3" /> Recent post (from Notion)
+              {contact.recentPostUrl && (
+                <a
+                  href={contact.recentPostUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ml-auto text-stone-500 hover:text-stone-900"
+                  title="Open original post"
+                >
+                  <ExternalLink className="size-3" />
+                </a>
+              )}
+            </div>
+            <div className="text-xs text-stone-800 whitespace-pre-wrap leading-relaxed">
+              {contact.recentPost.slice(0, 600)}
+              {contact.recentPost.length > 600 && "…"}
+            </div>
           </div>
         )}
       </section>

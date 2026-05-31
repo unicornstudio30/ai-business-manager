@@ -14,8 +14,12 @@
 
 import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles, ChevronRight, ChevronLeft, Copy, Check, Loader2, AlertCircle } from "lucide-react";
+import {
+  Sparkles, ChevronRight, ChevronLeft, Copy, Check, Loader2, AlertCircle,
+  CheckCircle2, Download, ExternalLink,
+} from "lucide-react";
 import type { NetworkingContact } from "@/lib/db/schema";
+import { parseJson } from "@/lib/utils";
 
 const STEPS = ["Recipient", "Purpose", "Context", "Call to action", "Tone & framework", "Channel & language", "Topic"];
 
@@ -59,6 +63,8 @@ type State = {
   purpose: string;
   contextChips: string[];
   contextDetail: string;
+  recentPost: string;
+  recentPostUrl: string;
   ctaChips: string[];
   tone: string;
   framework: string;
@@ -69,20 +75,23 @@ type State = {
 
 type Generated = { id: string; short: string; standard: string; detailed: string };
 
-function strengthScore(s: State, recipientName: string, relationship: string | null | undefined): number {
+function strengthScore(s: State, recipient: NetworkingContact): number {
   let score = 0;
-  if (recipientName) score += 10;
-  if (relationship) score += 10;
-  if (s.purpose) score += 15;
-  if (s.contextChips.length > 0) score += 5;
-  if (s.contextChips.length >= 2) score += 5;
-  if (s.contextChips.length >= 3) score += 5;
-  if (s.contextDetail.length > 30) score += 10;
+  if (recipient.name) score += 8;
+  if (recipient.relationship) score += 7;
+  // Recent post — biggest leverage; use per-message override OR Notion column.
+  const post = (s.recentPost || recipient.recentPost || "").trim();
+  if (post.length > 30) score += 15;
+  if (s.purpose) score += 12;
+  if (s.contextChips.length > 0) score += 4;
+  if (s.contextChips.length >= 2) score += 3;
+  if (s.contextChips.length >= 3) score += 3;
+  if (s.contextDetail.length > 30) score += 8;
   if (s.ctaChips.length > 0) score += 10;
-  if (s.tone) score += 10;
+  if (s.tone) score += 8;
   if (s.framework) score += 5;
-  if (s.channel) score += 5;
-  if (s.language) score += 5;
+  if (s.channel) score += 3;
+  if (s.language) score += 4;
   if (s.topic.trim().length > 3) score += 10;
   return Math.max(0, Math.min(100, score));
 }
@@ -94,6 +103,8 @@ export function WriteMessageWizard({ contact }: { contact: NetworkingContact }) 
     purpose: "",
     contextChips: [],
     contextDetail: "",
+    recentPost: "",
+    recentPostUrl: "",
     ctaChips: [],
     tone: "Friendly",
     framework: "ACA",
@@ -105,7 +116,7 @@ export function WriteMessageWizard({ contact }: { contact: NetworkingContact }) 
   const [generated, setGenerated] = useState<Generated | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const score = strengthScore(state, contact.name, contact.relationship);
+  const score = strengthScore(state, contact);
 
   function toggleChip(field: "contextChips" | "ctaChips", chip: string) {
     setState((s) => {
@@ -201,8 +212,13 @@ export function WriteMessageWizard({ contact }: { contact: NetworkingContact }) 
               <StepContext
                 chips={state.contextChips}
                 detail={state.contextDetail}
+                recentPost={state.recentPost}
+                recentPostUrl={state.recentPostUrl}
+                contact={contact}
                 onToggle={(c) => toggleChip("contextChips", c)}
                 onDetail={(v) => setState({ ...state, contextDetail: v.slice(0, 12000) })}
+                onRecentPost={(v) => setState({ ...state, recentPost: v.slice(0, 4000) })}
+                onRecentPostUrl={(v) => setState({ ...state, recentPostUrl: v })}
               />
             )}
             {step === 3 && (
@@ -313,23 +329,77 @@ export function WriteMessageWizard({ contact }: { contact: NetworkingContact }) 
 // ─── Step components ─────────────────────────────────────────────────────────
 
 function StepRecipient({ contact }: { contact: NetworkingContact }) {
+  const interests = parseJson<string[]>(contact.interests, []);
+  const tags = parseJson<string[]>(contact.tags, []);
+
+  // Every field we'll inject into the LLM prompt — shown with filled/missing
+  // state so the user can spot which Notion column to backfill before generating.
+  const fields: Array<{ label: string; value: string | null | undefined }> = [
+    { label: "Name", value: contact.name },
+    { label: "Relationship", value: contact.relationship },
+    { label: "Role / function", value: contact.role },
+    { label: "Position / title", value: contact.position },
+    { label: "Company", value: contact.company },
+    { label: "Profession", value: contact.profession },
+    { label: "Location", value: contact.location },
+    { label: "Platform", value: contact.platform },
+    { label: "Stage", value: contact.stage },
+    { label: "How we met", value: contact.source },
+    { label: "Email", value: contact.email },
+    { label: "Phone", value: contact.phone },
+    { label: "Profile URL", value: contact.profileUrl },
+    { label: "Interests", value: interests.length > 0 ? interests.join(", ") : null },
+    { label: "Tags", value: tags.length > 0 ? tags.join(", ") : null },
+    { label: "Last contact", value: contact.lastContactAt ? contact.lastContactAt.toISOString().slice(0, 10) : null },
+    { label: "Notes", value: contact.notes },
+    { label: "Recent post", value: contact.recentPost },
+  ];
+  const filled = fields.filter((f) => f.value).length;
+
   return (
-    <div className="rounded-lg border border-stone-200 bg-white p-4">
-      <div className="text-xs text-stone-500 mb-2">Sending to</div>
-      <div className="text-base font-semibold text-stone-900">{contact.name}</div>
-      <div className="text-xs text-stone-600 mt-1">
-        {[contact.role, contact.company, contact.location].filter(Boolean).join(" · ") || "—"}
+    <div className="flex flex-col gap-3">
+      <div className="rounded-lg border border-stone-200 bg-white p-4">
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-xs text-stone-500">Sending to</div>
+          <div className="text-[10px] text-stone-400">
+            {filled} / {fields.length} fields from Notion
+          </div>
+        </div>
+        <div className="text-base font-semibold text-stone-900">{contact.name}</div>
+        <div className="text-xs text-stone-600 mt-1">
+          {[contact.position || contact.role, contact.company, contact.location]
+            .filter(Boolean)
+            .join(" · ") || "—"}
+        </div>
+        {!contact.relationship && (
+          <div className="mt-2 text-[11px] text-amber-700">
+            ⚠ No relationship set in Notion — message may feel generic.
+          </div>
+        )}
       </div>
-      {contact.relationship && (
-        <div className="mt-2 text-[11px] text-stone-500">
-          Relationship: <strong>{contact.relationship}</strong>
+
+      <details className="rounded-lg border border-stone-200 bg-white">
+        <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50">
+          What gets sent to the LLM ({filled} fields)
+        </summary>
+        <div className="px-3 pb-3">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
+            {fields.map((f) => (
+              <div key={f.label} className="flex items-baseline gap-1.5 min-w-0">
+                {f.value ? (
+                  <CheckCircle2 className="size-3 text-emerald-500 flex-shrink-0" />
+                ) : (
+                  <span className="size-3 inline-block rounded-full bg-stone-200 flex-shrink-0" />
+                )}
+                <dt className="text-stone-500 flex-shrink-0">{f.label}:</dt>
+                <dd className={`truncate ${f.value ? "text-stone-800" : "text-stone-400 italic"}`}>
+                  {f.value || "not set in Notion"}
+                </dd>
+              </div>
+            ))}
+          </dl>
         </div>
-      )}
-      {!contact.relationship && (
-        <div className="mt-2 text-[11px] text-amber-700">
-          ⚠ No relationship set in Notion — message may feel generic. Update the PRM row to improve.
-        </div>
-      )}
+      </details>
     </div>
   );
 }
@@ -362,16 +432,32 @@ function StepText({
 function StepContext({
   chips,
   detail,
+  recentPost,
+  recentPostUrl,
+  contact,
   onToggle,
   onDetail,
+  onRecentPost,
+  onRecentPostUrl,
 }: {
   chips: string[];
   detail: string;
+  recentPost: string;
+  recentPostUrl: string;
+  contact: NetworkingContact;
   onToggle: (chip: string) => void;
   onDetail: (v: string) => void;
+  onRecentPost: (v: string) => void;
+  onRecentPostUrl: (v: string) => void;
 }) {
+  const notionPost = contact.recentPost;
+  const notionPostUrl = contact.recentPostUrl;
+  const effectivePost = recentPost || notionPost || "";
+  const hasNotionPost = !!notionPost;
+
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
+      {/* Context chips */}
       <div>
         <div className="text-sm font-medium text-stone-800 mb-1">Background / context</div>
         <p className="text-[11px] text-stone-500 mb-2">Pick up to 3 that apply. {chips.length}/3 selected.</p>
@@ -396,15 +482,78 @@ function StepContext({
           })}
         </div>
       </div>
+
+      {/* Recent post / social activity */}
+      <div className="rounded-lg border border-violet-200 bg-violet-50/30 p-3">
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <label className="text-sm font-medium text-stone-800">
+            Their recent post (high-leverage)
+          </label>
+          <button
+            type="button"
+            disabled
+            title="Coming soon — auto-fetch from LinkedIn / X via Apify"
+            className="inline-flex items-center gap-1 rounded-md border border-stone-300 bg-white px-2 py-0.5 text-[10px] text-stone-400 cursor-not-allowed"
+          >
+            <Download className="size-3" /> Auto-fetch (soon)
+          </button>
+        </div>
+        <p className="text-[11px] text-stone-600 mb-2">
+          Paste a recent post / activity from them. The LLM will reference a sharp detail from it so the message
+          feels timely instead of generic.{" "}
+          {hasNotionPost && !recentPost && (
+            <span className="text-emerald-700">
+              ✓ Using "Recent Post" from Notion (override below to use a different one).
+            </span>
+          )}
+        </p>
+        <textarea
+          value={recentPost}
+          onChange={(e) => onRecentPost(e.target.value)}
+          rows={4}
+          maxLength={4000}
+          placeholder={
+            hasNotionPost
+              ? `Notion "Recent Post" will be used by default:\n\n${notionPost!.slice(0, 200)}${notionPost!.length > 200 ? "…" : ""}\n\n(Paste here to override for this message only.)`
+              : "Paste a recent post, tweet, comment, or update from them. ~50–500 words is the sweet spot."
+          }
+          className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm text-stone-800 bg-white focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400"
+        />
+        <div className="flex items-center gap-2 mt-2">
+          <input
+            type="url"
+            value={recentPostUrl}
+            onChange={(e) => onRecentPostUrl(e.target.value)}
+            placeholder={notionPostUrl ? `Notion URL: ${notionPostUrl}` : "Optional: post URL"}
+            className="flex-1 rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-800 bg-white focus:outline-none focus:ring-2 focus:ring-violet-300"
+          />
+          {(recentPostUrl || notionPostUrl) && (
+            <a
+              href={recentPostUrl || notionPostUrl!}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-stone-400 hover:text-stone-900"
+              title="Open post"
+            >
+              <ExternalLink className="size-3.5" />
+            </a>
+          )}
+        </div>
+        <div className="text-[10px] text-stone-400 text-right mt-1 tabular-nums">
+          {(recentPost || effectivePost).length} / 4000
+        </div>
+      </div>
+
+      {/* Free-text detail */}
       <div>
-        <label className="text-sm font-medium text-stone-800">Detail (optional)</label>
+        <label className="text-sm font-medium text-stone-800">Other context detail (optional)</label>
         <p className="text-[11px] text-stone-500 mb-1">
-          The specific thing you want them to read. Up to 12,000 characters.
+          Anything else you want them to read. Up to 12,000 characters.
         </p>
         <textarea
           value={detail}
           onChange={(e) => onDetail(e.target.value)}
-          rows={4}
+          rows={3}
           maxLength={12000}
           className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400"
         />

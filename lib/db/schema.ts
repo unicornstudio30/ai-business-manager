@@ -417,8 +417,15 @@ export const networkingContacts = sqliteTable("networking_contacts", {
   profession: text("profession"),
   company: text("company"),
   role: text("role"),
+  position: text("position"),            // specific title (separate from "role")
   interests: text("interests"),          // JSON array of strings
   tags: text("tags"),                    // JSON array
+
+  // Recent activity / latest post — used by the Write Message wizard to ground
+  // the message in something current. Manual paste OR mirrored from a Notion
+  // "Recent Post" column. Auto-scrape from social platforms is a future option.
+  recentPost: text("recent_post"),
+  recentPostUrl: text("recent_post_url"),
 
   // Pipeline / lifecycle on the networking side
   stage: text("stage"),                  // free-text or enum: Start / Maintain / Focus / etc.
