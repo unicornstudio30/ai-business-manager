@@ -15,10 +15,20 @@ export function HotLeadsList({ contacts }: { contacts: Contact[] }) {
         </Link>
       </div>
       {contacts.length === 0 ? (
-        <div className="text-sm text-stone-500 py-8 text-center">
-          No leads showing. If you just updated Notion, hit{" "}
-          <Link href="/settings" className="text-stone-700 underline">Settings → Sync</Link>{" "}
-          to pull the latest.
+        <div className="text-sm text-stone-500 py-6 text-center space-y-2">
+          <div>No leads showing yet.</div>
+          <div className="text-xs leading-relaxed max-w-md mx-auto">
+            In Notion CRM, set a contact's <strong>Status</strong> column to one of:
+            <span className="block mt-1 text-stone-700 text-[11px]">
+              Lead · 1st Lead Follow up · 2nd Lead Follow up · Qualified · Proposal Sent ·
+              Post Proposal Follow-up-1 · Post Proposal Follow-up-2 · Booking · First call
+            </span>
+            <div className="mt-2">
+              Then{" "}
+              <Link href="/settings" className="text-stone-700 underline">Settings → Sync</Link>{" "}
+              to pull.
+            </div>
+          </div>
         </div>
       ) : (
         <ul className="flex flex-col divide-y divide-stone-100">

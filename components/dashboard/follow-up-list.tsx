@@ -6,10 +6,24 @@ import type { Contact } from "@/lib/db/schema";
 export function FollowUpList({ contacts }: { contacts: Contact[] }) {
   return (
     <div className="rounded-2xl border border-stone-200 bg-white p-6">
-      <div className="text-sm font-semibold text-stone-900 mb-1">Needs follow-up</div>
+      <div className="flex items-baseline justify-between mb-1">
+        <div className="text-sm font-semibold text-stone-900">
+          Follow up <span className="text-stone-400 font-normal">({contacts.length})</span>
+        </div>
+        <Link
+          href="/contacts"
+          className="text-xs text-stone-500 hover:text-stone-900 inline-flex items-center gap-1"
+        >
+          See all <ArrowUpRight className="size-3" />
+        </Link>
+      </div>
       <div className="text-xs text-stone-500 mb-4">last interaction 11+ days ago</div>
       {contacts.length === 0 ? (
-        <div className="text-sm text-stone-500 py-8 text-center">All current leads are within 10 days. Nice.</div>
+        <div className="text-sm text-stone-500 py-8 text-center">
+          All current leads are within 10 days. If you just updated Notion, hit{" "}
+          <Link href="/settings" className="text-stone-700 underline">Settings → Sync</Link>{" "}
+          to pull the latest.
+        </div>
       ) : (
         <ul className="flex flex-col divide-y divide-stone-100">
           {contacts.map((c) => {
