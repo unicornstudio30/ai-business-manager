@@ -116,9 +116,16 @@ export default async function Home() {
         <StatCard label="Stuck deals" value={stuck.length} tone="amber" />
       </div>
 
-      {/* Row 2 — Connect / Engage / DM. Each card = today's progress + the next
-          contacts to action. Replaces the prior split between standalone progress
-          tiles and separate inbox/engagement widgets. */}
+      {/* Row 2 — Leads + Follow-up lists. These are the "who specifically"
+          counterparts to the Leads / Follow-up tiles in row 1. Pulled up here
+          so you see the actual names before the outreach pillars. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <HotLeadsList contacts={hot} />
+        <FollowUpList contacts={followUps} />
+      </div>
+
+      {/* Row 3 — Connect / Engage / DM. Each card = today's progress + the next
+          contacts to action. */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <ConnectWidget kpis={kpis} queue={connectQueue} target={connectTarget} />
         <EngagementWidget kpis={kpis} queue={engagementQueue} target={engageTarget} />
@@ -131,7 +138,7 @@ export default async function Home() {
         />
       </div>
 
-      {/* Row 3 — ops / health */}
+      {/* Row 4 — ops / health */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <StuckWidget items={stuck} />
         <NextMeetings meetings={meetings} contactName={contactName} />
@@ -141,12 +148,7 @@ export default async function Home() {
 
       <ActivityTrend data={trend} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <StageBreakdown groups={groups} />
-        <HotLeadsList contacts={hot} />
-      </div>
-
-      <FollowUpList contacts={followUps} />
+      <StageBreakdown groups={groups} />
     </div>
   );
 }
