@@ -1,4 +1,5 @@
 import { StatCard } from "@/components/dashboard/stat-card";
+import { ProgressCard } from "@/components/dashboard/progress-card";
 import { StageBreakdown } from "@/components/dashboard/stage-breakdown";
 import { HotLeadsList } from "@/components/dashboard/hot-leads-list";
 import { FollowUpList } from "@/components/dashboard/follow-up-list";
@@ -11,7 +12,7 @@ import {
   getStageGroupCounts,
 } from "@/lib/db/queries";
 import { funnelCounts, activityTrend30d } from "@/lib/db/analytics";
-import { nextMeetings } from "@/lib/db/meetings";
+import { nextMeetings, upcomingMeetings } from "@/lib/db/meetings";
 import { inboxView, inboxCounts } from "@/lib/db/inbox-view";
 import { stuckDeals } from "@/lib/db/stuck-deals";
 import { NextMeetings } from "@/components/dashboard/next-meetings";
@@ -27,11 +28,12 @@ import { syncStatus } from "@/lib/notion/sync";
 import { getNotionDerivedKpis } from "@/lib/db/notion-derived-kpis";
 import { getEngagementQueueByPlatform } from "@/lib/db/engagement-queue";
 import { getEffectiveOutreachLimits } from "@/lib/outreach-config";
+import { PLATFORM_LIMITS, PLATFORMS_ORDER, target, type PlatformKey } from "@/lib/sales-limits";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const [stats, groups, hot, followUps, sync, funnel, trend, meetings, contacts, inbox, inboxC, stuck, streak, kpis, engagementQueue, effective] = await Promise.all([
+  const [stats, groups, hot, followUps, sync, funnel, trend, meetings, allUpcomingMeetings, contacts, inbox, inboxC, stuck, streak, kpis, engagementQueue, effective] = await Promise.all([
     getDashboardStats(),
     getStageGroupCounts(),
     getHotLeads(6),
@@ -40,6 +42,7 @@ export default async function Home() {
     funnelCounts(),
     activityTrend30d(),
     nextMeetings(3),
+    upcomingMeetings(200),                     // for total count in row-1 stat card
     db.select({ id: schema.contacts.id, name: schema.contacts.name }).from(schema.contacts),
     inboxView(),
     inboxCounts(),
@@ -52,6 +55,30 @@ export default async function Home() {
   const contactName = new Map(contacts.map((c) => [c.id, c.name]));
 
   const notConfigured = !sync.configured;
+
+  // Daily target totals for the Connect / Engage / DM progress cards in row 2.
+  // Connect targets cover the four "social" platforms with a connect action
+  // (LinkedIn, X, Instagram, Facebook). DM totals include dm + inmail +
+  // follow-up across every messaging platform. Engage targets are derived from
+  // commentTarget(p) = floor(dm.max * 0.4) for the comment-active platforms.
+  const ENGAGE_PLATFORMS: PlatformKey[] = ["linkedin", "x", "instagram", "facebook", "reddit"];
+  let connectTarget = 0;
+  let dmTarget = 0;
+  let engageTarget = 0;
+  for (const p of PLATFORMS_ORDER) {
+    const cfg = (effective.limits[p]?.actions ?? PLATFORM_LIMITS[p].actions) as any;
+    if (cfg.connect?.max) connectTarget += target(p, "connect", false, effective.limits);
+    if (cfg.dm?.max) dmTarget += target(p, "dm", false, effective.limits);
+    if (cfg.inmail?.max) dmTarget += target(p, "inmail", false, effective.limits);
+    if (cfg.follow_up?.max) dmTarget += target(p, "follow_up", false, effective.limits);
+  }
+  for (const p of ENGAGE_PLATFORMS) {
+    const dmMax = (effective.limits[p]?.actions?.dm?.max ?? (PLATFORM_LIMITS[p].actions as any).dm?.max ?? 0);
+    engageTarget += Math.floor(dmMax * 0.4);
+  }
+  const connectCount = kpis.connectionsSent.total;
+  const engageCount = kpis.commentsToday.total;
+  const dmCount = kpis.connectionsSent.total + kpis.followUpsSent.total + kpis.inmailsSent.total;
 
   return (
     <div className="flex flex-col gap-6">
@@ -81,11 +108,20 @@ export default async function Home() {
 
       <TodayQueue />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total contacts" value={stats.totalContacts} />
-        <StatCard label="Hot leads" value={stats.hotLeads} tone="red" />
-        <StatCard label="Active clients" value={stats.activeClients} tone="green" />
-        <StatCard label="Need follow-up" value={stats.needFollowUp} tone="amber" />
+      {/* Row 1 — pipeline + commitments at a glance */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        <StatCard label="Leads" value={stats.hotLeads} tone="red" />
+        <StatCard label="Follow-up" value={stats.needFollowUp} tone="amber" />
+        <StatCard label="Meetings" value={allUpcomingMeetings.length} />
+        <StatCard label="Active Clients" value={stats.activeClients} tone="green" />
+        <StatCard label="Stuck deals" value={stuck.length} tone="amber" />
+      </div>
+
+      {/* Row 2 — today's outreach progress against safe limits */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <ProgressCard label="Connect" count={connectCount} target={connectTarget} href="/connect" tone="emerald" />
+        <ProgressCard label="Engage" count={engageCount} target={engageTarget} href="/engagement" tone="violet" />
+        <ProgressCard label="DM" count={dmCount} target={dmTarget} href="/dm" tone="blue" />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

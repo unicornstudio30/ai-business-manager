@@ -40,7 +40,7 @@ const items = [
   { href: "/content", label: "Content Calendar", icon: Calendar },
   { href: "/projects", label: "Projects", icon: Briefcase },
   { href: "/audits", label: "Audits", icon: ScanSearch },
-  { href: "/partners", label: "Partners", icon: Handshake },
+  { href: "/partners", label: "Clients", icon: Handshake },
   { href: "/networking", label: "Networking", icon: Network },
   { href: "/communities", label: "Communities", icon: Globe },
   { href: "/finance", label: "Finance", icon: DollarSign },
