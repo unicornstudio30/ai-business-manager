@@ -6,10 +6,19 @@ import type { Contact } from "@/lib/db/schema";
 export function HotLeadsList({ contacts }: { contacts: Contact[] }) {
   return (
     <div className="rounded-2xl border border-stone-200 bg-white p-6">
-      <div className="text-sm font-semibold text-stone-900 mb-4">Hot leads — act now</div>
+      <div className="flex items-baseline justify-between mb-4">
+        <div className="text-sm font-semibold text-stone-900">
+          Leads <span className="text-stone-400 font-normal">({contacts.length})</span>
+        </div>
+        <Link href="/contacts" className="text-xs text-stone-500 hover:text-stone-900 inline-flex items-center gap-1">
+          See all <ArrowUpRight className="size-3" />
+        </Link>
+      </div>
       {contacts.length === 0 ? (
         <div className="text-sm text-stone-500 py-8 text-center">
-          No hot leads right now. Run <code className="px-1.5 py-0.5 bg-stone-100 rounded">/scan-hot-leads</code> in Claude Code once you have some.
+          No leads showing. If you just updated Notion, hit{" "}
+          <Link href="/settings" className="text-stone-700 underline">Settings → Sync</Link>{" "}
+          to pull the latest.
         </div>
       ) : (
         <ul className="flex flex-col divide-y divide-stone-100">

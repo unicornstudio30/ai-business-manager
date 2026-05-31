@@ -37,7 +37,7 @@ export default async function Home() {
   const [stats, groups, hot, followUps, sync, funnel, trend, meetings, allUpcomingMeetings, contacts, inbox, inboxC, stuck, streak, kpis, engagementQueue, connectQueue, effective] = await Promise.all([
     getDashboardStats(),
     getStageGroupCounts(),
-    getHotLeads(6),
+    getHotLeads(12),
     getNeedsFollowUp(11, 6),
     syncStatus(),
     funnelCounts(),
@@ -89,7 +89,7 @@ export default async function Home() {
         <p className="text-sm text-stone-500 mt-1">
           {stats.totalContacts === 0
             ? "Connect Notion to see your CRM here."
-            : `${stats.totalContacts} contacts · ${stats.hotLeads} hot · ${stats.needFollowUp} need follow-up`}
+            : `${stats.totalContacts} contacts · ${stats.hotLeads} leads · ${stats.needFollowUp} need follow-up`}
         </p>
         {notConfigured && (
           <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900 shadow-elevation-1">
