@@ -164,16 +164,26 @@ export async function generateMessageVariants(
   });
 
   let parsed: any;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    // Try to recover from a fenced response
-    const stripped = raw.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+  // Try 1: raw JSON.
+  // Try 2: strip ``` fences.
+  // Try 3: extract the first {…} block (handles prose wrappers like
+  //         "Sure, here's the JSON: { … } Let me know if…").
+  const attempts: string[] = [];
+  attempts.push(raw.trim());
+  attempts.push(raw.replace(/```(?:json)?/gi, "").trim());
+  const first = raw.indexOf("{");
+  const last = raw.lastIndexOf("}");
+  if (first !== -1 && last > first) attempts.push(raw.slice(first, last + 1));
+  for (const cand of attempts) {
     try {
-      parsed = JSON.parse(stripped);
+      parsed = JSON.parse(cand);
+      break;
     } catch {
-      throw new Error("LLM returned non-JSON output");
+      /* try next */
     }
+  }
+  if (!parsed) {
+    throw new Error(`LLM returned non-JSON output: ${raw.slice(0, 200)}`);
   }
 
   const short = String(parsed?.short ?? "").trim();
