@@ -11,7 +11,7 @@
 //
 // Counts:
 //   - connect:  kpis.connectionsSent.byPlatform (contacts moved to "1st message" today)
-//   - inmail:   kpis.inmailsSent.byPlatform     (contacts moved to "In-mail" today)
+//   - inmail:   kpis.inmailsSent.byPlatform     (contacts moved to "Inmail" today)
 
 import { AlertCircle, CheckCircle2, Gauge, UserPlus } from "lucide-react";
 import type { DerivedKpis } from "@/lib/db/notion-derived-kpis";

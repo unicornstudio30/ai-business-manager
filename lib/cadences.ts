@@ -21,7 +21,7 @@ export type CadenceItem = {
 
 export function computeCadence(contact: Contact, now: Date = new Date()): CadenceItem | null {
   if (isTerminal(contact.status)) return null;
-  if (isExcludedFromFollowUp(contact.status)) return null; // e.g. In-mail — no auto follow-up
+  if (isExcludedFromFollowUp(contact.status)) return null; // e.g. Inmail — no auto follow-up
   if (contact.status === "Partnership") return null; // active client, different rhythm
 
   const track = (contact.sequenceTrack as SequenceTrack) ?? trackForPlatform(contact.platform);

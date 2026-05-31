@@ -91,7 +91,7 @@ export function DerivedKpisPanel({ kpis }: { kpis: DerivedKpis }) {
               <div className="text-base font-semibold tabular-nums text-stone-900">{kpis.connectionsSent.total}</div>
               <PlatformList map={kpis.connectionsSent.byPlatform} />
             </div>
-            <div className="rounded-lg bg-stone-50/60 border border-stone-200/60 px-2 py-1.5" title="Contacts moved to 'In-mail' status today — cold first message to non-connections">
+            <div className="rounded-lg bg-stone-50/60 border border-stone-200/60 px-2 py-1.5" title="Contacts moved to 'Inmail' status today — cold first message to non-connections">
               <div className="text-[10px] uppercase tracking-wide text-stone-500">InMails (cold)</div>
               <div className="text-base font-semibold tabular-nums text-stone-900">{kpis.inmailsSent.total}</div>
               <PlatformList map={kpis.inmailsSent.byPlatform} />

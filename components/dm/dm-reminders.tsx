@@ -1,6 +1,6 @@
 // DM reminders — per-platform daily + hourly targets, split into three sub-rows:
 //   - Connected DM    (Notion status "1st message" → DMs to people you're already linked to)
-//   - InMail (cold)   (Notion status "In-mail"    → cold first messages, no connection)
+//   - InMail (cold)   (Notion status "Inmail"     → cold first messages, no connection)
 //   - Follow-ups      (any follow-up status moved today)
 //
 // Each sub-row has its own daily target + hourly pacing budget so the user can
@@ -204,7 +204,7 @@ export function DmReminders({
       <div className="mt-3 text-[11px] text-stone-500">
         Counts come from Notion CRM <strong>Status</strong> transitions:{" "}
         <code className="px-1 bg-stone-100 rounded">1st message</code> = DM to a connected person,{" "}
-        <code className="px-1 bg-stone-100 rounded">In-mail</code> = cold first message (no connection),{" "}
+        <code className="px-1 bg-stone-100 rounded">Inmail</code> = cold first message (no connection),{" "}
         any Follow-up stage = follow-up DM.
       </div>
     </section>

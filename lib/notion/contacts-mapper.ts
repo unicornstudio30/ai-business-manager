@@ -4,8 +4,59 @@
 import type { PageObjectResponse } from "@notionhq/client";
 import type { NewContact } from "../db/schema";
 import { trackForPlatform } from "../sequences";
+import { STAGES, type Stage } from "../stages";
 
 type Props = PageObjectResponse["properties"];
+
+// Aliases for Status values that drift from the canonical STAGES list.
+// Keys are the spellings Notion may emit; values are the canonical Stage.
+const STATUS_ALIAS: Record<string, Stage> = {
+  "In-mail": "Inmail",
+  "Close": "Closed without Partnership",
+};
+
+const STAGE_INDEX: Record<string, number> = Object.fromEntries(
+  STAGES.map((s, i) => [s, i])
+);
+
+// Read the Status property from a Notion page. Handles BOTH single-select and
+// multi_select column types (the latter is what the user actually has). When
+// multiple values are picked (data-quality issue, but we tolerate it), pick the
+// one furthest along in the pipeline — terminal stages naturally win.
+function readStatus(p: any): string | null {
+  if (!p) return null;
+  // single-select
+  if (p.type === "select") {
+    const raw = p.select?.name;
+    if (!raw) return null;
+    return STATUS_ALIAS[raw] ?? raw;
+  }
+  // multi-select (the actual shape in this CRM)
+  if (p.type === "multi_select") {
+    const names: string[] = (p.multi_select ?? []).map((o: any) => o.name);
+    if (names.length === 0) return null;
+    const canonical = names.map((n) => STATUS_ALIAS[n] ?? n);
+    // Pick the most-advanced known stage; if none match STAGES, take the
+    // first raw value so the data isn't lost entirely.
+    let best: string | null = null;
+    let bestIdx = -1;
+    for (const c of canonical) {
+      const idx = STAGE_INDEX[c];
+      if (idx !== undefined && idx > bestIdx) {
+        bestIdx = idx;
+        best = c;
+      }
+    }
+    return best ?? canonical[0];
+  }
+  // Notion's "status" property type (yet another shape — defensive)
+  if (p.type === "status") {
+    const raw = p.status?.name;
+    if (!raw) return null;
+    return STATUS_ALIAS[raw] ?? raw;
+  }
+  return null;
+}
 
 const text = (p: any): string | null => {
   if (!p) return null;
@@ -63,7 +114,7 @@ export function notionToContact(page: PageObjectResponse): NewContact {
     category: JSON.stringify(multiSelect(props["Category"])),
     position: JSON.stringify(multiSelect(props["Position"])),
     profession: JSON.stringify(multiSelect(props["Proffesion"])),
-    status: select(props["Status"]),
+    status: readStatus(props["Status"]),
     statusDate: date(props["Status Date"]),
     followUpDate: date(props["Follow-up Date"]),
     closedDate: date(props["Closed date"]),

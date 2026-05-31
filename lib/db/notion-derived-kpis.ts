@@ -32,7 +32,7 @@ function endOfDay(d: Date): Date {
 
 // Stage groupings from the 18-stage pipeline
 const CONNECTION_STAGES = ["1st message"];                                                                      // initial outreach
-const INMAIL_STAGE = "In-mail";                                                                                 // cold message, no connection request
+const INMAIL_STAGE = "Inmail";                                                                                  // cold message, no connection request
 const ENGAGED_STAGES = ["Lead", "1st Lead Follow up", "2nd Lead Follow up"];
 const QUALIFIED_STAGE = "Qualified";
 const PROPOSAL_STAGE = "Proposal Sent";
@@ -190,7 +190,7 @@ export async function getNotionDerivedKpis(forDate: Date): Promise<DerivedKpis> 
         bumpPlatform(connectionsSent.byPlatform, channel);
         newConnectionsToday.push({ id: c.id, name: c.name || "(no name)", platform: c.platform });
       }
-      // InMail sent (Status = "In-mail" + statusDate = today)
+      // InMail sent (Status = "Inmail" + statusDate = today)
       if (status === INMAIL_STAGE) {
         inmailsSent.total++;
         bumpPlatform(inmailsSent.byPlatform, channel);

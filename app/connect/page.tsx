@@ -11,7 +11,7 @@
 //   - Facebook friend request
 //   - Instagram / X follow
 // Once a connection request is accepted (or an InMail is sent), move the
-// contact's Status to "1st message" / "In-mail" in Notion CRM.
+// contact's Status to "1st message" / "Inmail" in Notion CRM.
 
 import { UserPlus } from "lucide-react";
 import { getNotionDerivedKpis } from "@/lib/db/notion-derived-kpis";

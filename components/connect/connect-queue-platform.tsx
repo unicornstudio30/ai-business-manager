@@ -22,7 +22,7 @@ export function ConnectQueuePlatform({ data }: { data: ConnectQueueByPlatform })
           <h2 className="text-sm font-semibold text-stone-900">Connect queue · by platform</h2>
           <p className="text-xs text-stone-500 mt-0.5">
             Prospects waiting for first outreach. Top 50 pinned. Click <strong>Profile</strong> to send the connect request,
-            then move them to <code className="px-1 bg-stone-100 rounded">1st message</code> (or <code className="px-1 bg-stone-100 rounded">In-mail</code>) in Notion.
+            then move them to <code className="px-1 bg-stone-100 rounded">1st message</code> (or <code className="px-1 bg-stone-100 rounded">Inmail</code>) in Notion.
           </p>
         </div>
         <div className="flex items-center gap-3 text-xs text-stone-500">
