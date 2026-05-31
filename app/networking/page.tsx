@@ -5,7 +5,9 @@
 import Link from "next/link";
 import { Search, Network, ExternalLink, Calendar } from "lucide-react";
 import { listNetworkingContacts, getNetworkingStats } from "@/lib/db/networking-contacts";
+import { getNetworkingAnalytics } from "@/lib/db/networking-analytics";
 import { PrmSyncButton } from "@/components/networking/sync-button";
+import { NetworkingAnalyticsDashboard } from "@/components/networking/analytics-dashboard";
 import { fmtDate } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -20,9 +22,10 @@ export default async function NetworkingPage({ searchParams }: PageProps) {
   const stage = sp.stage || undefined;
   const relationship = sp.rel || undefined;
 
-  const [contacts, stats] = await Promise.all([
+  const [contacts, stats, analytics] = await Promise.all([
     listNetworkingContacts({ search, stage, relationship, limit: 200 }),
     getNetworkingStats(),
+    getNetworkingAnalytics(),
   ]);
 
   function buildUrl(overrides: Record<string, string | undefined>): string {
@@ -56,12 +59,7 @@ export default async function NetworkingPage({ searchParams }: PageProps) {
         <PrmSyncButton />
       </div>
 
-      <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <StatTile label="Total contacts" value={stats.total} />
-            <StatTile label="Overdue follow-ups" value={stats.overdueFollowUps} tone="amber" />
-            <StatTile label="Stages" value={stats.byStage.length} />
-            <StatTile label="Relationships" value={stats.byRelationship.length} />
-          </section>
+      <NetworkingAnalyticsDashboard data={analytics} />
 
           <div className="flex flex-wrap items-center gap-3">
             <form action="/networking" method="GET" className="flex items-center gap-2">
@@ -223,12 +221,3 @@ export default async function NetworkingPage({ searchParams }: PageProps) {
   );
 }
 
-function StatTile({ label, value, tone }: { label: string; value: number; tone?: "amber" }) {
-  const valColor = tone === "amber" ? "text-amber-700" : "text-stone-900";
-  return (
-    <div className="surface p-3">
-      <div className="text-[10px] uppercase tracking-wide text-stone-500 mb-1">{label}</div>
-      <div className={`text-2xl font-semibold tabular-nums ${valColor}`}>{value}</div>
-    </div>
-  );
-}
