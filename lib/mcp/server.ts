@@ -49,8 +49,17 @@ import { getHistory, type HistoryEventType } from "@/lib/db/history";
 import { listNetworkingContacts, getNetworkingContact } from "@/lib/db/networking-contacts";
 import { getMessagesForContact, getLastMessageForContact, createMessage, updateMessage } from "@/lib/db/networking-messages";
 import { getNetworkingNextDrafts } from "@/lib/db/networking-next-drafts";
+import { getNetworkingAnalytics } from "@/lib/db/networking-analytics";
 import { FRAMEWORKS } from "@/lib/ai/write-message";
+import { parseProfileFromImage, parseProfileFromText, parseProfileFromUrl } from "@/lib/ai/profile-parse";
 import { parseJson } from "@/lib/utils";
+
+// Sales — active clients (Partnership stage)
+import { getClientsView } from "@/lib/db/clients";
+
+// Outreach safety limits + active window (read/write)
+import { getOutreachConfig, saveOutreachConfig, type OutreachConfig } from "@/lib/outreach-config";
+import { PLATFORM_LIMITS, type PlatformKey, type ActionKey } from "@/lib/sales-limits";
 
 // JSON-serialize a result wrapping it as MCP text content.
 function ok(data: unknown) {
@@ -847,6 +856,175 @@ export function buildMcpServer(): McpServer {
       if (!contact) return ok({ error: "Contact not found", contact_id });
       const messages = await getMessagesForContact(contact_id);
       return ok({ contact, messages });
+    }
+  );
+
+  server.registerTool(
+    "networking_analytics",
+    {
+      title: "Networking · Analytics Snapshot",
+      description:
+        "Full analytics rollup for the networking PRM: headline KPIs (total, +30d new, " +
+        "overdue follow-ups, due this week, going cold, cold, total drafts, drafts in 30d), " +
+        "distributions by stage / relationship / platform / contact freshness, " +
+        "14-day message-drafting activity, most-used frameworks + tones, upcoming follow-ups, " +
+        "and oldest-untouched contacts. Mirrors what /networking shows.",
+      inputSchema: {},
+    },
+    async () => {
+      const data = await getNetworkingAnalytics();
+      return ok(data);
+    }
+  );
+
+  // ────────────────────────────────────────────────────────────────────────
+  // CLIENTS — Sales CRM contacts whose Status reached "Partnership"
+  // ────────────────────────────────────────────────────────────────────────
+
+  server.registerTool(
+    "list_clients",
+    {
+      title: "Clients · List Active Partnerships",
+      description:
+        "List all Partnership-stage contacts with health tracking. Each client includes " +
+        "days as client (since statusDate), days since last touch, and a health bucket " +
+        "(fresh ≤14d, warm ≤30d, cooling ≤90d, cold 90d+, unknown if never touched). " +
+        "Returns aggregate totals too. Use to find clients going quiet that need a check-in.",
+      inputSchema: {
+        search: z.string().optional().describe("Optional substring search on client name"),
+      },
+    },
+    async ({ search }) => {
+      const view = await getClientsView(search);
+      return ok({
+        totals: view.totals,
+        items: view.items.map((i) => ({
+          id: i.contact.id,
+          name: i.contact.name,
+          status: i.contact.status,
+          platform: i.contact.platform,
+          country: i.contact.country,
+          days_as_client: i.daysAsClient,
+          days_since_touch: i.daysSinceTouch,
+          health: i.health,
+          notion_url: i.notionUrl,
+          follow_up_date: i.contact.followUpDate?.toISOString().slice(0, 10) ?? null,
+        })),
+      });
+    }
+  );
+
+  // ────────────────────────────────────────────────────────────────────────
+  // OUTREACH LIMITS — read + edit per-(platform, action) safety caps
+  // ────────────────────────────────────────────────────────────────────────
+
+  server.registerTool(
+    "get_outreach_limits",
+    {
+      title: "Outreach · Get Daily + Hourly Limits Config",
+      description:
+        "Returns the current outreach safety config: active window (start/end hour) and " +
+        "the full per-(platform, action) max + per-hour values, including any user overrides " +
+        "saved in /settings. Use to inspect what's allowed before recommending volume.",
+      inputSchema: {},
+    },
+    async () => {
+      const cfg = await getOutreachConfig();
+      // Return both the saved overrides AND the resolved values per platform/action
+      // so Claude can answer questions like "what's my LinkedIn DM cap" without
+      // having to recompute defaults.
+      const resolved: Record<string, Record<string, { max: number; perHour: number; label: string }>> = {};
+      for (const [pk, pcfg] of Object.entries(PLATFORM_LIMITS) as [PlatformKey, any][]) {
+        const platformOverride = (cfg.overrides[pk] ?? {}) as Record<string, any>;
+        resolved[pk] = {};
+        for (const [ak, acfg] of Object.entries(pcfg.actions) as [ActionKey, any][]) {
+          const ov = platformOverride[ak] ?? {};
+          resolved[pk][ak] = {
+            max: ov.max ?? acfg.max,
+            perHour: ov.perHour ?? acfg.perHour,
+            label: acfg.label,
+          };
+        }
+      }
+      return ok({ active_window: cfg.activeWindow, saved_overrides: cfg.overrides, resolved_limits: resolved });
+    }
+  );
+
+  server.registerTool(
+    "set_outreach_limit",
+    {
+      title: "Outreach · Set One Daily-Cap Override",
+      description:
+        "Override max and/or perHour for one (platform, action) combination. Persists to " +
+        "app_settings and revalidates the affected pages so /connect, /dm, /engage, and " +
+        "/daily-sales reflect immediately. Pass null/omit a field to leave it at default.",
+      inputSchema: {
+        platform: z.enum(["linkedin", "x", "instagram", "facebook", "reddit", "discord", "whatsapp", "slack", "email"]),
+        action: z.enum(["dm", "connect", "comment", "follow_up", "inmail"]),
+        max: z.number().int().min(1).max(10000).optional().describe("Daily max for this action. Omit to leave at default."),
+        perHour: z.number().int().min(1).max(500).optional().describe("Hourly pacing budget. Omit to leave at default."),
+      },
+    },
+    async ({ platform, action, max, perHour }) => {
+      const cfg = await getOutreachConfig();
+      const overrides = { ...cfg.overrides } as Record<string, Record<string, { max?: number; perHour?: number }>>;
+      if (!overrides[platform]) overrides[platform] = {};
+      const cur = overrides[platform][action] ?? {};
+      const next: { max?: number; perHour?: number } = { ...cur };
+      if (max !== undefined) next.max = max;
+      if (perHour !== undefined) next.perHour = perHour;
+      // If both fields are absent (caller wants to reset), drop the override entirely
+      if (next.max === undefined && next.perHour === undefined) {
+        delete overrides[platform][action];
+        if (Object.keys(overrides[platform]).length === 0) delete overrides[platform];
+      } else {
+        overrides[platform][action] = next;
+      }
+      const newCfg: OutreachConfig = { activeWindow: cfg.activeWindow, overrides };
+      await saveOutreachConfig(newCfg);
+      return ok({
+        ok: true,
+        platform,
+        action,
+        applied: next,
+        note: "Refresh /connect, /dm, /engage, /daily-sales to see the new targets.",
+      });
+    }
+  );
+
+  // ────────────────────────────────────────────────────────────────────────
+  // PROFILE PARSE — extract structured contact data from a social profile
+  // ────────────────────────────────────────────────────────────────────────
+
+  server.registerTool(
+    "parse_social_profile",
+    {
+      title: "Profile Parse · Image / Text / URL → Structured",
+      description:
+        "Extract a contact's name, role, position, company, location, bio, recent post, " +
+        "skills, and interests from a social media profile. Three input modes: " +
+        "image (data URL or https URL — vision LLM OCRs), text (pasted profile content), " +
+        "or url (server-side fetch — LinkedIn/X/IG/FB block server fetches, use image/text " +
+        "for those). Output feeds the Write Message wizard's recipient grounding.",
+      inputSchema: {
+        mode: z.enum(["image", "text", "url"]),
+        payload: z.string().describe(
+          "image: data URL like 'data:image/png;base64,...' or an https image URL; " +
+          "text: copy-pasted profile content; " +
+          "url: a public web URL (blogs / About pages work; major social sites blocked)"
+        ),
+      },
+    },
+    async ({ mode, payload }) => {
+      try {
+        let parsed;
+        if (mode === "image") parsed = await parseProfileFromImage(payload);
+        else if (mode === "text") parsed = await parseProfileFromText(payload);
+        else parsed = await parseProfileFromUrl(payload);
+        return ok({ ok: true, parsed });
+      } catch (e: any) {
+        return ok({ ok: false, error: e?.message ?? String(e) });
+      }
     }
   );
 
