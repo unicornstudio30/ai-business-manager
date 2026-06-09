@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Sidebar } from "@/components/nav/sidebar";
 import { MobileNav } from "@/components/nav/mobile-nav";
+import { MobileTabBar } from "@/components/nav/mobile-tab-bar";
 import { SyncButton } from "@/components/sync-button";
 import { QuickLog } from "@/components/quick-log";
 import { ReminderBanner } from "@/components/reminder-banner";
@@ -33,10 +34,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </div>
               <SyncButton />
             </header>
-            <main className="flex-1 p-4 sm:p-6 md:p-8 max-w-[1400px] w-full">{children}</main>
+            {/* Bottom padding on mobile so MobileTabBar doesn't sit on top of content. */}
+            <main className="flex-1 p-4 pb-24 sm:p-6 md:p-8 md:pb-8 max-w-[1400px] w-full">{children}</main>
           </div>
         </div>
         <QuickLog />
+        <MobileTabBar />
       </body>
     </html>
   );

@@ -89,10 +89,12 @@ export function QuickLog() {
 
   return (
     <>
-      {/* Floating button */}
+      {/* Floating button — sits above the MobileTabBar (~56px tall) on mobile,
+          back to the corner on desktop. */}
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-50 inline-flex items-center gap-2 rounded-full bg-stone-900 text-white px-4 py-3 text-sm font-medium shadow-elevation-3 hover:shadow-elevation-4 hover:-translate-y-0.5 transition-all duration-200 ease-material"
+        className="fixed right-4 sm:right-6 bottom-20 md:bottom-6 z-40 inline-flex items-center gap-2 rounded-full bg-stone-900 text-white px-4 py-3 text-sm font-medium shadow-elevation-3 hover:shadow-elevation-4 hover:-translate-y-0.5 transition-all duration-200 ease-material"
+        style={{ touchAction: "manipulation" }}
         title="Quick log activity (Taplio / Tweethunter / manual)"
       >
         <Plus className="size-4" />
