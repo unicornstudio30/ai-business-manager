@@ -13,7 +13,7 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="hidden md:flex md:w-60 md:flex-col md:gap-1 border-r border-stone-200 bg-stone-100/60 p-4">
+    <aside className="hidden lg:flex lg:w-60 lg:flex-col lg:gap-1 border-r border-stone-200 bg-stone-100/60 p-4">
       <div className="px-2 mb-5">
         <div className="text-sm font-semibold text-stone-900 tracking-tight">Unicorn Studio</div>
         <div className="text-xs text-stone-500">AI Business Manager</div>

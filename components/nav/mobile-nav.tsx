@@ -55,7 +55,7 @@ export function MobileNav() {
         onClick={() => setOpen(true)}
         aria-label="Open navigation menu"
         aria-expanded={open}
-        className="md:hidden inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-md text-stone-700 hover:bg-stone-100 active:bg-stone-200 transition-colors"
+        className="lg:hidden inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-md text-stone-700 hover:bg-stone-100 active:bg-stone-200 transition-colors"
         style={{ touchAction: "manipulation" }}
       >
         <Menu className="size-6" />
@@ -64,7 +64,7 @@ export function MobileNav() {
       {/* Drawer is ALWAYS mounted so CSS transform can animate.
           pointer-events flip on open state so taps pass through when closed. */}
       <div
-        className={`md:hidden fixed inset-0 z-50 transition-opacity duration-200 ${
+        className={`lg:hidden fixed inset-0 z-50 transition-opacity duration-200 ${
           open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
         }`}
         role="dialog"

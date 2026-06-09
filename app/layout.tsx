@@ -35,7 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <SyncButton />
             </header>
             {/* Bottom padding on mobile so MobileTabBar doesn't sit on top of content. */}
-            <main className="flex-1 p-4 pb-24 sm:p-6 md:p-8 md:pb-8 max-w-[1400px] w-full">{children}</main>
+            <main className="flex-1 p-4 pb-24 sm:p-6 lg:p-8 lg:pb-8 max-w-[1400px] w-full">{children}</main>
           </div>
         </div>
         <QuickLog />
