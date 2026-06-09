@@ -6,6 +6,8 @@ import { MobileTabBar } from "@/components/nav/mobile-tab-bar";
 import { SyncButton } from "@/components/sync-button";
 import { QuickLog } from "@/components/quick-log";
 import { ReminderBanner } from "@/components/reminder-banner";
+import { LogoutButton } from "@/components/auth/logout-button";
+import { getCurrentUser } from "@/lib/auth/server";
 
 export const metadata: Metadata = {
   title: "Unicorn Studio — AI Business Manager",
@@ -18,7 +20,11 @@ export const viewport = {
   themeColor: "#fafaf9",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Read session for the header — show logout button only when signed in.
+  // Middleware already enforces auth, this is just for the chrome.
+  const user = await getCurrentUser();
+
   return (
     <html lang="en">
       <body className="min-h-screen bg-stone-50">
@@ -33,6 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <span className="hidden sm:inline"> — Business Manager</span>
               </div>
               <SyncButton />
+              {user && <LogoutButton />}
             </header>
             {/* Bottom padding on mobile so MobileTabBar doesn't sit on top of content. */}
             <main className="flex-1 p-4 pb-24 sm:p-6 lg:p-8 lg:pb-8 max-w-[1400px] w-full">{children}</main>
