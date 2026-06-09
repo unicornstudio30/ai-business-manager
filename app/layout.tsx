@@ -21,32 +21,39 @@ export const viewport = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  // Read session for the header — show logout button only when signed in.
-  // Middleware already enforces auth, this is just for the chrome.
   const user = await getCurrentUser();
 
   return (
     <html lang="en">
       <body className="min-h-screen bg-stone-50">
-        <div className="flex min-h-screen">
-          <Sidebar />
-          <div className="flex-1 flex flex-col min-w-0">
-            <ReminderBanner />
-            <header className="sticky top-0 z-40 flex items-center gap-2 bg-white/85 backdrop-blur-md border-b border-stone-200/70 px-3 py-3 sm:px-6 shadow-elevation-1">
-              <MobileNav />
-              <div className="text-sm text-stone-500 min-w-0 flex-1 truncate">
-                <span className="text-stone-900 font-semibold tracking-tight">Unicorn Studio</span>
-                <span className="hidden sm:inline"> — Business Manager</span>
+        {user ? (
+          // Authenticated: render the full app chrome
+          <>
+            <div className="flex min-h-screen">
+              <Sidebar />
+              <div className="flex-1 flex flex-col min-w-0">
+                <ReminderBanner />
+                <header className="sticky top-0 z-40 flex items-center gap-2 bg-white/85 backdrop-blur-md border-b border-stone-200/70 px-3 py-3 sm:px-6 shadow-elevation-1">
+                  <MobileNav />
+                  <div className="text-sm text-stone-500 min-w-0 flex-1 truncate">
+                    <span className="text-stone-900 font-semibold tracking-tight">Unicorn Studio</span>
+                    <span className="hidden sm:inline"> — Business Manager</span>
+                  </div>
+                  <SyncButton />
+                  <LogoutButton />
+                </header>
+                {/* Bottom padding on mobile so MobileTabBar doesn't sit on top of content. */}
+                <main className="flex-1 p-4 pb-24 sm:p-6 lg:p-8 lg:pb-8 max-w-[1400px] w-full">{children}</main>
               </div>
-              <SyncButton />
-              {user && <LogoutButton />}
-            </header>
-            {/* Bottom padding on mobile so MobileTabBar doesn't sit on top of content. */}
-            <main className="flex-1 p-4 pb-24 sm:p-6 lg:p-8 lg:pb-8 max-w-[1400px] w-full">{children}</main>
-          </div>
-        </div>
-        <QuickLog />
-        <MobileTabBar />
+            </div>
+            <QuickLog />
+            <MobileTabBar />
+          </>
+        ) : (
+          // Unauthenticated: render the page bare (used by /login).
+          // No sidebar, no header, no mobile nav, no FAB — just the content.
+          <>{children}</>
+        )}
       </body>
     </html>
   );
