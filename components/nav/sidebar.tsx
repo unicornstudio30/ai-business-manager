@@ -2,53 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Home,
-  Users,
-  Flame,
-  MessageSquare,
-  UserPlus,
-  AlertTriangle,
-  Repeat2,
-  CalendarClock,
-  Trophy,
-  NotebookPen,
-  Calendar,
-  Briefcase,
-  ScanSearch,
-  Handshake,
-  Globe,
-  Network,
-  DollarSign,
-  BarChart3,
-  History as HistoryIcon,
-  Star,
-  Settings as SettingsIcon,
-} from "lucide-react";
-
-const items = [
-  { href: "/", label: "Dashboard", icon: Home },
-  { href: "/contacts", label: "CRM", icon: Users },
-  { href: "/connect", label: "Connect", icon: UserPlus },
-  { href: "/engagement", label: "Engage", icon: Flame },
-  { href: "/dm", label: "DM", icon: MessageSquare },
-  { href: "/top-50", label: "Top 50", icon: Star },
-  { href: "/stuck", label: "Stuck", icon: AlertTriangle },
-  { href: "/cadences", label: "Cadences", icon: Repeat2 },
-  { href: "/meetings", label: "Meetings", icon: CalendarClock },
-  { href: "/tracker", label: "Sales Tracker", icon: NotebookPen },
-  { href: "/content", label: "Content Calendar", icon: Calendar },
-  { href: "/projects", label: "Projects", icon: Briefcase },
-  { href: "/audits", label: "Audits", icon: ScanSearch },
-  { href: "/partners", label: "Clients", icon: Handshake },
-  { href: "/networking", label: "Networking", icon: Network },
-  { href: "/communities", label: "Communities", icon: Globe },
-  { href: "/finance", label: "Finance", icon: DollarSign },
-  { href: "/wins-losses", label: "Wins & Losses", icon: Trophy },
-  { href: "/daily-sales", label: "Daily KPIs", icon: BarChart3 },
-  { href: "/history", label: "History", icon: HistoryIcon },
-  { href: "/settings", label: "Settings", icon: SettingsIcon },
-];
+import { NAV_ITEMS } from "@/lib/nav-items";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -65,7 +19,7 @@ export function Sidebar() {
         <div className="text-xs text-stone-500">AI Business Manager</div>
       </div>
       <nav className="flex flex-col gap-0.5">
-        {items.map((item) => {
+        {NAV_ITEMS.map((item) => {
           const active = isActive(item.href);
           return (
             <Link

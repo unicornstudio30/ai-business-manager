@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Sidebar } from "@/components/nav/sidebar";
+import { MobileNav } from "@/components/nav/mobile-nav";
 import { SyncButton } from "@/components/sync-button";
 import { QuickLog } from "@/components/quick-log";
 import { ReminderBanner } from "@/components/reminder-banner";
@@ -8,6 +9,12 @@ import { ReminderBanner } from "@/components/reminder-banner";
 export const metadata: Metadata = {
   title: "Unicorn Studio — AI Business Manager",
   description: "Unified CRM, content, projects, and AI cockpit for Unicorn Studio.",
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#fafaf9",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -18,14 +25,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Sidebar />
           <div className="flex-1 flex flex-col min-w-0">
             <ReminderBanner />
-            <header className="sticky top-0 z-40 flex items-center justify-between bg-white/85 backdrop-blur-md border-b border-stone-200/70 px-6 py-3 shadow-elevation-1">
-              <div className="text-sm text-stone-500">
+            <header className="sticky top-0 z-40 flex items-center gap-2 bg-white/85 backdrop-blur-md border-b border-stone-200/70 px-3 py-3 sm:px-6 shadow-elevation-1">
+              <MobileNav />
+              <div className="text-sm text-stone-500 min-w-0 flex-1 truncate">
                 <span className="text-stone-900 font-semibold tracking-tight">Unicorn Studio</span>
                 <span className="hidden sm:inline"> — Business Manager</span>
               </div>
               <SyncButton />
             </header>
-            <main className="flex-1 p-6 md:p-8 max-w-[1400px] w-full">{children}</main>
+            <main className="flex-1 p-4 sm:p-6 md:p-8 max-w-[1400px] w-full">{children}</main>
           </div>
         </div>
         <QuickLog />
