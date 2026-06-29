@@ -9,7 +9,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ShieldCheck, Shield, UserCircle2, EyeOff, Trash2, Power, AlertCircle, CheckCircle2 } from "lucide-react";
+import { ShieldCheck, Shield, UserCircle2, EyeOff, Trash2, Power, AlertCircle, CheckCircle2, UserPlus } from "lucide-react";
+import { AddUserModal } from "./add-user-modal";
 
 type Role = "owner" | "admin" | "salesperson" | "viewer";
 
@@ -37,6 +38,7 @@ export function UsersTable({ initial }: { initial: { me: { id: string; role: Rol
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState<string | null>(null);
   const [status, setStatus] = useState<{ kind: "ok" | "err"; msg: string } | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
 
   function call(action: "role" | "active" | "delete", body: any, optimistic: () => void) {
     setStatus(null);
@@ -98,6 +100,21 @@ export function UsersTable({ initial }: { initial: { me: { id: string; role: Rol
 
   return (
     <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="text-xs text-stone-500 tabular-nums">
+          {users.length} user{users.length === 1 ? "" : "s"} · {users.filter((u) => u.active).length} active
+        </div>
+        {(me.role === "owner" || me.role === "admin") && (
+          <button
+            type="button"
+            onClick={() => setAddOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-md bg-stone-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-stone-800 min-h-[36px]"
+          >
+            <UserPlus className="size-3.5" /> Add user
+          </button>
+        )}
+      </div>
+
       {status && (
         <div
           className={`inline-flex items-center gap-1.5 text-xs rounded-md px-2.5 py-1.5 border ${
@@ -211,6 +228,14 @@ export function UsersTable({ initial }: { initial: { me: { id: string; role: Rol
         viewers. Salesperson runs outreach + sees their own leads. Viewer is read-only. Only the
         Owner can promote/demote admins or other owners.
       </p>
+
+      {(me.role === "owner" || me.role === "admin") && (
+        <AddUserModal
+          open={addOpen}
+          onClose={() => setAddOpen(false)}
+          myRole={me.role as "owner" | "admin"}
+        />
+      )}
     </div>
   );
 }
