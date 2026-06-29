@@ -176,6 +176,13 @@
       "when": 1782398778829,
       "tag": "0024_users_and_owner",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1782738066905,
+      "tag": "0025_market_or_die",
+      "breakpoints": true
     }
   ]
 }

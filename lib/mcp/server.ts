@@ -64,6 +64,10 @@ import { PLATFORM_LIMITS, type PlatformKey, type ActionKey } from "@/lib/sales-l
 // Workspace users + roles (read-only over MCP — destructive ops live in /admin)
 import { listUsers } from "@/lib/auth/users";
 
+// Market or Die — weekly marketing leaderboard (read-only)
+import { getLeaderboard } from "@/lib/db/marketing";
+import { weekStartFor, fmtWeekLabel } from "@/lib/marketing/points";
+
 // JSON-serialize a result wrapping it as MCP text content.
 function ok(data: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
@@ -1062,6 +1066,58 @@ export function buildMcpServer(): McpServer {
       } catch (e: any) {
         return ok({ ok: false, error: e?.message ?? String(e) });
       }
+    }
+  );
+
+  // ────────────────────────────────────────────────────────────────────────
+  // MARKET OR DIE — weekly marketing leaderboard (read-only)
+  // ────────────────────────────────────────────────────────────────────────
+
+  server.registerTool(
+    "marketing_leaderboard",
+    {
+      title: "Market or Die · Weekly Leaderboard",
+      description:
+        "Read the team's weekly marketing leaderboard. Returns one row per active user " +
+        "with rank, level (L1–L4 based on lifetime points), this-week points vs target, " +
+        "percent of target, hit/miss flag, current streak (consecutive prior weeks they " +
+        "hit target, capped at 26), and activity count. Sorted by week points desc. " +
+        "Pass weekStart=YYYY-MM-DD (UTC Monday) to read a past or future week; omit for the current week.",
+      inputSchema: {
+        weekStart: z
+          .string()
+          .optional()
+          .describe("UTC Monday YYYY-MM-DD. Omit for this week."),
+      },
+    },
+    async ({ weekStart }) => {
+      const ws = weekStart || weekStartFor();
+      const { rows } = await getLeaderboard(ws);
+      return ok({
+        weekStart: ws,
+        weekLabel: fmtWeekLabel(ws),
+        teamTotals: {
+          activeUsers: rows.length,
+          totalWeekPoints: rows.reduce((s, r) => s + r.weekPoints, 0),
+          hitTargetCount: rows.filter((r) => r.hitTarget).length,
+          topStreak: Math.max(0, ...rows.map((r) => r.streakWeeks)),
+        },
+        rows: rows.map((r) => ({
+          rank: r.rank,
+          userId: r.userId,
+          name: r.name,
+          email: r.email,
+          role: r.role,
+          level: r.level,
+          weekPoints: r.weekPoints,
+          targetPoints: r.targetPoints,
+          pct: r.pct,
+          hitTarget: r.hitTarget,
+          streakWeeks: r.streakWeeks,
+          activityCount: r.activityCount,
+          lifetimePoints: r.lifetimePoints,
+        })),
+      });
     }
   );
 

@@ -407,6 +407,38 @@ export const users = sqliteTable("users", {
   emailIdx: uniqueIndex("users_email_idx").on(t.email),
 }));
 
+// "Market or Die" gamification — every marketing activity a team member logs
+// is a row here. Points awarded per row come from lib/marketing/points.ts.
+// week_start is Monday of the week (UTC date YYYY-MM-DD) so the leaderboard
+// can group cheaply.
+export const marketingActivities = sqliteTable("marketing_activities", {
+  id: id(),
+  userId: text("user_id").notNull(),                  // → users.id
+  weekStart: text("week_start").notNull(),            // ISO date, Monday of the week
+  platform: text("platform").notNull(),               // linkedin | x | youtube | tiktok | reddit | instagram | blog | other
+  kind: text("kind").notNull(),                       // post | video | short | story | comment | dm | blog_post | channel_setup | …
+  count: integer("count").notNull().default(1),
+  points: integer("points").notNull(),                // points awarded (count × per-unit value)
+  notes: text("notes"),
+  createdAt: now(),
+}, (t) => ({
+  userWeekIdx: index("marketing_activities_user_week_idx").on(t.userId, t.weekStart),
+  weekIdx: index("marketing_activities_week_idx").on(t.weekStart),
+}));
+
+// Per-user weekly target overrides. When no row exists for a (user, week),
+// the target is derived from the user's level (see lib/marketing/points.ts).
+export const marketingWeeklyTargets = sqliteTable("marketing_weekly_targets", {
+  id: id(),
+  userId: text("user_id").notNull(),
+  weekStart: text("week_start").notNull(),
+  targetPoints: integer("target_points").notNull(),
+  setBy: text("set_by"),                              // user id who set it
+  createdAt: now(),
+}, (t) => ({
+  userWeekUnique: uniqueIndex("marketing_targets_user_week_unique").on(t.userId, t.weekStart),
+}));
+
 // Generic key/value app settings. JSON values keyed by name.
 // First user: outreach limits + active window overrides (see lib/outreach-config.ts).
 export const appSettings = sqliteTable("app_settings", {
@@ -511,6 +543,10 @@ export const networkingMessages = sqliteTable("networking_messages", {
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
+export type MarketingActivity = typeof marketingActivities.$inferSelect;
+export type NewMarketingActivity = typeof marketingActivities.$inferInsert;
+export type MarketingTarget = typeof marketingWeeklyTargets.$inferSelect;
+export type NewMarketingTarget = typeof marketingWeeklyTargets.$inferInsert;
 export type UserRole = "owner" | "admin" | "salesperson" | "viewer";
 
 // Ordered most-privileged → least-privileged. Used for permission checks like
