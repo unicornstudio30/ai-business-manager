@@ -183,6 +183,13 @@
       "when": 1782738066905,
       "tag": "0025_market_or_die",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1782800000000,
+      "tag": "0026_marketing_auto_sync",
+      "breakpoints": true
     }
   ]
 }

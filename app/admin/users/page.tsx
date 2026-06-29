@@ -40,6 +40,7 @@ export default async function AdminUsersPage() {
             name: u.name,
             role: u.role as "owner" | "admin" | "salesperson" | "viewer",
             active: !!u.active,
+            notionPerson: u.notionPerson ?? null,
             createdAt: u.createdAt?.toISOString() ?? null,
             lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
           })),

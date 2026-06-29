@@ -401,6 +401,11 @@ export const users = sqliteTable("users", {
   passwordHash: text("password_hash").notNull(),
   role: text("role").notNull().default("salesperson"),
   active: integer("active").notNull().default(1),
+  // Optional override that maps this user to the Notion "Person" column value
+  // on CRM contacts. If null we fall back to matching by `name`. This lets
+  // auto-sync attribute CRM/content/networking activity to the right teammate
+  // even when Notion's display name differs from the app display name.
+  notionPerson: text("notion_person"),
   createdAt: now(),
   lastLoginAt: ts("last_login_at"),
 }, (t) => ({
@@ -420,10 +425,16 @@ export const marketingActivities = sqliteTable("marketing_activities", {
   count: integer("count").notNull().default(1),
   points: integer("points").notNull(),                // points awarded (count × per-unit value)
   notes: text("notes"),
+  // Idempotency key for auto-logged rows. Manual entries leave this null.
+  // Format: "content:<contentId>:<platform>:publish" | "content:<id>:<platform>:reuse"
+  //       | "crm_activity:<activityId>" | "networking_msg:<msgId>"
+  // Unique index prevents double-counting on re-sync.
+  source: text("source"),
   createdAt: now(),
 }, (t) => ({
   userWeekIdx: index("marketing_activities_user_week_idx").on(t.userId, t.weekStart),
   weekIdx: index("marketing_activities_week_idx").on(t.weekStart),
+  sourceUnique: uniqueIndex("marketing_activities_source_unique").on(t.source),
 }));
 
 // Per-user weekly target overrides. When no row exists for a (user, week),

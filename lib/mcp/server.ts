@@ -64,9 +64,10 @@ import { PLATFORM_LIMITS, type PlatformKey, type ActionKey } from "@/lib/sales-l
 // Workspace users + roles (read-only over MCP — destructive ops live in /admin)
 import { listUsers } from "@/lib/auth/users";
 
-// Market or Die — weekly marketing leaderboard (read-only)
+// Market or Die — weekly marketing leaderboard (read-only) + auto-sync
 import { getLeaderboard } from "@/lib/db/marketing";
 import { weekStartFor, fmtWeekLabel } from "@/lib/marketing/points";
+import { runMarketingAutoSync } from "@/lib/marketing/auto-sync";
 
 // JSON-serialize a result wrapping it as MCP text content.
 function ok(data: unknown) {
@@ -1118,6 +1119,26 @@ export function buildMcpServer(): McpServer {
           lifetimePoints: r.lifetimePoints,
         })),
       });
+    }
+  );
+
+  server.registerTool(
+    "marketing_auto_sync",
+    {
+      title: "Market or Die · Auto-Sync From CRM/Content/Networking",
+      description:
+        "Re-feeds the leaderboard from existing app data: each content_items " +
+        "publish/reuse date per platform becomes a 'post', each sent " +
+        "networking message becomes a 'dm', and each CRM activity (dm_sent / " +
+        "follow_up_sent / email_drafted / comment_drafted) is mapped to a dm " +
+        "or comment attributed via the contact's owner_name → user. Idempotent " +
+        "(source-keyed); safe to call repeatedly. Returns scanned/inserted " +
+        "counts per source and any owner_name values that did not map to a user.",
+      inputSchema: {},
+    },
+    async () => {
+      const result = await runMarketingAutoSync();
+      return ok(result);
     }
   );
 

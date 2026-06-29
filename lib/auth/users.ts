@@ -88,6 +88,19 @@ export async function updateUserPassword(id: string, newPassword: string): Promi
   return row ?? null;
 }
 
+// Set/clear the optional Notion Person mapping. Used by Market or Die
+// auto-sync to attribute CRM activity to the right teammate when Notion's
+// person display name differs from the app's user display name.
+export async function updateUserNotionPerson(id: string, notionPerson: string | null): Promise<User | null> {
+  const cleaned = notionPerson?.trim() || null;
+  const [row] = await db
+    .update(schema.users)
+    .set({ notionPerson: cleaned })
+    .where(eq(schema.users.id, id))
+    .returning();
+  return row ?? null;
+}
+
 export async function recordLogin(id: string): Promise<void> {
   await db
     .update(schema.users)

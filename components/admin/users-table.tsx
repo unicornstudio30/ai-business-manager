@@ -20,6 +20,7 @@ type UserRow = {
   name: string;
   role: Role;
   active: boolean;
+  notionPerson: string | null;
   createdAt: string | null;
   lastLoginAt: string | null;
 };
@@ -40,7 +41,7 @@ export function UsersTable({ initial }: { initial: { me: { id: string; role: Rol
   const [status, setStatus] = useState<{ kind: "ok" | "err"; msg: string } | null>(null);
   const [addOpen, setAddOpen] = useState(false);
 
-  function call(action: "role" | "active" | "delete", body: any, optimistic: () => void) {
+  function call(action: "role" | "active" | "delete" | "notion-person", body: any, optimistic: () => void) {
     setStatus(null);
     setBusy(body.userId);
     startTransition(async () => {
@@ -86,6 +87,14 @@ export function UsersTable({ initial }: { initial: { me: { id: string; role: Rol
     if (!confirm(`Delete ${u.email}? This can't be undone.`)) return;
     call("delete", { userId: u.id }, () => {
       setUsers((arr) => arr.filter((x) => x.id !== u.id));
+    });
+  }
+
+  function saveNotionPerson(u: UserRow, value: string) {
+    const cleaned = value.trim() || null;
+    if (cleaned === u.notionPerson) return;
+    call("notion-person", { userId: u.id, notionPerson: cleaned }, () => {
+      setUsers((arr) => arr.map((x) => (x.id === u.id ? { ...x, notionPerson: cleaned } : x)));
     });
   }
 
@@ -135,6 +144,9 @@ export function UsersTable({ initial }: { initial: { me: { id: string; role: Rol
               <th className="text-left px-3 py-2">User</th>
               <th className="text-left px-3 py-2">Role</th>
               <th className="text-left px-3 py-2">Status</th>
+              <th className="text-left px-3 py-2 hidden md:table-cell" title="Maps the user to the Notion 'Person' value on contacts. Defaults to user name if blank.">
+                Notion Person
+              </th>
               <th className="text-left px-3 py-2 hidden sm:table-cell">Last login</th>
               <th className="text-right px-3 py-2 w-28">Actions</th>
             </tr>
@@ -188,6 +200,16 @@ export function UsersTable({ initial }: { initial: { me: { id: string; role: Rol
                         <span className="size-1.5 rounded-full bg-stone-400" /> Disabled
                       </span>
                     )}
+                  </td>
+                  <td className="px-3 py-2 hidden md:table-cell">
+                    <input
+                      type="text"
+                      defaultValue={u.notionPerson ?? ""}
+                      disabled={busy === u.id || (!isMe && !editable && me.role !== "owner")}
+                      onBlur={(e) => saveNotionPerson(u, e.target.value)}
+                      placeholder={u.name || "—"}
+                      className="w-32 rounded border border-stone-200 px-2 py-1 text-xs text-stone-700 focus:outline-none focus:ring-1 focus:ring-stone-400 disabled:bg-stone-50 disabled:opacity-60"
+                    />
                   </td>
                   <td className="px-3 py-2 text-[11px] text-stone-500 hidden sm:table-cell">
                     {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : "—"}

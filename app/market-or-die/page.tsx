@@ -9,6 +9,7 @@ import { addWeeks, fmtWeekLabel, weekStartFor } from "@/lib/marketing/points";
 import { getCurrentUser } from "@/lib/auth/server";
 import { LogActivityButton } from "@/components/marketing/log-activity-button";
 import { SetTargetButton } from "@/components/marketing/set-target-button";
+import { AutoSyncButton } from "@/components/marketing/auto-sync-button";
 
 export const dynamic = "force-dynamic";
 
@@ -90,8 +91,16 @@ export default async function MarketOrDiePage({
           <p className="text-sm text-stone-500 mt-1">
             Ship marketing every week. Hit your target → streak grows. Miss it → streak dies.
           </p>
+          <p className="text-xs text-stone-400 mt-1">
+            Auto-fed from <strong>Content Calendar</strong> publishes,{" "}
+            <strong>sent networking DMs</strong>, and <strong>CRM activity</strong> (comments, DMs, follow-ups).
+            Log the rest (videos, blogs, lead magnets) manually.
+          </p>
         </div>
-        <LogActivityButton weekStart={weekStart} />
+        <div className="flex items-start gap-2 flex-wrap">
+          {canSetTarget && <AutoSyncButton />}
+          <LogActivityButton weekStart={weekStart} />
+        </div>
       </div>
 
       {/* Week nav */}
