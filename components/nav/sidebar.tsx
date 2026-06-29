@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { NAV_ITEMS } from "@/lib/nav-items";
+import { visibleNavItems } from "@/lib/nav-items";
+import type { UserRole } from "@/lib/db/schema";
 
-export function Sidebar() {
+export function Sidebar({ role }: { role?: UserRole }) {
   const pathname = usePathname();
+  const items = visibleNavItems(role);
 
   function isActive(href: string): boolean {
     if (href === "/") return pathname === "/";
@@ -19,7 +21,7 @@ export function Sidebar() {
         <div className="text-xs text-stone-500">AI Business Manager</div>
       </div>
       <nav className="flex flex-col gap-0.5">
-        {NAV_ITEMS.map((item) => {
+        {items.map((item) => {
           const active = isActive(item.href);
           return (
             <Link

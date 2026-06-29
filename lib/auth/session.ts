@@ -1,24 +1,26 @@
-// Simple email + password auth using a signed JWT in an httpOnly cookie.
+// Multi-user auth using a signed JWT in an httpOnly cookie.
 //
-// Single-user setup — credentials live in env vars (AUTH_EMAIL, AUTH_PASSWORD).
-// AUTH_SECRET is the HMAC key used to sign the session JWT.
+// Token carries the user's id, email, and role so middleware (Edge runtime)
+// can do route guards without hitting the database. AUTH_SECRET is the HMAC
+// signing key. Stays env-only because middleware can't read the DB on Edge.
 //
-// Edge-compatible (uses jose's Web Crypto build) so middleware can verify
-// sessions without a Node runtime.
+// User records live in the `users` table (lib/db/schema.ts). See lib/auth/users.ts
+// for the DB queries (login, signup, role changes, etc.).
+//
+// Edge-compatible: jose's Web Crypto build works in middleware.
 
 import { SignJWT, jwtVerify } from "jose";
+import type { UserRole } from "../db/schema";
 
 const SESSION_COOKIE = "ubm_session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;     // 30 days
 
 export const AUTH_COOKIE_NAME = SESSION_COOKIE;
 
-export function authEmail(): string | null {
-  return process.env.AUTH_EMAIL?.trim().toLowerCase() || null;
-}
-
 export function authConfigured(): boolean {
-  return !!process.env.AUTH_EMAIL && !!process.env.AUTH_PASSWORD && !!process.env.AUTH_SECRET;
+  // We need AUTH_SECRET to sign sessions. AUTH_EMAIL + AUTH_PASSWORD are
+  // optional — used only to bootstrap the first owner from env on a fresh DB.
+  return !!process.env.AUTH_SECRET;
 }
 
 function secretKey(): Uint8Array {
@@ -29,43 +31,34 @@ function secretKey(): Uint8Array {
   return new TextEncoder().encode(s);
 }
 
-// Constant-time string compare. Avoids leaking timing info on wrong password.
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let res = 0;
-  for (let i = 0; i < a.length; i++) res |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return res === 0;
-}
-
-export function verifyCredentials(email: string, password: string): boolean {
-  const expectedEmail = process.env.AUTH_EMAIL?.trim().toLowerCase();
-  const expectedPassword = process.env.AUTH_PASSWORD;
-  if (!expectedEmail || !expectedPassword) return false;
-  const emailOk = timingSafeEqual(email.trim().toLowerCase(), expectedEmail);
-  const passwordOk = timingSafeEqual(password, expectedPassword);
-  return emailOk && passwordOk;
-}
-
 export type SessionPayload = {
+  userId: string;
   email: string;
+  role: UserRole;
   iat: number;
   exp: number;
 };
 
-export async function createSessionToken(email: string): Promise<string> {
+export async function createSessionToken(input: {
+  userId: string;
+  email: string;
+  role: UserRole;
+}): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
-  return await new SignJWT({ email })
+  return await new SignJWT({ userId: input.userId, email: input.email, role: input.role })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt(now)
     .setExpirationTime(now + SESSION_MAX_AGE_SECONDS)
-    .setSubject(email)
+    .setSubject(input.userId)
     .sign(secretKey());
 }
 
 export async function verifySessionToken(token: string): Promise<SessionPayload | null> {
   try {
     const { payload } = await jwtVerify(token, secretKey(), { algorithms: ["HS256"] });
-    if (!payload.email || typeof payload.email !== "string") return null;
+    if (typeof payload.userId !== "string") return null;
+    if (typeof payload.email !== "string") return null;
+    if (typeof payload.role !== "string") return null;
     return payload as unknown as SessionPayload;
   } catch {
     return null;

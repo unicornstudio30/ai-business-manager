@@ -19,9 +19,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
-import { NAV_ITEMS } from "@/lib/nav-items";
+import { visibleNavItems } from "@/lib/nav-items";
+import type { UserRole } from "@/lib/db/schema";
 
-export function MobileNav() {
+export function MobileNav({ role }: { role?: UserRole }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
@@ -117,7 +118,7 @@ export function MobileNav() {
           style={{ WebkitOverflowScrolling: "touch" }}
           aria-label="Full navigation"
         >
-          {NAV_ITEMS.map((item) => {
+          {visibleNavItems(role).map((item) => {
             const active = isActive(item.href);
             return (
               <Link

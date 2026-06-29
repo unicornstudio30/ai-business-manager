@@ -1,14 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition, FormEvent, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Loader2, AlertCircle, Lock } from "lucide-react";
+import { useState, useTransition, FormEvent } from "react";
+import { Loader2, AlertCircle, UserPlus } from "lucide-react";
 
-function LoginForm() {
-  const router = useRouter();
-  const params = useSearchParams();
-  const from = params.get("from") || "/";
+export default function SignupPage() {
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pending, startTransition] = useTransition();
@@ -17,22 +14,26 @@ function LoginForm() {
   function submit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
     startTransition(async () => {
       try {
-        const res = await fetch("/api/auth/login", {
+        const res = await fetch("/api/auth/signup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify({ name, email, password }),
         });
         const data = await res.json();
         if (!res.ok) {
-          setError(data?.error || "Login failed");
+          setError(data?.error || "Sign-up failed");
           return;
         }
         // Hard navigate so the layout re-renders with the new auth state.
-        window.location.href = from;
+        window.location.href = "/";
       } catch (e: any) {
-        setError(e?.message ?? "Login failed");
+        setError(e?.message ?? "Sign-up failed");
       }
     });
   }
@@ -42,10 +43,10 @@ function LoginForm() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-6">
           <div className="inline-flex items-center justify-center size-12 rounded-2xl bg-stone-900 text-white mb-3">
-            <Lock className="size-5" />
+            <UserPlus className="size-5" />
           </div>
-          <h1 className="text-2xl font-semibold text-stone-900 tracking-tight">Unicorn Studio</h1>
-          <p className="text-sm text-stone-500 mt-0.5">AI Business Manager</p>
+          <h1 className="text-2xl font-semibold text-stone-900 tracking-tight">Create your account</h1>
+          <p className="text-sm text-stone-500 mt-0.5">Join the Unicorn Studio workspace</p>
         </div>
 
         <form
@@ -53,8 +54,24 @@ function LoginForm() {
           className="rounded-2xl border border-stone-200 bg-white p-6 shadow-elevation-2 flex flex-col gap-3"
         >
           <div>
+            <label htmlFor="name" className="text-xs font-medium text-stone-700 mb-1.5 block">
+              Name
+            </label>
+            <input
+              id="name"
+              name="name"
+              type="text"
+              autoComplete="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-stone-300 focus:border-stone-400"
+              style={{ touchAction: "manipulation" }}
+            />
+          </div>
+
+          <div>
             <label htmlFor="email" className="text-xs font-medium text-stone-700 mb-1.5 block">
-              Email
+              Work email
             </label>
             <input
               id="email"
@@ -72,13 +89,15 @@ function LoginForm() {
           <div>
             <label htmlFor="password" className="text-xs font-medium text-stone-700 mb-1.5 block">
               Password
+              <span className="ml-1 text-stone-400 font-normal">(min 8 chars)</span>
             </label>
             <input
               id="password"
               name="password"
               type="password"
-              autoComplete="current-password"
+              autoComplete="new-password"
               required
+              minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-stone-300 focus:border-stone-400"
@@ -101,30 +120,25 @@ function LoginForm() {
           >
             {pending ? (
               <>
-                <Loader2 className="size-4 animate-spin" /> Signing in…
+                <Loader2 className="size-4 animate-spin" /> Creating account…
               </>
             ) : (
-              "Sign in"
+              "Create account"
             )}
           </button>
         </form>
 
         <p className="text-xs text-stone-500 text-center mt-4">
-          New to the team?{" "}
-          <Link href="/signup" className="text-stone-900 font-medium underline">
-            Create an account
+          New accounts start as <strong>Salesperson</strong> and need an owner / admin to upgrade.
+          {" "}The first signup automatically becomes the workspace <strong>Owner</strong>.
+        </p>
+        <p className="text-xs text-stone-500 text-center mt-2">
+          Already have an account?{" "}
+          <Link href="/login" className="text-stone-900 font-medium underline">
+            Sign in
           </Link>
         </p>
       </div>
     </div>
-  );
-}
-
-export default function LoginPage() {
-  // useSearchParams must be wrapped in Suspense per Next.js 15 requirements.
-  return (
-    <Suspense fallback={<div className="min-h-[100dvh] bg-stone-50" />}>
-      <LoginForm />
-    </Suspense>
   );
 }

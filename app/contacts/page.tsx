@@ -4,15 +4,21 @@ import { computeIcpScore, icpColor } from "@/lib/icp-scoring";
 import { STAGES, STAGE_COLORS, type Stage } from "@/lib/stages";
 import { fmtDate, daysAgo, parseJson } from "@/lib/utils";
 import { db, schema } from "@/lib/db/client";
+import { getCurrentUser } from "@/lib/auth/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function ContactsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; search?: string; country?: string; platform?: string; sort?: string }>;
+  searchParams: Promise<{ status?: string; search?: string; country?: string; platform?: string; sort?: string; mine?: string }>;
 }) {
   const sp = await searchParams;
+  const me = await getCurrentUser();
+  // Salespeople default to "my leads only"; admins/owner see all. The user
+  // can override with ?mine=0 / ?mine=1 explicitly.
+  const myLeadsDefault = me?.role === "salesperson";
+  const myLeadsOn = sp.mine === undefined ? myLeadsDefault : sp.mine === "1";
   const rowsRaw = await listContacts({ ...sp, limit: 200 });
   const icpScores = new Map(rowsRaw.map((c) => [c.id, computeIcpScore(c).score]));
 
@@ -37,8 +43,18 @@ export default async function ContactsPage({
   for (const [s, n] of statusCounts) {
     if (!STAGES.includes(s as Stage)) orderedStatuses.push({ name: s, count: n });
   }
+  // Apply "My leads" filter — match contact.ownerName to current user's name
+  // (case-insensitive). Owner / admin still gets a toggle so they can drill
+  // into one person's leads when needed.
+  const matchOwner = (c: typeof rowsRaw[number]): boolean => {
+    if (!myLeadsOn || !me) return true;
+    const myName = (me.name || me.email.split("@")[0]).trim().toLowerCase();
+    return (c.ownerName ?? "").trim().toLowerCase() === myName;
+  };
+  const filtered = rowsRaw.filter(matchOwner);
+
   // Default sort: ICP fit desc. Overrides: ?sort=name|status|date
-  const rows = [...rowsRaw].sort((a, b) => {
+  const rows = [...filtered].sort((a, b) => {
     if (sp.sort === "name") return (a.name || "").localeCompare(b.name || "");
     if (sp.sort === "status") return (a.status || "").localeCompare(b.status || "");
     if (sp.sort === "date") return (b.statusDate?.getTime() ?? 0) - (a.statusDate?.getTime() ?? 0);
@@ -83,10 +99,22 @@ export default async function ContactsPage({
             <option value="Reddit">Reddit</option>
           </select>
         </label>
+        {me && (
+          <label className="flex items-center gap-1.5 text-xs text-stone-700 self-end pb-1.5">
+            <input
+              type="checkbox"
+              name="mine"
+              value="1"
+              defaultChecked={myLeadsOn}
+              className="rounded border-stone-300"
+            />
+            My leads only
+          </label>
+        )}
         <button type="submit" className="rounded-md bg-stone-900 px-4 py-1.5 text-sm font-medium text-white">
           Filter
         </button>
-        {(sp.status || sp.search || sp.country || sp.platform) && (
+        {(sp.status || sp.search || sp.country || sp.platform || sp.mine) && (
           <Link href="/contacts" className="text-sm text-stone-500 hover:text-stone-900">
             Clear
           </Link>
@@ -107,6 +135,7 @@ export default async function ContactsPage({
               <th className="text-left px-4 py-2.5">
                 <Link href="/contacts?sort=status" className="hover:text-stone-900">Stage</Link>
               </th>
+              <th className="text-left px-4 py-2.5">Owner</th>
               <th className="text-left px-4 py-2.5 hidden md:table-cell">Platform</th>
               <th className="text-left px-4 py-2.5 hidden md:table-cell">Country</th>
               <th className="text-left px-4 py-2.5 hidden lg:table-cell">
@@ -119,7 +148,7 @@ export default async function ContactsPage({
           <tbody className="divide-y divide-stone-100">
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-12 text-center text-sm text-stone-500">
+                <td colSpan={9} className="px-4 py-12 text-center text-sm text-stone-500">
                   No contacts yet. Click <span className="font-medium">Sync Notion</span> to pull from your Sales CRM.
                 </td>
               </tr>
@@ -146,6 +175,15 @@ export default async function ContactsPage({
                         <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${STAGE_COLORS[c.status as Stage] ?? "bg-stone-100 text-stone-800 border-stone-200"}`}>
                           {c.status}
                         </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {c.ownerName ? (
+                        <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] bg-stone-100 text-stone-700 border border-stone-200">
+                          {c.ownerName}
+                        </span>
+                      ) : (
+                        <span className="text-stone-400 text-xs">—</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-stone-700 hidden md:table-cell">{c.platform || "—"}</td>
@@ -189,6 +227,9 @@ export default async function ContactsPage({
                       </span>
                     )}
                     {c.platform && <span className="text-[10px] text-stone-500">{c.platform}</span>}
+                    {c.ownerName && (
+                      <span className="text-[10px] text-stone-500">· owner: {c.ownerName}</span>
+                    )}
                     {age !== null && <span className="text-[10px] text-stone-400">· {age}d</span>}
                   </div>
                 </div>

@@ -61,6 +61,9 @@ import { getClientsView } from "@/lib/db/clients";
 import { getOutreachConfig, saveOutreachConfig, type OutreachConfig } from "@/lib/outreach-config";
 import { PLATFORM_LIMITS, type PlatformKey, type ActionKey } from "@/lib/sales-limits";
 
+// Workspace users + roles (read-only over MCP — destructive ops live in /admin)
+import { listUsers } from "@/lib/auth/users";
+
 // JSON-serialize a result wrapping it as MCP text content.
 function ok(data: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
@@ -995,6 +998,40 @@ export function buildMcpServer(): McpServer {
   // ────────────────────────────────────────────────────────────────────────
   // PROFILE PARSE — extract structured contact data from a social profile
   // ────────────────────────────────────────────────────────────────────────
+
+  // ────────────────────────────────────────────────────────────────────────
+  // USERS — read-only view of workspace users + roles. Mutations live in
+  // the web /admin/users panel since the MCP endpoint isn't per-user authed.
+  // ────────────────────────────────────────────────────────────────────────
+
+  server.registerTool(
+    "list_users",
+    {
+      title: "Users · List Workspace Members",
+      description:
+        "Workspace users + their roles. Each user has: id, email, name, " +
+        "role (owner/admin/salesperson/viewer), active flag, last login. " +
+        "Use to see who owns leads (cross-reference with the Person column on " +
+        "contacts) or to answer 'who's on the team'. Read-only — to change a " +
+        "role, deactivate, or delete, use /admin/users in the web app.",
+      inputSchema: {},
+    },
+    async () => {
+      const users = await listUsers();
+      return ok({
+        count: users.length,
+        users: users.map((u) => ({
+          id: u.id,
+          email: u.email,
+          name: u.name,
+          role: u.role,
+          active: !!u.active,
+          created_at: u.createdAt?.toISOString() ?? null,
+          last_login_at: u.lastLoginAt?.toISOString() ?? null,
+        })),
+      });
+    }
+  );
 
   server.registerTool(
     "parse_social_profile",

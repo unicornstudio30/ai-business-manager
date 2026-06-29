@@ -69,6 +69,20 @@ const text = (p: any): string | null => {
 };
 
 const select = (p: any): string | null => p?.select?.name ?? null;
+
+// Read the first user from a Notion `people` property. Used for the "Person"
+// column (lead owner). Falls back to plain text if the user has it as a
+// rich-text field instead of a People field. Returns the display name.
+const people = (p: any): string | null => {
+  if (!p) return null;
+  if (p.type === "people" && Array.isArray(p.people) && p.people.length > 0) {
+    const first = p.people[0];
+    return first?.name || first?.person?.email || null;
+  }
+  if (p.type === "rich_text" || p.type === "title") return text(p);
+  if (p.type === "select") return p.select?.name ?? null;
+  return null;
+};
 const multiSelect = (p: any): string[] =>
   p?.multi_select?.map((o: any) => o.name) ?? [];
 
@@ -129,6 +143,9 @@ export function notionToContact(page: PageObjectResponse): NewContact {
     relation: JSON.stringify(multiSelect(props["Relation"])),
     // Top 50 = whether "Top 50" is one of the values in the Category multi-select.
     top50: multiSelect(props["Category"]).includes("Top 50") ? 1 : 0,
+    // Lead owner from Notion "Person" column. Tries the People property type
+    // first; falls back to rich-text / select if you stored it as a string.
+    ownerName: people(props["Person"]) || people(props["Owner"]) || null,
     sequenceTrack: trackForPlatform(platform),
     lastTouchAt: date(props["Status Date"]) || new Date(page.last_edited_time),
     updatedAt: new Date(page.last_edited_time),

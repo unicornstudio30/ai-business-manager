@@ -65,6 +65,10 @@ export const contacts = sqliteTable(
     // auto-promotes status to "Lead" if currently below.
     relation: text("relation"),
 
+    // Lead owner — pulled from the Notion "Person" column. Matches by name
+    // (case-insensitive) against the local users table to compute "my leads".
+    ownerName: text("owner_name"),
+
     // Top 50 long-term relationship list — checkbox from Notion CRM.
     // /top-50 page surfaces these for CSV download (all + per platform).
     top50: integer("top50").notNull().default(0),
@@ -384,6 +388,25 @@ export const aiCache = sqliteTable("ai_cache", {
   expiresAt: ts("expires_at").notNull(),
 });
 
+// Multi-role auth users. role: "owner" | "admin" | "salesperson" | "viewer".
+// "owner" is the root account — full access + manages every role incl. admins.
+//   Cannot be demoted or deactivated by anyone else; only one per workspace.
+// "admin" — full app access + manages salespeople/viewers (NOT other admins/owner).
+// "salesperson" — runs outreach workflows + sees their own leads.
+// "viewer" — read-only.
+export const users = sqliteTable("users", {
+  id: id(),
+  email: text("email").notNull().unique(),
+  name: text("name").notNull().default(""),
+  passwordHash: text("password_hash").notNull(),
+  role: text("role").notNull().default("salesperson"),
+  active: integer("active").notNull().default(1),
+  createdAt: now(),
+  lastLoginAt: ts("last_login_at"),
+}, (t) => ({
+  emailIdx: uniqueIndex("users_email_idx").on(t.email),
+}));
+
 // Generic key/value app settings. JSON values keyed by name.
 // First user: outreach limits + active window overrides (see lib/outreach-config.ts).
 export const appSettings = sqliteTable("app_settings", {
@@ -486,6 +509,22 @@ export const networkingMessages = sqliteTable("networking_messages", {
 // Type exports
 // ─────────────────────────────────────────────────────────────────────────────
 
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
+export type UserRole = "owner" | "admin" | "salesperson" | "viewer";
+
+// Ordered most-privileged → least-privileged. Used for permission checks like
+// "this action requires admin or higher".
+export const ROLE_RANK: Record<UserRole, number> = {
+  owner: 100,
+  admin: 80,
+  salesperson: 40,
+  viewer: 10,
+};
+export function roleAtLeast(role: UserRole | null | undefined, min: UserRole): boolean {
+  if (!role) return false;
+  return (ROLE_RANK[role] ?? 0) >= ROLE_RANK[min];
+}
 export type Contact = typeof contacts.$inferSelect;
 export type NewContact = typeof contacts.$inferInsert;
 export type NetworkingContact = typeof networkingContacts.$inferSelect;

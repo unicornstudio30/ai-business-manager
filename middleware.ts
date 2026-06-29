@@ -15,11 +15,15 @@ import { AUTH_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 
 const PUBLIC_PATH_PREFIXES = [
   "/login",
+  "/signup",
   "/api/auth/",
   "/api/mcp",          // MCP server uses its own auth model
   "/_next/",
   "/favicon",
 ];
+
+// Admin-only routes — anything starting with these requires owner|admin role.
+const ADMIN_PATH_PREFIXES = ["/admin"];
 
 function isPublic(pathname: string): boolean {
   return PUBLIC_PATH_PREFIXES.some((p) => pathname === p || pathname.startsWith(p));
@@ -48,15 +52,28 @@ export async function middleware(req: NextRequest) {
   // Verify session cookie
   const token = req.cookies.get(AUTH_COOKIE_NAME)?.value;
   const session = token ? await verifySessionToken(token) : null;
-  if (session) return NextResponse.next();
 
-  // Unauthenticated: API → 401 JSON, pages → redirect to /login
-  if (pathname.startsWith("/api/")) {
-    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  if (!session) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
+    const loginUrl = new URL("/login", req.url);
+    loginUrl.searchParams.set("from", pathname + (search || ""));
+    return NextResponse.redirect(loginUrl);
   }
-  const loginUrl = new URL("/login", req.url);
-  loginUrl.searchParams.set("from", pathname + (search || ""));
-  return NextResponse.redirect(loginUrl);
+
+  // Admin-only routes — owner OR admin required.
+  if (ADMIN_PATH_PREFIXES.some((p) => pathname.startsWith(p))) {
+    const role = session.role;
+    if (role !== "owner" && role !== "admin") {
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json({ error: "Forbidden — admin or owner role required" }, { status: 403 });
+      }
+      return NextResponse.redirect(new URL("/", req.url));
+    }
+  }
+
+  return NextResponse.next();
 }
 
 export const config = {
