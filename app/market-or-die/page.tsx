@@ -3,13 +3,14 @@
 // (L1–L4), points/target as the headline number, streak chips.
 
 import Link from "next/link";
-import { Trophy, Crown, Flame, ChevronLeft, ChevronRight, Calendar, BarChart3, Target } from "lucide-react";
+import { Trophy, Crown, Flame, ChevronLeft, ChevronRight, Calendar, BarChart3, Target, ExternalLink } from "lucide-react";
 import { getLeaderboard } from "@/lib/db/marketing";
 import { addWeeks, fmtWeekLabel, weekStartFor } from "@/lib/marketing/points";
 import { getCurrentUser } from "@/lib/auth/server";
 import { LogActivityButton } from "@/components/marketing/log-activity-button";
 import { SetTargetButton } from "@/components/marketing/set-target-button";
 import { AutoSyncButton } from "@/components/marketing/auto-sync-button";
+import { fetchLeaderboard, marketOrDieEnabled, marketOrDieUrl } from "@/lib/clients/market-or-die";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,26 @@ function initialsFor(name: string): string {
   return parts.map((p) => p[0]?.toUpperCase() || "").join("") || "?";
 }
 
+// Load leaderboard rows either from the local DB (legacy) or from the
+// standalone Market or Die app (when MARKET_OR_DIE_URL is set).
+async function loadLeaderboard(weekStart: string) {
+  if (marketOrDieEnabled()) {
+    try {
+      const board = await fetchLeaderboard(weekStart);
+      return { rows: board.rows, weekStart: board.weekStart, source: "remote" as const, error: null as string | null };
+    } catch (e: any) {
+      return {
+        rows: [],
+        weekStart,
+        source: "remote" as const,
+        error: e?.message ?? "Failed to reach Market or Die app",
+      };
+    }
+  }
+  const { rows, weekStart: ws } = await getLeaderboard(weekStart);
+  return { rows, weekStart: ws, source: "local" as const, error: null as string | null };
+}
+
 export default async function MarketOrDiePage({
   searchParams,
 }: {
@@ -60,9 +81,11 @@ export default async function MarketOrDiePage({
   const me = await getCurrentUser();
   const thisWeek = weekStartFor();
   const ws = params.week || thisWeek;
-  const { weekStart, rows } = await getLeaderboard(ws);
+  const { rows, weekStart, source, error } = await loadLeaderboard(ws);
+  const remoteMode = source === "remote";
+  const modUrl = marketOrDieUrl();
 
-  const canSetTarget = me?.role === "owner" || me?.role === "admin";
+  const canSetTarget = (me?.role === "owner" || me?.role === "admin") && !remoteMode;
   const totalWeekPoints = rows.reduce((s, r) => s + r.weekPoints, 0);
   const hitCount = rows.filter((r) => r.hitTarget).length;
   const teamProgressPct =
@@ -96,10 +119,34 @@ export default async function MarketOrDiePage({
             <strong>sent networking DMs</strong>, and <strong>CRM activity</strong> (comments, DMs, follow-ups).
             Log the rest (videos, blogs, lead magnets) manually.
           </p>
+          {remoteMode && (
+            <p className="text-[11px] text-stone-500 mt-2 inline-flex items-center gap-1">
+              <span className="size-1.5 rounded-full bg-emerald-500" />
+              Reading from the standalone Market or Die app. Manual logging + target editing happen there.
+            </p>
+          )}
+          {error && (
+            <p className="text-[11px] text-red-700 mt-2">Market or Die app unreachable: {error}</p>
+          )}
         </div>
         <div className="flex items-start gap-2 flex-wrap">
-          {canSetTarget && <AutoSyncButton />}
-          <LogActivityButton weekStart={weekStart} />
+          {remoteMode ? (
+            modUrl && (
+              <a
+                href={modUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-md bg-stone-900 px-3 py-2 text-sm font-medium text-white hover:bg-stone-800 min-h-[40px]"
+              >
+                Open Market or Die <ExternalLink className="size-3.5" />
+              </a>
+            )
+          ) : (
+            <>
+              {(me?.role === "owner" || me?.role === "admin") && <AutoSyncButton />}
+              <LogActivityButton weekStart={weekStart} />
+            </>
+          )}
         </div>
       </div>
 

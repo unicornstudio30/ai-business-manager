@@ -9,9 +9,14 @@
 // Every auto-row stamps a `source` key so re-runs are idempotent (unique index).
 // Manual rows have source=null and are untouched.
 
-import { and, eq, gte, isNotNull, ne } from "drizzle-orm";
+import { and, eq, gte, isNotNull } from "drizzle-orm";
 import { db, schema } from "../db/client";
 import { pointsFor, weekStartFor, type ActivityKind, type Platform } from "./points";
+import {
+  marketOrDieEnabled,
+  fetchUsers as fetchMoDUsers,
+  postActivity as postMoDActivity,
+} from "../clients/market-or-die";
 
 type PlatformLike = string | null | undefined;
 
@@ -186,12 +191,39 @@ export type AutoSyncResult = {
     workspaceOwner: { id: string; name: string } | null;
     unmappedOwnerNames: string[]; // distinct owner_name values that didn't match any user
   };
+  destination: "local" | "market-or-die-app";
 };
 
 export async function runMarketingAutoSync(): Promise<AutoSyncResult> {
-  // 1. Load users (lite shape)
-  const users: LiteUser[] = (
-    await db
+  const modEnabled = marketOrDieEnabled();
+
+  // 1. Load users — from MoD when routing there (so userIds match its DB),
+  //    otherwise from local `users` table.
+  let users: LiteUser[];
+  if (modEnabled) {
+    try {
+      const modUsers = await fetchMoDUsers();
+      users = modUsers.map((u) => ({
+        id: u.id,
+        name: u.name,
+        notionPerson: u.notionPerson,
+        role: u.role,
+      }));
+    } catch (e: any) {
+      // MoD unreachable — fail loudly rather than silently writing to local DB
+      // and getting the two out of sync.
+      return {
+        scanned: { content: 0, networking: 0, crm: 0 },
+        inserted: { content: 0, networking: 0, crm: 0, total: 0 },
+        attribution: {
+          workspaceOwner: null,
+          unmappedOwnerNames: [`MoD unreachable: ${e?.message ?? String(e)}`],
+        },
+        destination: "market-or-die-app",
+      };
+    }
+  } else {
+    users = await db
       .select({
         id: schema.users.id,
         name: schema.users.name,
@@ -199,14 +231,16 @@ export async function runMarketingAutoSync(): Promise<AutoSyncResult> {
         role: schema.users.role,
       })
       .from(schema.users)
-      .where(eq(schema.users.active, 1))
-  );
+      .where(eq(schema.users.active, 1));
+  }
+
   const owner = workspaceOwner(users);
   if (!owner) {
     return {
       scanned: { content: 0, networking: 0, crm: 0 },
       inserted: { content: 0, networking: 0, crm: 0, total: 0 },
       attribution: { workspaceOwner: null, unmappedOwnerNames: [] },
+      destination: modEnabled ? "market-or-die-app" : "local",
     };
   }
 
@@ -248,9 +282,11 @@ export async function runMarketingAutoSync(): Promise<AutoSyncResult> {
     if (r.ownerName && !resolveUserId(r.ownerName, users)) unmapped.add(r.ownerName);
   }
 
-  // 5. Insert per source-type so we can report exact per-source counts.
-  //    onConflictDoNothing on the source unique index makes this idempotent.
-  async function insertRows(rows: AutoRow[]): Promise<number> {
+  // 5. Insert. Two destinations:
+  //    - Local DB: onConflictDoNothing on the source unique index (idempotent)
+  //    - MoD app: POST per row to /api/external/activities, which returns
+  //      { inserted: true|false } — false means the source key already existed
+  async function insertLocal(rows: AutoRow[]): Promise<number> {
     if (rows.length === 0) return 0;
     const CHUNK = 200;
     let inserted = 0;
@@ -275,6 +311,27 @@ export async function runMarketingAutoSync(): Promise<AutoSyncResult> {
     return inserted;
   }
 
+  async function insertRemote(rows: AutoRow[]): Promise<number> {
+    if (rows.length === 0) return 0;
+    let inserted = 0;
+    // Sequential to keep it easy on the MoD app; leaderboard isn't huge.
+    for (const r of rows) {
+      const res = await postMoDActivity({
+        userId: r.userId,
+        platform: r.platform,
+        kind: r.kind,
+        count: r.count,
+        notes: r.notes,
+        weekStart: r.weekStart,
+        source: r.source,
+      });
+      if (res.ok && res.inserted) inserted += 1;
+    }
+    return inserted;
+  }
+
+  const insertRows = modEnabled ? insertRemote : insertLocal;
+
   const insertedContent = await insertRows(contentRows);
   const insertedNetworking = await insertRows(netRows);
   const insertedCrm = await insertRows(crmRows);
@@ -296,5 +353,6 @@ export async function runMarketingAutoSync(): Promise<AutoSyncResult> {
       workspaceOwner: { id: owner.id, name: owner.name || "" },
       unmappedOwnerNames: Array.from(unmapped).sort(),
     },
+    destination: modEnabled ? "market-or-die-app" : "local",
   };
 }
