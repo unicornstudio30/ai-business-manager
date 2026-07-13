@@ -3,13 +3,17 @@
 // Notion "Person" ↔ user mapping health panel.
 //
 // Shows every distinct owner_name value from the CRM `contacts` table with
-// the user it currently resolves to (via notion_person override or name
-// match). Unmapped rows come first — admins can pick a user from the
-// dropdown to set that user's notion_person to the owner_name value.
+// the user it currently resolves to. Three match tiers:
+//   - notion_person: explicit override → deterministic, green
+//   - name:          exact name match → deterministic, green
+//   - fuzzy:         similar-name match ("Saydur Rahman" ≈ "Saidur Rahaman")
+//                    → tentative, amber, with a "Pin" button to promote to
+//                    an explicit notion_person override
+//   - unmapped:      no user matched → red, with a dropdown to assign
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, AlertCircle, Loader2, LinkIcon, User as UserIcon } from "lucide-react";
+import { CheckCircle2, AlertCircle, Loader2, LinkIcon, Sparkles, Pin } from "lucide-react";
 
 type UserSummary = {
   id: string;
@@ -23,7 +27,7 @@ type OwnerMappingRow = {
   contactCount: number;
   activityCount: number;
   mappedTo: UserSummary | null;
-  matchedVia: "notion_person" | "name" | null;
+  matchedVia: "notion_person" | "name" | "fuzzy" | null;
 };
 
 export function OwnerMappingPanel({
@@ -79,8 +83,9 @@ export function OwnerMappingPanel({
         <p className="text-xs text-stone-500 mt-1 max-w-3xl">
           The Notion CRM stores each contact's owner in the <code className="px-1 bg-stone-100 rounded">Person</code> column.
           Sell or Die attributes CRM activity to whichever app user matches that value —
-          via the user's <code className="px-1 bg-stone-100 rounded">Notion Person</code> override, or (if empty) their display name.
-          Anything unmapped credits the workspace owner as fallback.
+          via the <code className="px-1 bg-stone-100 rounded">Notion Person</code> override,
+          exact name, or a fuzzy match ("Saydur Rahman" ≈ "Saidur Rahaman").
+          Notion is the source of truth: pin fuzzy matches to lock the Notion spelling as the user's override.
         </p>
       </div>
 
@@ -121,7 +126,29 @@ export function OwnerMappingPanel({
                     <td className="px-3 py-2 text-stone-700 tabular-nums">{r.contactCount}</td>
                     <td className="px-3 py-2 text-stone-500 tabular-nums hidden sm:table-cell">{r.activityCount}</td>
                     <td className="px-3 py-2">
-                      {r.mappedTo ? (
+                      {r.mappedTo && r.matchedVia === "fuzzy" ? (
+                        <div className="inline-flex items-center gap-2 flex-wrap">
+                          <Sparkles className="size-3.5 text-amber-600" />
+                          <span className="text-stone-900">{r.mappedTo.name || r.mappedTo.email}</span>
+                          <span className="text-[10px] text-amber-700 uppercase tracking-wide font-medium">
+                            fuzzy
+                          </span>
+                          <button
+                            type="button"
+                            disabled={isBusy || pending}
+                            onClick={() => mapTo(r.ownerName, r.mappedTo!.id)}
+                            className="inline-flex items-center gap-1 rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                            title={`Pin "${r.ownerName}" as the Notion Person on ${r.mappedTo.name}. Locks the mapping so future syncs are deterministic.`}
+                          >
+                            {isBusy ? (
+                              <Loader2 className="size-3 animate-spin" />
+                            ) : (
+                              <Pin className="size-3" />
+                            )}
+                            Pin
+                          </button>
+                        </div>
+                      ) : r.mappedTo ? (
                         <div className="inline-flex items-center gap-1.5">
                           <CheckCircle2 className="size-3.5 text-emerald-600" />
                           <span className="text-stone-900">{r.mappedTo.name || r.mappedTo.email}</span>

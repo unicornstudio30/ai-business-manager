@@ -23,6 +23,7 @@ import {
   type ActivityKind as SalesKind,
   type Channel as SalesChannel,
 } from "../sales/points";
+import { resolveOwnerName } from "../name-matcher";
 
 type PlatformLike = string | null | undefined;
 
@@ -52,20 +53,13 @@ function normalizePlatform(p: PlatformLike): Platform {
   return "other";
 }
 
-// Match a Notion Person name to a user, preferring an explicit notion_person
-// override on the user row, falling back to a case-insensitive name match.
+// Match a Notion Person name to a user via the shared resolver
+// (notion_person override → exact name → fuzzy name). See lib/name-matcher.ts.
 type LiteUser = { id: string; name: string; notionPerson: string | null; role: string };
 
 function resolveUserId(ownerName: string | null | undefined, users: LiteUser[]): string | null {
-  if (!ownerName) return null;
-  const needle = ownerName.trim().toLowerCase();
-  if (!needle) return null;
-  // Prefer the override
-  const byOverride = users.find((u) => (u.notionPerson || "").trim().toLowerCase() === needle);
-  if (byOverride) return byOverride.id;
-  const byName = users.find((u) => (u.name || "").trim().toLowerCase() === needle);
-  if (byName) return byName.id;
-  return null;
+  const match = resolveOwnerName(ownerName ?? null, users);
+  return match?.user.id ?? null;
 }
 
 // Owner fallback — first owner-role user. Used when source data has no

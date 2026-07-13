@@ -2,12 +2,14 @@
 //
 // The Notion CRM's Person column stores the owner name for each contact.
 // Auto-sync (Sell/Market leaderboards) attributes activity to the matching
-// user via `users.notion_person` first, then a case-insensitive `users.name`
-// match. This module surfaces the current state of that mapping so admins
-// can see who owns what — and fix any unmapped names.
+// user via `users.notion_person` first, then case-insensitive `users.name`,
+// then a fuzzy name match (edit distance + prefix, ambiguity → no match).
+// See lib/name-matcher.ts. This module surfaces the current state so admins
+// can see who owns what — and pin fuzzy matches to explicit overrides.
 
 import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
 import { db, schema } from "./client";
+import { resolveOwnerName, type NameMatchTier } from "../name-matcher";
 
 export type OwnerName = string;
 
@@ -22,10 +24,13 @@ export type OwnerMappingRow = {
   ownerName: OwnerName;
   contactCount: number;
   activityCount: number;      // activities in the last 120 days on those contacts
-  // Which app-user this owner_name currently resolves to (if any). null means
-  // no user has notion_person or name matching this ownerName.
+  // Which app-user this owner_name currently resolves to (if any).
+  //   - "notion_person": exact match on override column (deterministic)
+  //   - "name": exact match on user's display name
+  //   - "fuzzy": similar-name match (only when exactly one user matches)
+  //   - null: unmapped — auto-sync falls through to the workspace owner
   mappedTo: UserSummary | null;
-  matchedVia: "notion_person" | "name" | null;
+  matchedVia: Exclude<NameMatchTier, null> | null;
 };
 
 export type OwnerMappingReport = {
@@ -44,19 +49,14 @@ export type UserOwnedCount = {
   ownedContacts: number;
 };
 
+// Shared resolver — same tiers as auto-sync so both surfaces agree.
 function resolveUser(
   ownerName: string,
   users: UserSummary[]
-): { user: UserSummary; via: "notion_person" | "name" } | null {
-  const needle = ownerName.trim().toLowerCase();
-  if (!needle) return null;
-  const byOverride = users.find(
-    (u) => (u.notionPerson || "").trim().toLowerCase() === needle
-  );
-  if (byOverride) return { user: byOverride, via: "notion_person" };
-  const byName = users.find((u) => (u.name || "").trim().toLowerCase() === needle);
-  if (byName) return { user: byName, via: "name" };
-  return null;
+): { user: UserSummary; via: Exclude<NameMatchTier, null> } | null {
+  const match = resolveOwnerName(ownerName, users);
+  if (!match) return null;
+  return { user: match.user, via: match.via };
 }
 
 export async function getOwnerMappingReport(): Promise<OwnerMappingReport> {
