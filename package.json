@@ -11,8 +11,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "db:reset": "tsx scripts/reset-db.ts",
-    "db:seed": "tsx scripts/seed.ts",
-    "mod:migrate": "tsx scripts/migrate-marketing-to-mod.ts"
+    "db:seed": "tsx scripts/seed.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
