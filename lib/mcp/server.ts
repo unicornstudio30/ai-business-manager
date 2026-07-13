@@ -3,9 +3,8 @@
 //
 //   READ: briefing, list_contacts, get_contact, hot_leads, needs_follow_up,
 //         engagement_queue, cadences_due, icp_score, analytics, inbox,
-//         stuck_deals, wins_losses, prep_brief, upcoming_meetings,
-//         stage_definitions
-//   WRITE: create_activity, sync_notion, sync_gcal, save_audit
+//         stuck_deals, wins_losses, stage_definitions
+//   WRITE: create_activity, sync_notion
 //   AI:    next_message, stuck_suggestion, daily_summary, classify_icp
 //         (server-side OpenRouter — callable from Claude.ai)
 
@@ -28,13 +27,10 @@ import { computeCadence, dueToday, dueSoon } from "@/lib/cadences";
 import { db, schema } from "@/lib/db/client";
 import { eq } from "drizzle-orm";
 import { funnelCounts, activityTrend30d } from "@/lib/db/analytics";
-import { upcomingMeetings, recentMeetings } from "@/lib/db/meetings";
-import { syncGoogleCalendar } from "@/lib/gcal/sync";
 import { inboxView, inboxCounts } from "@/lib/db/inbox-view";
 import { INBOX_CHANNELS } from "@/lib/inbox";
 import { stuckDeals, stuckByStage } from "@/lib/db/stuck-deals";
 import { listClosedDeals, winLossSummary } from "@/lib/db/wins-losses";
-import { buildPrepBrief } from "@/lib/prep-brief";
 import { computeIcpScore } from "@/lib/icp-scoring";
 import { syncNotion, syncStatus } from "@/lib/notion/sync";
 import { STAGES } from "@/lib/stages";
@@ -280,28 +276,6 @@ export function buildMcpServer(): McpServer {
   );
 
   server.registerTool(
-    "upcoming_meetings",
-    {
-      title: "Upcoming Meetings",
-      description:
-        "Upcoming + recent meetings from Google Calendar (synced via ICS). " +
-        "Returns up to 'limit' future events plus 'recentDays' days of past events. " +
-        "Each meeting links to its contact when invitee email matches.",
-      inputSchema: {
-        limit: z.number().int().min(1).max(50).optional().default(20),
-        recentDays: z.number().int().min(0).max(60).optional().default(7),
-      },
-    },
-    async ({ limit, recentDays }) => {
-      const [upcoming, recent] = await Promise.all([
-        upcomingMeetings(limit ?? 20),
-        recentMeetings(recentDays ?? 7, 20),
-      ]);
-      return ok({ upcoming, recent });
-    }
-  );
-
-  server.registerTool(
     "inbox",
     {
       title: "Inbox (needs your move)",
@@ -316,40 +290,6 @@ export function buildMcpServer(): McpServer {
     async ({ channel }) => {
       const [items, counts] = await Promise.all([inboxView({ channel }), inboxCounts()]);
       return ok({ items, counts });
-    }
-  );
-
-  server.registerTool(
-    "save_audit",
-    {
-      title: "Save Site Audit (write)",
-      description:
-        "Save a site audit + drafted ACA email to the audits table. Used by the /audit slash command. " +
-        "If contact_id is provided, the audit links to that contact and shows on /audits.",
-      inputSchema: {
-        url: z.string().describe("URL that was audited"),
-        summary: z.string().optional().describe("2-3 sentence honest read"),
-        scores: z.record(z.string(), z.number()).optional().describe("e.g. {design:4, copy:3, conversion:4, speed_signal:3}"),
-        detected_stack: z.array(z.string()).optional().describe("e.g. ['WordPress','Elementor']"),
-        missing_pages: z.array(z.string()).optional().describe("e.g. ['/case-studies','/pricing']"),
-        email_draft: z.string().optional().describe("Full ACA outreach email markdown"),
-        contact_id: z.string().optional(),
-      },
-    },
-    async ({ url, summary, scores, detected_stack, missing_pages, email_draft, contact_id }) => {
-      const [row] = await db
-        .insert(schema.audits)
-        .values({
-          url,
-          contactId: contact_id ?? null,
-          summary: summary ?? null,
-          scores: scores ? JSON.stringify(scores) : null,
-          detectedStack: detected_stack ? JSON.stringify(detected_stack) : null,
-          missingPages: missing_pages ? JSON.stringify(missing_pages) : null,
-          emailDraft: email_draft ?? null,
-        })
-        .returning();
-      return ok({ ok: true, audit: row });
     }
   );
 
@@ -377,26 +317,6 @@ export function buildMcpServer(): McpServer {
         .sort((a, b) => b.icp_score - a.icp_score)
         .slice(0, 20);
       return ok({ ranked });
-    }
-  );
-
-  server.registerTool(
-    "prep_brief",
-    {
-      title: "Discovery Call Prep Brief",
-      description:
-        "Generate a discovery-call prep brief for a specific meeting. Returns: " +
-        "meeting metadata, contact details + lead score, recent touchpoints, audits, " +
-        "stage-aware discovery questions, common objection responses, and Unicorn's 30-sec pitch. " +
-        "Pull this before a call and Claude can polish it into talking points.",
-      inputSchema: {
-        meeting_id: z.string().describe("ID of the meeting (from upcoming_meetings tool)"),
-      },
-    },
-    async ({ meeting_id }) => {
-      const brief = await buildPrepBrief(meeting_id);
-      if (!brief) return ok({ error: "Meeting not found", meeting_id });
-      return ok(brief);
     }
   );
 
@@ -436,19 +356,6 @@ export function buildMcpServer(): McpServer {
     }
   );
 
-  server.registerTool(
-    "sync_gcal",
-    {
-      title: "Sync Google Calendar",
-      description: "Pull latest events from the configured Google Calendar ICS feed.",
-      inputSchema: {},
-    },
-    async () => {
-      const result = await syncGoogleCalendar();
-      return ok(result);
-    }
-  );
-
   // ─────────── WRITE TOOLS ───────────
 
   server.registerTool(
@@ -456,7 +363,7 @@ export function buildMcpServer(): McpServer {
     {
       title: "Create Activity (Draft)",
       description:
-        "Write a draft (comment, email, DM, follow-up, note, audit, post observation) to a contact's Activities feed. " +
+        "Write a draft (comment, email, DM, follow-up, note, post observation) to a contact's Activities feed. " +
         "Saidur reviews drafts in /contacts/[id]. Drafts auto-trigger a lead score recompute.",
       inputSchema: {
         contact_id: z.string().describe("Contact id (ULID)"),
@@ -464,7 +371,6 @@ export function buildMcpServer(): McpServer {
           "post_observed",
           "comment_drafted",
           "email_drafted",
-          "audit_run",
           "follow_up_sent",
           "dm_sent",
           "note",
@@ -566,11 +472,11 @@ export function buildMcpServer(): McpServer {
       title: "Global History",
       description:
         "Unified chronological event stream from across the tool: drafted/sent activities, " +
-        "meetings, audits, tracker entries, sync events, and content-publish flips. " +
+        "tracker entries, sync events, and content-publish flips. " +
         "Filter by type, date range, contact. Default: last 30 days, all types, up to 200 events.",
       inputSchema: {
         days: z.number().int().min(1).max(365).optional().default(30),
-        types: z.array(z.enum(["activity", "meeting", "audit", "tracker", "sync", "content_published"])).optional(),
+        types: z.array(z.enum(["activity", "tracker", "sync", "content_published"])).optional(),
         contact_id: z.string().optional(),
         limit: z.number().int().min(1).max(500).optional().default(200),
       },

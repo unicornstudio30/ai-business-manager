@@ -42,8 +42,6 @@ const RANGE_PRESETS: Record<string, number> = {
 
 const LABEL: Record<HistoryEventType, string> = {
   activity:          "Activities",
-  meeting:           "Meetings",
-  audit:             "Audits",
   deal_closed:       "Deals closed",
   tracker:           "Tracker",
   kpi_logged:        "Daily KPIs",
@@ -54,8 +52,6 @@ const LABEL: Record<HistoryEventType, string> = {
 
 const BADGE_TONE: Record<HistoryEventType, string> = {
   activity: "violet",
-  meeting: "blue",
-  audit: "amber",
   deal_closed: "rose",
   tracker: "stone",
   kpi_logged: "indigo",

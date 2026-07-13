@@ -2,14 +2,13 @@
 
 import { useState } from "react";
 import { fmtDateTime } from "@/lib/utils";
-import { Copy, ExternalLink, MessageSquare, Mail, ScanSearch, Send, Eye, FileText, Check } from "lucide-react";
+import { Copy, ExternalLink, MessageSquare, Mail, Send, Eye, FileText, Check } from "lucide-react";
 import type { Activity } from "@/lib/db/schema";
 
 const TYPE_ICON: Record<string, any> = {
   post_observed: Eye,
   comment_drafted: MessageSquare,
   email_drafted: Mail,
-  audit_run: ScanSearch,
   follow_up_sent: Send,
   dm_sent: Send,
   note: FileText,
@@ -19,7 +18,6 @@ const TYPE_LABEL: Record<string, string> = {
   post_observed: "Post observed",
   comment_drafted: "Comment draft",
   email_drafted: "Email draft",
-  audit_run: "Site audit",
   follow_up_sent: "Follow-up draft",
   dm_sent: "DM draft",
   note: "Note",
@@ -38,7 +36,7 @@ export function ActivitiesFeed({ activities }: { activities: Activity[] }) {
     <div className="rounded-2xl border border-stone-200 bg-white p-6">
       <div className="text-sm font-semibold text-stone-900 mb-1">Recent Activities</div>
       <div className="text-xs text-stone-500 mb-5">
-        Drafts Claude writes here from <code>/scan-hot-leads</code>, <code>/audit</code>, <code>/triage</code>, and <code>/next-message</code>.
+        Drafts Claude writes here from <code>/scan-hot-leads</code>, <code>/triage</code>, and <code>/next-message</code>.
       </div>
 
       {activities.length === 0 ? (

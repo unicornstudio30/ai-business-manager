@@ -37,7 +37,6 @@ export function computeStageSuggestions(contact: Contact, activities: Activity[]
   const followUpsSent = recent.filter((a) => a.type === "follow_up_sent").length;
   const commentsDrafted = recent.filter((a) => a.type === "comment_drafted").length;
   const emailsDrafted = recent.filter((a) => a.type === "email_drafted").length;
-  const auditRuns = recent.filter((a) => a.type === "audit_run").length;
 
   // Rule 1: Prospect → 1st message (we sent something)
   if (stage === "Prospect" && (dmsSent > 0 || emailsDrafted > 0 || commentsDrafted > 0)) {
@@ -77,19 +76,6 @@ export function computeStageSuggestions(contact: Contact, activities: Activity[]
       toStage: "1st Lead Follow up",
       reason: "Lead conversation has multiple outbound touches — moving deeper into follow-up.",
       confidence: "medium",
-    });
-  }
-
-  // Rule 5: any waiting stage with audit + email → suggest Qualified
-  if (
-    auditRuns > 0 &&
-    emailsDrafted > 0 &&
-    ["Lead", "1st Lead Follow up", "2nd Lead Follow up"].includes(stage)
-  ) {
-    suggestions.push({
-      toStage: "Qualified",
-      reason: "Site audit run + email drafted — they're a real opportunity.",
-      confidence: "low",
     });
   }
 

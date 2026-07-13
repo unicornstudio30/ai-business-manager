@@ -11,10 +11,8 @@ import {
   getStageGroupCounts,
 } from "@/lib/db/queries";
 import { funnelCounts, activityTrend30d } from "@/lib/db/analytics";
-import { nextMeetings, upcomingMeetings } from "@/lib/db/meetings";
 import { inboxView, inboxCounts } from "@/lib/db/inbox-view";
 import { stuckDeals } from "@/lib/db/stuck-deals";
-import { NextMeetings } from "@/components/dashboard/next-meetings";
 import { InboxWidget } from "@/components/dashboard/inbox-widget";
 import { ConnectWidget } from "@/components/dashboard/connect-widget";
 import { EngagementWidget } from "@/components/dashboard/engagement-widget";
@@ -34,7 +32,7 @@ import { PLATFORM_LIMITS, PLATFORMS_ORDER, target, type PlatformKey } from "@/li
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const [stats, groups, hot, followUps, sync, funnel, trend, meetings, allUpcomingMeetings, contacts, inbox, inboxC, stuck, streak, kpis, engagementQueue, connectQueue, effective] = await Promise.all([
+  const [stats, groups, hot, followUps, sync, funnel, trend, contacts, inbox, inboxC, stuck, streak, kpis, engagementQueue, connectQueue, effective] = await Promise.all([
     getDashboardStats(),
     getStageGroupCounts(),
     getHotLeads(12),
@@ -42,8 +40,6 @@ export default async function Home() {
     syncStatus(),
     funnelCounts(),
     activityTrend30d(),
-    nextMeetings(3),
-    upcomingMeetings(200),                     // for total count in row-1 stat card
     db.select({ id: schema.contacts.id, name: schema.contacts.name }).from(schema.contacts),
     inboxView(),
     inboxCounts(),
@@ -108,10 +104,9 @@ export default async function Home() {
       <TodayQueue />
 
       {/* Row 1 — pipeline + commitments at a glance */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <StatCard label="Leads" value={stats.hotLeads} tone="red" />
         <StatCard label="Follow-up" value={stats.needFollowUp} tone="amber" />
-        <StatCard label="Meetings" value={allUpcomingMeetings.length} />
         <StatCard label="Active Clients" value={stats.activeClients} tone="green" />
         <StatCard label="Stuck deals" value={stuck.length} tone="amber" />
       </div>
@@ -139,9 +134,8 @@ export default async function Home() {
       </div>
 
       {/* Row 4 — ops / health */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6">
         <StuckWidget items={stuck} />
-        <NextMeetings meetings={meetings} contactName={contactName} />
       </div>
 
       <FunnelChart data={funnel} />

@@ -198,19 +198,6 @@ export const projects = sqliteTable("projects", {
   updatedAt: ts("updated_at").$defaultFn(() => new Date()),
 });
 
-export const audits = sqliteTable("audits", {
-  id: id(),
-  contactId: text("contact_id").references(() => contacts.id),
-  url: text("url").notNull(),
-  summary: text("summary"),
-  scores: text("scores"),               // JSON: {design, copy, conversion, speed_signal}
-  detectedStack: text("detected_stack"),
-  missingPages: text("missing_pages"),
-  emailDraft: text("email_draft"),
-  claudeRunId: text("claude_run_id"),
-  createdAt: now(),
-});
-
 export const partners = sqliteTable("partners", {
   id: id(),
   contactId: text("contact_id").references(() => contacts.id),
@@ -341,32 +328,6 @@ export const leadScores = sqliteTable("lead_scores", {
   replyScore: integer("reply_score").notNull().default(0),
   updatedAt: ts("updated_at").notNull().$defaultFn(() => new Date()),
 });
-
-// Meetings — pulled from Calendly (and any other future booker).
-// One row per scheduled event. Linked to a contact when we can match by email/name;
-// otherwise contactId is null and the user can link manually.
-export const meetings = sqliteTable("meetings", {
-  id: id(),
-  externalId: text("external_id").unique(),     // Calendly event UUID
-  source: text("source").notNull().default("calendly"),  // calendly | manual | etc.
-  contactId: text("contact_id").references(() => contacts.id, { onDelete: "set null" }),
-  inviteeName: text("invitee_name"),
-  inviteeEmail: text("invitee_email"),
-  eventName: text("event_name"),                 // "Discovery Call — 30min"
-  scheduledAt: ts("scheduled_at"),
-  endedAt: ts("ended_at"),
-  status: text("status"),                         // active | canceled | completed
-  meetingUrl: text("meeting_url"),                // Zoom/Meet link
-  rescheduleUrl: text("reschedule_url"),
-  cancelUrl: text("cancel_url"),
-  questionsAndAnswers: text("questions_and_answers"),  // JSON of intake form responses
-  notes: text("notes"),
-  createdAt: now(),
-  updatedAt: ts("updated_at").$defaultFn(() => new Date()),
-}, (t) => ({
-  scheduledIdx: index("meetings_scheduled_idx").on(t.scheduledAt),
-  contactIdx: index("meetings_contact_idx").on(t.contactId),
-}));
 
 export const syncLog = sqliteTable("sync_log", {
   id: id(),
@@ -660,11 +621,8 @@ export type NewNetworkingMessage = typeof networkingMessages.$inferInsert;
 export type Activity = typeof activities.$inferSelect;
 export type NewActivity = typeof activities.$inferInsert;
 export type Project = typeof projects.$inferSelect;
-export type Audit = typeof audits.$inferSelect;
 export type ContentItem = typeof contentItems.$inferSelect;
 export type TrackerEntry = typeof trackerEntries.$inferSelect;
 export type DailySalesKpi = typeof dailySalesKpis.$inferSelect;
 export type ClaudeRun = typeof claudeRuns.$inferSelect;
 export type SyncLog = typeof syncLog.$inferSelect;
-export type Meeting = typeof meetings.$inferSelect;
-export type NewMeeting = typeof meetings.$inferInsert;

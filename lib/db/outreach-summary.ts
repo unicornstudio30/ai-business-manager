@@ -1,5 +1,5 @@
 // "How much input did I give and how much output did I get" — the sales
-// scorecard for any time window. Aggregates across activities + meetings +
+// scorecard for any time window. Aggregates across activities +
 // deals_closed + daily_sales_kpis.
 
 import { db, schema } from "./client";
@@ -11,12 +11,10 @@ export type OutreachSummary = {
     commentsDrafted: number;
     emailsDrafted: number;
     followUpsSent: number;
-    auditsRun: number;
     postsObserved: number;
     totalActions: number;       // sum of all the above
   };
   output: {
-    meetingsBooked: number;
     dealsClosed: number;         // total in the period
     dealsWon: number;            // subset where status === "Partnership"
     inboundLeads: number;        // from daily_sales_kpis.inboundLeads in period
@@ -28,7 +26,7 @@ export type OutreachSummary = {
   ratio: number | null;          // null when no input yet
 };
 
-const INPUT_TYPES = ["dm_sent", "comment_drafted", "email_drafted", "follow_up_sent", "audit_run", "post_observed"] as const;
+const INPUT_TYPES = ["dm_sent", "comment_drafted", "email_drafted", "follow_up_sent", "post_observed"] as const;
 
 export async function getOutreachSummary(opts: { since: Date; until?: Date }): Promise<OutreachSummary> {
   const since = opts.since;
@@ -50,16 +48,12 @@ export async function getOutreachSummary(opts: { since: Date; until?: Date }): P
     commentsDrafted: byType.comment_drafted ?? 0,
     emailsDrafted: byType.email_drafted ?? 0,
     followUpsSent: byType.follow_up_sent ?? 0,
-    auditsRun: byType.audit_run ?? 0,
     postsObserved: byType.post_observed ?? 0,
     totalActions: activities.length,
   };
 
-  // 2) OUTPUT — meetings + deals_closed + KPI rollups
-  const [meetings, closedContacts, kpis] = await Promise.all([
-    db.select({ id: schema.meetings.id, contactId: schema.meetings.contactId })
-      .from(schema.meetings)
-      .where(and(gte(schema.meetings.scheduledAt, since), lte(schema.meetings.scheduledAt, until))),
+  // 2) OUTPUT — deals_closed + KPI rollups
+  const [closedContacts, kpis] = await Promise.all([
     db.select({ status: schema.contacts.status })
       .from(schema.contacts)
       .where(and(
@@ -84,7 +78,6 @@ export async function getOutreachSummary(opts: { since: Date; until?: Date }): P
     kpis.reduce((s, k) => s + ((k[key] as number | null) ?? 0), 0);
 
   const output = {
-    meetingsBooked: meetings.length,
     dealsClosed: closedContacts.length,
     dealsWon,
     inboundLeads: kpiSum("inboundLeads"),
@@ -92,7 +85,7 @@ export async function getOutreachSummary(opts: { since: Date; until?: Date }): P
     callsBooked: kpiSum("callsBooked"),
     totalResults: 0,
   };
-  output.totalResults = output.meetingsBooked + output.dealsClosed + output.inboundLeads + output.responses;
+  output.totalResults = output.dealsClosed + output.inboundLeads + output.responses;
 
   const ratio = input.totalActions === 0 ? null : output.totalResults / input.totalActions;
 

@@ -43,7 +43,6 @@ export type PlatformCountsForCaps = {
   followUps: number;
   emails: number;
   posts_observed: number;
-  audits: number;
   notes: number;
 };
 

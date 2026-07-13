@@ -24,7 +24,6 @@ export type ActivityKind =
   | "deploy"              // deployed to production
   | "bug_fix"             // resolved a bug in shipped work
   | "refactor"            // meaningful code-quality improvement
-  | "audit_run"           // ran an audit for a client
   | "client_demo"         // showed shipped work to a client
   | "client_handoff"      // final delivery + handoff
   | "docs_written"        // wrote docs for a shipped build
@@ -41,7 +40,6 @@ const BASE_POINTS: Record<ActivityKind, number> = {
   deploy:              40,
   bug_fix:             20,
   refactor:            30,
-  audit_run:           80,
   client_demo:         80,
   client_handoff:     200,
   docs_written:        30,
@@ -103,7 +101,6 @@ export const ALL_KINDS: { kind: ActivityKind; label: string }[] = [
   { kind: "deploy",             label: "Production deploy" },
   { kind: "bug_fix",            label: "Bug fix" },
   { kind: "refactor",           label: "Refactor" },
-  { kind: "audit_run",          label: "Audit run" },
   { kind: "client_demo",        label: "Client demo" },
   { kind: "client_handoff",     label: "Client handoff" },
   { kind: "docs_written",       label: "Docs written" },

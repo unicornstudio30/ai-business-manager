@@ -113,7 +113,6 @@ export type PlatformDayCounts = {
   followUps: number;      // follow_up_sent
   emails: number;         // email_drafted
   posts_observed: number; // post_observed
-  audits: number;         // audit_run
   notes: number;          // note + closed_reason
 };
 
@@ -159,7 +158,6 @@ export async function platformBreakdownForDate(date: Date): Promise<PlatformDayC
         followUps: 0,
         emails: 0,
         posts_observed: 0,
-        audits: 0,
         notes: 0,
       });
     }
@@ -171,7 +169,6 @@ export async function platformBreakdownForDate(date: Date): Promise<PlatformDayC
       case "follow_up_sent": b.followUps++; break;
       case "email_drafted": b.emails++; break;
       case "post_observed": b.posts_observed++; break;
-      case "audit_run": b.audits++; break;
       case "note":
       case "closed_reason":
         b.notes++; break;

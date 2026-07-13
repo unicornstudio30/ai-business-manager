@@ -3,7 +3,6 @@ import { CalendarCheck, Repeat2, Clock } from "lucide-react";
 import { db, schema } from "@/lib/db/client";
 import { lte, and, isNotNull } from "drizzle-orm";
 import { computeCadence, dueToday } from "@/lib/cadences";
-import { upcomingMeetings } from "@/lib/db/meetings";
 import { fmtDate } from "@/lib/utils";
 
 export async function TodayQueue() {
@@ -22,13 +21,7 @@ export async function TodayQueue() {
     .where(and(isNotNull(schema.contacts.followUpDate), lte(schema.contacts.followUpDate, endOfDay)))
     .limit(8);
 
-  // 3) Meetings today
-  const meetings = (await upcomingMeetings(8)).filter((m) => {
-    if (!m.scheduledAt) return false;
-    return m.scheduledAt <= endOfDay;
-  });
-
-  const total = cadenceDue.length + followUps.length + meetings.length;
+  const total = cadenceDue.length + followUps.length;
   if (total === 0) {
     return (
       <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 text-sm text-emerald-800">
@@ -46,7 +39,7 @@ export async function TodayQueue() {
         </span>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Cadence steps */}
         <div>
           <div className="flex items-center gap-1 text-xs font-medium text-stone-700 mb-1.5">
@@ -89,24 +82,6 @@ export async function TodayQueue() {
           )}
         </div>
 
-        {/* Meetings */}
-        <div>
-          <div className="flex items-center gap-1 text-xs font-medium text-stone-700 mb-1.5">
-            <CalendarCheck className="size-3" /> Meetings ({meetings.length})
-          </div>
-          {meetings.length === 0 ? (
-            <div className="text-xs text-stone-400">none</div>
-          ) : (
-            <ul className="flex flex-col gap-1">
-              {meetings.map((m) => (
-                <li key={m.id} className="text-xs">
-                  <span className="text-stone-800">{m.eventName || "(untitled)"}</span>
-                  <span className="text-stone-400"> · {m.scheduledAt ? m.scheduledAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "—"}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
       </div>
     </div>
   );

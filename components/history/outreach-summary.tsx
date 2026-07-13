@@ -23,7 +23,6 @@ export function OutreachSummaryPanel({ summary, periodLabel }: Props) {
           <Stat label="Comments" value={input.commentsDrafted} />
           <Stat label="Follow-ups" value={input.followUpsSent} />
           <Stat label="Emails" value={input.emailsDrafted} />
-          <Stat label="Audits" value={input.auditsRun} />
           <Stat label="Observed" value={input.postsObserved} />
         </div>
       </section>
@@ -47,7 +46,6 @@ export function OutreachSummaryPanel({ summary, periodLabel }: Props) {
         </div>
         <div className="grid grid-cols-3 gap-2 text-xs">
           <Stat label="Responses" value={output.responses} />
-          <Stat label="Meetings" value={output.meetingsBooked} />
           <Stat label="Calls" value={output.callsBooked} />
           <Stat label="Inbound" value={output.inboundLeads} />
           <Stat label="Closed" value={output.dealsClosed} />

@@ -69,7 +69,6 @@ export async function getTodayCounts() {
     dms: map.get("dm_sent") ?? 0,
     follow_ups: map.get("follow_up_sent") ?? 0,
     emails: map.get("email_drafted") ?? 0,
-    audits: map.get("audit_run") ?? 0,
     posts_observed: map.get("post_observed") ?? 0,
     notes: map.get("note") ?? 0,
   };

@@ -27,13 +27,12 @@ export function NotionColumnsSetup() {
         <Wand2 className="size-4 text-violet-500" /> Notion CRM columns
       </div>
       <p className="text-sm text-stone-600 leading-relaxed mb-3">
-        Adds 2 web-app-managed columns to your Sales CRM in Notion so data
-        (win/loss reasons, audit summaries) flows back into Notion automatically.
+        Adds a web-app-managed column to your Sales CRM in Notion so win/loss
+        reasons flow back into Notion automatically.
         Idempotent — safe to run multiple times.
       </p>
       <ul className="text-xs text-stone-500 mb-4 list-disc list-inside space-y-0.5">
         <li><code className="px-1 bg-stone-100 rounded">Closed Reason</code> (text) — pushed when you fill it in /wins-losses</li>
-        <li><code className="px-1 bg-stone-100 rounded">Latest Audit</code> (text) — pushed when /audit runs against a contact</li>
       </ul>
       <button
         onClick={run}

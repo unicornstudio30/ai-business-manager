@@ -34,7 +34,6 @@ export function PlatformBreakdown({ rows }: { rows: PlatformDayCounts[] }) {
               <th className="text-center py-2 px-2" title="Follow-ups">↩️ F/up</th>
               <th className="text-center py-2 px-2" title="Emails">✉️ Email</th>
               <th className="text-center py-2 px-2" title="Posts observed">👁 Post</th>
-              <th className="text-center py-2 px-2" title="Audits">🔍 Audit</th>
               <th className="text-center py-2 px-2" title="Notes">📝 Note</th>
               <th className="text-right py-2 pl-3 font-semibold">Total</th>
             </tr>
@@ -52,7 +51,6 @@ export function PlatformBreakdown({ rows }: { rows: PlatformDayCounts[] }) {
                 <Cell n={r.followUps} />
                 <Cell n={r.emails} />
                 <Cell n={r.posts_observed} />
-                <Cell n={r.audits} />
                 <Cell n={r.notes} />
                 <td className="py-2 pl-3 text-right font-semibold text-stone-900 tabular-nums">
                   {r.total}

@@ -2,9 +2,9 @@
 // every major table. No new tables; pure SELECT + merge in code.
 //
 // Event types are grouped into categories:
-//   sales     — work that moves deals: activities, meetings, audits, stage flips, daily KPIs, journal
+//   sales     — work that moves deals: activities, stage flips, daily KPIs, journal
 //   marketing — work that builds reach: content created, content published
-//   system    — plumbing: notion/gcal sync events
+//   system    — plumbing: notion sync events
 
 import { db, schema } from "./client";
 import { gte, lte, desc, eq, and, isNotNull } from "drizzle-orm";
@@ -13,8 +13,6 @@ import { platformToChannel, type InboxChannel } from "../inbox";
 export type HistoryEventType =
   // sales
   | "activity"
-  | "meeting"
-  | "audit"
   | "deal_closed"
   | "tracker"
   | "kpi_logged"
@@ -27,7 +25,7 @@ export type HistoryEventType =
 export type HistoryCategory = "sales" | "marketing" | "system";
 
 export const TYPES_BY_CATEGORY: Record<HistoryCategory, HistoryEventType[]> = {
-  sales: ["activity", "meeting", "audit", "deal_closed", "tracker", "kpi_logged"],
+  sales: ["activity", "deal_closed", "tracker", "kpi_logged"],
   marketing: ["content_created", "content_published"],
   system: ["sync"],
 };
@@ -40,8 +38,6 @@ export const ALL_TYPES: HistoryEventType[] = [
 
 export const CATEGORY_OF: Record<HistoryEventType, HistoryCategory> = {
   activity: "sales",
-  meeting: "sales",
-  audit: "sales",
   deal_closed: "sales",
   tracker: "sales",
   kpi_logged: "sales",
@@ -82,7 +78,6 @@ export const ACTIVITY_SUBTYPES = [
   "comment_drafted",
   "email_drafted",
   "follow_up_sent",
-  "audit_run",
   "post_observed",
   "note",
 ] as const;
@@ -92,18 +87,15 @@ export const ACTIVITY_SUBTYPE_LABEL: Record<string, string> = {
   comment_drafted: "Comment drafted",
   email_drafted: "Email drafted",
   follow_up_sent: "Follow-up sent",
-  audit_run: "Audit run",
   post_observed: "Post observed",
   note: "Note",
 };
 
 // Outbound = work Saidur did (the "input")
-export const OUTBOUND_SUBTYPES = ["dm_sent", "comment_drafted", "email_drafted", "follow_up_sent", "audit_run", "post_observed"] as const;
+export const OUTBOUND_SUBTYPES = ["dm_sent", "comment_drafted", "email_drafted", "follow_up_sent", "post_observed"] as const;
 
 const BADGES: Record<HistoryEventType, HistoryEvent["badge"]> = {
   activity:           { label: "Activity",     tone: "violet" },
-  meeting:            { label: "Meeting",      tone: "blue" },
-  audit:              { label: "Audit",        tone: "amber" },
   deal_closed:        { label: "Deal closed",  tone: "rose" },
   tracker:            { label: "Tracker",      tone: "stone" },
   kpi_logged:         { label: "Daily KPI",    tone: "indigo" },
@@ -180,71 +172,7 @@ export async function getHistory(filters: HistoryFilters = {}): Promise<HistoryE
     }
   }
 
-  // 2) Meetings
-  if (types.includes("meeting")) {
-    const where = and(
-      gte(schema.meetings.scheduledAt, since),
-      lte(schema.meetings.scheduledAt, until),
-      filters.contactId ? eq(schema.meetings.contactId, filters.contactId) : undefined
-    );
-    const rows = await db
-      .select()
-      .from(schema.meetings)
-      .where(where)
-      .orderBy(desc(schema.meetings.scheduledAt))
-      .limit(limit);
-    for (const m of rows) {
-      if (!m.scheduledAt) continue;
-      if (!contactMatch(m.contactId)) continue;
-      events.push({
-        id: `meeting:${m.id}`,
-        timestamp: m.scheduledAt,
-        type: "meeting",
-        category: "sales",
-        title: m.eventName || "(meeting)",
-        summary: m.inviteeName ? `with ${m.inviteeName}` : null,
-        contactId: m.contactId,
-        contactName: m.contactId ? contactName.get(m.contactId) ?? null : (m.inviteeName ?? null),
-        platform: platformFor(m.contactId),
-        link: `/meetings/${m.id}/brief`,
-        badge: BADGES.meeting,
-      });
-    }
-  }
-
-  // 3) Audits
-  if (types.includes("audit")) {
-    const where = and(
-      gte(schema.audits.createdAt, since),
-      lte(schema.audits.createdAt, until),
-      filters.contactId ? eq(schema.audits.contactId, filters.contactId) : undefined
-    );
-    const rows = await db
-      .select()
-      .from(schema.audits)
-      .where(where)
-      .orderBy(desc(schema.audits.createdAt))
-      .limit(limit);
-    for (const a of rows) {
-      if (!a.createdAt) continue;
-      if (!contactMatch(a.contactId)) continue;
-      events.push({
-        id: `audit:${a.id}`,
-        timestamp: a.createdAt,
-        type: "audit",
-        category: "sales",
-        title: `Audited ${a.url}`,
-        summary: a.summary ?? null,
-        contactId: a.contactId,
-        contactName: a.contactId ? contactName.get(a.contactId) ?? null : null,
-        platform: platformFor(a.contactId),
-        link: "/audits",
-        badge: BADGES.audit,
-      });
-    }
-  }
-
-  // 4) Deal closed — contacts.closedDate in range (Partnership / Lost / etc.)
+  // 2) Deal closed — contacts.closedDate in range (Partnership / Lost / etc.)
   if (types.includes("deal_closed")) {
     const where = and(
       isNotNull(schema.contacts.closedDate),
