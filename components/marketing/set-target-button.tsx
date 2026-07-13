@@ -9,11 +9,13 @@ export function SetTargetButton({
   weekStart,
   currentTarget,
   userName,
+  apiPath = "/api/marketing/target",
 }: {
   userId: string;
   weekStart: string;
   currentTarget: number;
   userName: string;
+  apiPath?: string;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -23,7 +25,7 @@ export function SetTargetButton({
   function save() {
     const n = Math.max(0, Math.floor(Number(value) || 0));
     startTransition(async () => {
-      const res = await fetch("/api/marketing/target", {
+      const res = await fetch(apiPath, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, weekStart, targetPoints: n }),

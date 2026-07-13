@@ -190,6 +190,13 @@
       "when": 1782800000000,
       "tag": "0026_marketing_auto_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "6",
+      "when": 1782900000000,
+      "tag": "0027_sell_and_build_or_die",
+      "breakpoints": true
     }
   ]
 }

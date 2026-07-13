@@ -450,6 +450,75 @@ export const marketingWeeklyTargets = sqliteTable("marketing_weekly_targets", {
   userWeekUnique: uniqueIndex("marketing_targets_user_week_unique").on(t.userId, t.weekStart),
 }));
 
+// ─────────────────────────────────────────────────────────────────────────────
+// "Sell or Die" gamification — mirrors marketing_activities. `channel` is the
+// outreach medium (linkedin / email / phone / zoom / in-person / other).
+// Kinds are sales-specific: dm_sent, discovery_call, demo, proposal_sent,
+// close_won, etc. See lib/sales/points.ts.
+// ─────────────────────────────────────────────────────────────────────────────
+export const salesActivities = sqliteTable("sales_activities", {
+  id: id(),
+  userId: text("user_id").notNull(),
+  weekStart: text("week_start").notNull(),
+  channel: text("channel").notNull(),
+  kind: text("kind").notNull(),
+  count: integer("count").notNull().default(1),
+  points: integer("points").notNull(),
+  notes: text("notes"),
+  // Idempotency key for auto-fed rows (from CRM activities table).
+  source: text("source"),
+  createdAt: now(),
+}, (t) => ({
+  userWeekIdx: index("sales_activities_user_week_idx").on(t.userId, t.weekStart),
+  weekIdx: index("sales_activities_week_idx").on(t.weekStart),
+  sourceUnique: uniqueIndex("sales_activities_source_unique").on(t.source),
+}));
+
+export const salesWeeklyTargets = sqliteTable("sales_weekly_targets", {
+  id: id(),
+  userId: text("user_id").notNull(),
+  weekStart: text("week_start").notNull(),
+  targetPoints: integer("target_points").notNull(),
+  setBy: text("set_by"),
+  createdAt: now(),
+}, (t) => ({
+  userWeekUnique: uniqueIndex("sales_targets_user_week_unique").on(t.userId, t.weekStart),
+}));
+
+// ─────────────────────────────────────────────────────────────────────────────
+// "Build or Die" gamification — mirrors marketing_activities. `stack` is the
+// tool/platform (n8n / gpt / zapier / retool / code / other). Kinds are
+// delivery-specific: kickoff, milestone_shipped, feature_delivered, deploy,
+// bug_fix, refactor, integration, client_handoff, etc. See lib/builds/points.ts.
+// ─────────────────────────────────────────────────────────────────────────────
+export const buildActivities = sqliteTable("build_activities", {
+  id: id(),
+  userId: text("user_id").notNull(),
+  weekStart: text("week_start").notNull(),
+  stack: text("stack").notNull(),
+  kind: text("kind").notNull(),
+  count: integer("count").notNull().default(1),
+  points: integer("points").notNull(),
+  notes: text("notes"),
+  source: text("source"),
+  createdAt: now(),
+}, (t) => ({
+  userWeekIdx: index("build_activities_user_week_idx").on(t.userId, t.weekStart),
+  weekIdx: index("build_activities_week_idx").on(t.weekStart),
+  sourceUnique: uniqueIndex("build_activities_source_unique").on(t.source),
+}));
+
+export const buildWeeklyTargets = sqliteTable("build_weekly_targets", {
+  id: id(),
+  userId: text("user_id").notNull(),
+  weekStart: text("week_start").notNull(),
+  targetPoints: integer("target_points").notNull(),
+  setBy: text("set_by"),
+  createdAt: now(),
+}, (t) => ({
+  userWeekUnique: uniqueIndex("build_targets_user_week_unique").on(t.userId, t.weekStart),
+}));
+
 // Generic key/value app settings. JSON values keyed by name.
 // First user: outreach limits + active window overrides (see lib/outreach-config.ts).
 export const appSettings = sqliteTable("app_settings", {
@@ -558,6 +627,16 @@ export type MarketingActivity = typeof marketingActivities.$inferSelect;
 export type NewMarketingActivity = typeof marketingActivities.$inferInsert;
 export type MarketingTarget = typeof marketingWeeklyTargets.$inferSelect;
 export type NewMarketingTarget = typeof marketingWeeklyTargets.$inferInsert;
+
+export type SalesActivity = typeof salesActivities.$inferSelect;
+export type NewSalesActivity = typeof salesActivities.$inferInsert;
+export type SalesTarget = typeof salesWeeklyTargets.$inferSelect;
+export type NewSalesTarget = typeof salesWeeklyTargets.$inferInsert;
+
+export type BuildActivity = typeof buildActivities.$inferSelect;
+export type NewBuildActivity = typeof buildActivities.$inferInsert;
+export type BuildTarget = typeof buildWeeklyTargets.$inferSelect;
+export type NewBuildTarget = typeof buildWeeklyTargets.$inferInsert;
 export type UserRole = "owner" | "admin" | "salesperson" | "viewer";
 
 // Ordered most-privileged → least-privileged. Used for permission checks like

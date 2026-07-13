@@ -1,17 +1,28 @@
-// Auto-feed the Market or Die leaderboard from existing app data.
+// Auto-feed all three leaderboards from existing app data.
 //
-// Sources covered:
-//   1. content_items publish/reuse dates per platform → "post" activity
-//   2. networking_messages with status=sent → "dm" activity
-//   3. CRM activities (dm_sent / comment_drafted / follow_up_sent / email_drafted)
-//      → mapped to dm or comment, attributed via contacts.owner_name
+// Marketing sources → marketing_activities:
+//   1. content_items publish/reuse dates per platform → "post"
+//   2. networking_messages with status=sent → "dm"       (marketing-style outreach)
+//   3. CRM `comment_drafted` activities → "comment"       (engaging on prospects' content)
+//
+// Sales sources → sales_activities:
+//   1. CRM `dm_sent` → "dm_sent"
+//   2. CRM `follow_up_sent` → "follow_up"
+//   3. CRM `email_drafted` → "dm_sent" (outbound touch, treated as DM equivalent)
+//
+// (Build feed is manual-only for now — no automatic sources.)
 //
 // Every auto-row stamps a `source` key so re-runs are idempotent (unique index).
 // Manual rows have source=null and are untouched.
 
-import { and, eq, gte, isNotNull, ne } from "drizzle-orm";
+import { and, eq, gte, isNotNull } from "drizzle-orm";
 import { db, schema } from "../db/client";
 import { pointsFor, weekStartFor, type ActivityKind, type Platform } from "./points";
+import {
+  pointsFor as salesPointsFor,
+  type ActivityKind as SalesKind,
+  type Channel as SalesChannel,
+} from "../sales/points";
 
 type PlatformLike = string | null | undefined;
 
@@ -132,16 +143,41 @@ function buildNetworkingRows(
   return out;
 }
 
-// Map a CRM activity type to a Market-or-Die kind. Returns null for types
-// that aren't really marketing/sales output (notes, audits, observations).
+// Map a CRM activity type to a MARKETING kind. Only `comment_drafted` counts as
+// marketing (engaging on prospects' content). Outreach types (dm/follow_up/email)
+// now feed Sell or Die — see crmSalesKind below.
 function crmActivityKind(t: string): ActivityKind | null {
   switch (t) {
-    case "dm_sent":          return "dm";
-    case "follow_up_sent":   return "dm";       // outbound touch
-    case "email_drafted":    return "dm";       // counts as outbound effort
     case "comment_drafted":  return "comment";
-    default:                  return null;       // post_observed/note/audit_run/reply_received excluded
+    default:                  return null;
   }
+}
+
+// Map a CRM activity type to a SALES kind. Outreach touches feed Sell or Die.
+function crmSalesKind(t: string): SalesKind | null {
+  switch (t) {
+    case "dm_sent":          return "dm_sent";
+    case "follow_up_sent":   return "follow_up";
+    case "email_drafted":    return "dm_sent";     // count outbound effort as DM
+    case "reply_received":   return null;          // inbound, not a sales action
+    default:                 return null;
+  }
+}
+
+// Map a free-text platform value to a sales Channel. Used when normalizing
+// contacts.platform for CRM outreach rows going into sales_activities.
+function normalizeSalesChannel(p: string | null | undefined): SalesChannel {
+  const s = String(p || "").trim().toLowerCase();
+  if (!s) return "linkedin";
+  if (s.includes("linkedin")) return "linkedin";
+  if (s.includes("email"))    return "email";
+  if (s.includes("phone"))    return "phone";
+  if (s.includes("zoom"))     return "zoom";
+  if (s === "x" || s === "twitter") return "x";
+  if (s.includes("facebook")) return "facebook";
+  if (s.includes("instagram")) return "instagram";
+  if (s.includes("whatsapp")) return "whatsapp";
+  return "other";
 }
 
 function buildCrmRows(
@@ -179,12 +215,57 @@ function buildCrmRows(
   return out;
 }
 
+type SalesAutoRow = {
+  userId: string;
+  weekStart: string;
+  channel: SalesChannel;
+  kind: SalesKind;
+  count: number;
+  points: number;
+  source: string;
+  notes: string | null;
+};
+
+function buildSalesRows(
+  rows: Array<{
+    id: string;
+    type: string;
+    createdAt: Date | null;
+    contactPlatform: string | null;
+    ownerName: string | null;
+    contactName: string | null;
+  }>,
+  users: LiteUser[],
+  fallbackOwner: LiteUser
+): SalesAutoRow[] {
+  const out: SalesAutoRow[] = [];
+  const cutoff = lookbackCutoff();
+  for (const r of rows) {
+    if (!r.createdAt || r.createdAt < cutoff) continue;
+    const kind = crmSalesKind(r.type);
+    if (!kind) continue;
+    const channel = normalizeSalesChannel(r.contactPlatform);
+    const userId = resolveUserId(r.ownerName, users) || fallbackOwner.id;
+    out.push({
+      userId,
+      weekStart: weekStartFor(r.createdAt),
+      channel,
+      kind,
+      count: 1,
+      points: salesPointsFor(channel, kind, 1),
+      source: `crm_activity:${r.id}`,
+      notes: r.contactName ? `${r.type.replace(/_/g, " ")} · ${r.contactName.slice(0, 80)}` : r.type,
+    });
+  }
+  return out;
+}
+
 export type AutoSyncResult = {
-  scanned: { content: number; networking: number; crm: number };
-  inserted: { content: number; networking: number; crm: number; total: number };
+  scanned: { content: number; networking: number; crm: number; sales: number };
+  inserted: { content: number; networking: number; crm: number; sales: number; total: number };
   attribution: {
     workspaceOwner: { id: string; name: string } | null;
-    unmappedOwnerNames: string[]; // distinct owner_name values that didn't match any user
+    unmappedOwnerNames: string[];
   };
 };
 
@@ -204,8 +285,8 @@ export async function runMarketingAutoSync(): Promise<AutoSyncResult> {
   const owner = workspaceOwner(users);
   if (!owner) {
     return {
-      scanned: { content: 0, networking: 0, crm: 0 },
-      inserted: { content: 0, networking: 0, crm: 0, total: 0 },
+      scanned: { content: 0, networking: 0, crm: 0, sales: 0 },
+      inserted: { content: 0, networking: 0, crm: 0, sales: 0, total: 0 },
       attribution: { workspaceOwner: null, unmappedOwnerNames: [] },
     };
   }
@@ -240,7 +321,7 @@ export async function runMarketingAutoSync(): Promise<AutoSyncResult> {
   const contentRows = buildContentRows(content, owner);
   const netRows = buildNetworkingRows(networking, owner);
   const crmRows = buildCrmRows(crmActivities, users, owner);
-  const allRows = [...contentRows, ...netRows, ...crmRows];
+  const salesRows = buildSalesRows(crmActivities, users, owner);
 
   // 4. Track unmapped owner names (for surfacing back to the user)
   const unmapped = new Set<string>();
@@ -275,21 +356,51 @@ export async function runMarketingAutoSync(): Promise<AutoSyncResult> {
     return inserted;
   }
 
+  // Insert sales rows into sales_activities (separate table + unique-source
+  // index — same idempotency guarantees as marketing).
+  async function insertSalesRows(rows: SalesAutoRow[]): Promise<number> {
+    if (rows.length === 0) return 0;
+    const CHUNK = 200;
+    let inserted = 0;
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      const slice = rows.slice(i, i + CHUNK);
+      const res = await db
+        .insert(schema.salesActivities)
+        .values(slice.map((r) => ({
+          userId: r.userId,
+          weekStart: r.weekStart,
+          channel: r.channel,
+          kind: r.kind,
+          count: r.count,
+          points: r.points,
+          notes: r.notes,
+          source: r.source,
+        })))
+        .onConflictDoNothing({ target: schema.salesActivities.source })
+        .returning({ id: schema.salesActivities.id });
+      inserted += res.length;
+    }
+    return inserted;
+  }
+
   const insertedContent = await insertRows(contentRows);
   const insertedNetworking = await insertRows(netRows);
   const insertedCrm = await insertRows(crmRows);
-  const total = insertedContent + insertedNetworking + insertedCrm;
+  const insertedSales = await insertSalesRows(salesRows);
+  const total = insertedContent + insertedNetworking + insertedCrm + insertedSales;
 
   return {
     scanned: {
       content: contentRows.length,
       networking: netRows.length,
       crm: crmRows.length,
+      sales: salesRows.length,
     },
     inserted: {
       content: insertedContent,
       networking: insertedNetworking,
       crm: insertedCrm,
+      sales: insertedSales,
       total,
     },
     attribution: {

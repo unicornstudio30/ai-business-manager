@@ -69,6 +69,10 @@ import { getLeaderboard } from "@/lib/db/marketing";
 import { weekStartFor, fmtWeekLabel } from "@/lib/marketing/points";
 import { runMarketingAutoSync } from "@/lib/marketing/auto-sync";
 
+// Sell or Die + Build or Die leaderboards (read-only)
+import { getSalesLeaderboard } from "@/lib/db/sales-leaderboard";
+import { getBuildLeaderboard } from "@/lib/db/build-leaderboard";
+
 // JSON-serialize a result wrapping it as MCP text content.
 function ok(data: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
@@ -1125,20 +1129,117 @@ export function buildMcpServer(): McpServer {
   server.registerTool(
     "marketing_auto_sync",
     {
-      title: "Market or Die · Auto-Sync From CRM/Content/Networking",
+      title: "Leaderboards · Auto-Sync From CRM/Content/Networking",
       description:
-        "Re-feeds the leaderboard from existing app data: each content_items " +
-        "publish/reuse date per platform becomes a 'post', each sent " +
-        "networking message becomes a 'dm', and each CRM activity (dm_sent / " +
-        "follow_up_sent / email_drafted / comment_drafted) is mapped to a dm " +
-        "or comment attributed via the contact's owner_name → user. Idempotent " +
-        "(source-keyed); safe to call repeatedly. Returns scanned/inserted " +
-        "counts per source and any owner_name values that did not map to a user.",
+        "Re-feeds both Market or Die and Sell or Die from existing app data. " +
+        "Marketing → content_items publish/reuse dates (posts), sent networking " +
+        "messages (DMs), and CRM comment_drafted (comments). " +
+        "Sales → CRM dm_sent / follow_up_sent / email_drafted, attributed via " +
+        "contact.owner_name → user. Build or Die is manual-only. Idempotent " +
+        "(source-keyed); safe to call repeatedly. Returns scanned/inserted counts " +
+        "per feed and any owner_name values that did not map to a user.",
       inputSchema: {},
     },
     async () => {
       const result = await runMarketingAutoSync();
       return ok(result);
+    }
+  );
+
+  // ────────────────────────────────────────────────────────────────────────
+  // SELL OR DIE — weekly sales leaderboard (read-only)
+  // ────────────────────────────────────────────────────────────────────────
+
+  server.registerTool(
+    "sales_leaderboard",
+    {
+      title: "Sell or Die · Weekly Leaderboard",
+      description:
+        "Read the team's weekly sales leaderboard. Same shape as marketing_leaderboard " +
+        "but sourced from sales_activities (DMs, discovery calls, demos, proposals, " +
+        "closes). Points reward late-funnel work: a close_won is worth 500× more than " +
+        "a DM. Pass weekStart=YYYY-MM-DD (UTC Monday); omit for the current week.",
+      inputSchema: {
+        weekStart: z.string().optional().describe("UTC Monday YYYY-MM-DD. Omit for this week."),
+      },
+    },
+    async ({ weekStart }) => {
+      const ws = weekStart || weekStartFor();
+      const { rows } = await getSalesLeaderboard(ws);
+      return ok({
+        weekStart: ws,
+        weekLabel: fmtWeekLabel(ws),
+        teamTotals: {
+          activeUsers: rows.length,
+          totalWeekPoints: rows.reduce((s, r) => s + r.weekPoints, 0),
+          hitTargetCount: rows.filter((r) => r.hitTarget).length,
+          topStreak: Math.max(0, ...rows.map((r) => r.streakWeeks)),
+        },
+        rows: rows.map((r) => ({
+          rank: r.rank,
+          userId: r.userId,
+          name: r.name,
+          email: r.email,
+          role: r.role,
+          level: r.level,
+          weekPoints: r.weekPoints,
+          targetPoints: r.targetPoints,
+          pct: r.pct,
+          hitTarget: r.hitTarget,
+          streakWeeks: r.streakWeeks,
+          activityCount: r.activityCount,
+          lifetimePoints: r.lifetimePoints,
+        })),
+      });
+    }
+  );
+
+  // ────────────────────────────────────────────────────────────────────────
+  // BUILD OR DIE — weekly delivery leaderboard (read-only)
+  // ────────────────────────────────────────────────────────────────────────
+
+  server.registerTool(
+    "build_leaderboard",
+    {
+      title: "Build or Die · Weekly Leaderboard",
+      description:
+        "Read the team's weekly delivery leaderboard. Same shape as marketing_leaderboard " +
+        "but sourced from build_activities (features delivered, integrations wired, " +
+        "deploys, bug fixes, client handoffs). Points reward shipped work — a " +
+        "client_handoff is worth 200 pts, a feature_delivered 150 pts. All manual today. " +
+        "Pass weekStart=YYYY-MM-DD (UTC Monday); omit for the current week.",
+      inputSchema: {
+        weekStart: z.string().optional().describe("UTC Monday YYYY-MM-DD. Omit for this week."),
+      },
+    },
+    async ({ weekStart }) => {
+      const ws = weekStart || weekStartFor();
+      const { rows } = await getBuildLeaderboard(ws);
+      return ok({
+        weekStart: ws,
+        weekLabel: fmtWeekLabel(ws),
+        teamTotals: {
+          activeUsers: rows.length,
+          totalWeekPoints: rows.reduce((s, r) => s + r.weekPoints, 0),
+          hitTargetCount: rows.filter((r) => r.hitTarget).length,
+          topStreak: Math.max(0, ...rows.map((r) => r.streakWeeks)),
+        },
+        rows: rows.map((r) => ({
+          rank: r.rank,
+          userId: r.userId,
+          name: r.name,
+          email: r.email,
+          role: r.role,
+          level: r.level,
+          weekPoints: r.weekPoints,
+          targetPoints: r.targetPoints,
+          pct: r.pct,
+          hitTarget: r.hitTarget,
+          streakWeeks: r.streakWeeks,
+          activityCount: r.activityCount,
+          lifetimePoints: r.lifetimePoints,
+        })),
+      });
     }
   );
 
