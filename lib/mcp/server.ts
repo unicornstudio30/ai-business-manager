@@ -59,6 +59,7 @@ import { PLATFORM_LIMITS, type PlatformKey, type ActionKey } from "@/lib/sales-l
 
 // Workspace users + roles (read-only over MCP — destructive ops live in /admin)
 import { listUsers } from "@/lib/auth/users";
+import { getOwnerMappingReport } from "@/lib/db/owner-mapping";
 
 // Market or Die — weekly marketing leaderboard (read-only) + auto-sync
 import { getLeaderboard } from "@/lib/db/marketing";
@@ -943,6 +944,42 @@ export function buildMcpServer(): McpServer {
           active: !!u.active,
           created_at: u.createdAt?.toISOString() ?? null,
           last_login_at: u.lastLoginAt?.toISOString() ?? null,
+        })),
+      });
+    }
+  );
+
+  server.registerTool(
+    "owner_mapping",
+    {
+      title: "Users · Notion Person ↔ User Mapping Report",
+      description:
+        "Health check for CRM attribution. Returns every distinct 'Person' value " +
+        "on contacts in Notion CRM, how many contacts each owns, how many recent " +
+        "activities exist under it, and which app user (if any) it currently " +
+        "resolves to — via the user's notion_person override or (fallback) name " +
+        "match. Unmapped owner names fall through to the workspace owner when " +
+        "auto-sync feeds Sell or Die. Use to spot attribution gaps.",
+      inputSchema: {},
+    },
+    async () => {
+      const report = await getOwnerMappingReport();
+      return ok({
+        totals: {
+          ownerValues: report.rows.length,
+          mapped: report.mappedOwnerNames,
+          unmapped: report.unmappedOwnerNames,
+          contactsWithOwner: report.totalContactsWithOwner,
+          contactsWithoutOwner: report.totalContactsUnowned,
+        },
+        rows: report.rows.map((r) => ({
+          owner_name: r.ownerName,
+          contacts: r.contactCount,
+          recent_activities: r.activityCount,
+          mapped_to: r.mappedTo
+            ? { id: r.mappedTo.id, name: r.mappedTo.name, email: r.mappedTo.email }
+            : null,
+          matched_via: r.matchedVia,
         })),
       });
     }

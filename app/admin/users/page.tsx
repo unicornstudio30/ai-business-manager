@@ -1,12 +1,12 @@
-// /admin/users — workspace user + role management. Middleware enforces that
-// only owner|admin can hit this route; this page calls listUsers() directly
-// (we're already server-side) instead of going through the GET API.
+// /admin/users — workspace user + role management + Notion owner mapping.
 
 import { redirect } from "next/navigation";
 import { Shield } from "lucide-react";
 import { listUsers } from "@/lib/auth/users";
 import { getCurrentUser } from "@/lib/auth/server";
 import { UsersTable } from "@/components/admin/users-table";
+import { OwnerMappingPanel } from "@/components/admin/owner-mapping-panel";
+import { getOwnerMappingReport, getUserOwnedCounts } from "@/lib/db/owner-mapping";
 import type { UserRole } from "@/lib/db/schema";
 
 export const dynamic = "force-dynamic";
@@ -16,10 +16,14 @@ export default async function AdminUsersPage() {
   if (!me) redirect("/login?from=/admin/users");
   if (me.role !== "owner" && me.role !== "admin") redirect("/");
 
-  const users = await listUsers();
+  const [users, mapping, ownedCounts] = await Promise.all([
+    listUsers(),
+    getOwnerMappingReport(),
+    getUserOwnedCounts(),
+  ]);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
       <div>
         <div className="text-xs font-medium uppercase tracking-wider text-stone-500 mb-1">Admin</div>
         <h1 className="text-3xl font-semibold tracking-tight text-stone-900 flex items-center gap-2">
@@ -41,9 +45,21 @@ export default async function AdminUsersPage() {
             role: u.role as "owner" | "admin" | "salesperson" | "viewer",
             active: !!u.active,
             notionPerson: u.notionPerson ?? null,
+            ownedContacts: ownedCounts.get(u.id) ?? 0,
             createdAt: u.createdAt?.toISOString() ?? null,
             lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
           })),
+        }}
+      />
+
+      <OwnerMappingPanel
+        initial={{
+          users: mapping.users,
+          rows: mapping.rows,
+          totalContactsWithOwner: mapping.totalContactsWithOwner,
+          totalContactsUnowned: mapping.totalContactsUnowned,
+          mappedOwnerNames: mapping.mappedOwnerNames,
+          unmappedOwnerNames: mapping.unmappedOwnerNames,
         }}
       />
     </div>

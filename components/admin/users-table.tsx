@@ -21,6 +21,7 @@ type UserRow = {
   role: Role;
   active: boolean;
   notionPerson: string | null;
+  ownedContacts: number;
   createdAt: string | null;
   lastLoginAt: string | null;
 };
@@ -147,6 +148,9 @@ export function UsersTable({ initial }: { initial: { me: { id: string; role: Rol
               <th className="text-left px-3 py-2 hidden md:table-cell" title="Maps the user to the Notion 'Person' value on contacts. Defaults to user name if blank.">
                 Notion Person
               </th>
+              <th className="text-left px-3 py-2 hidden lg:table-cell tabular-nums" title="Contacts in CRM currently attributed to this user via Notion Person → name resolution">
+                Leads
+              </th>
               <th className="text-left px-3 py-2 hidden sm:table-cell">Last login</th>
               <th className="text-right px-3 py-2 w-28">Actions</th>
             </tr>
@@ -210,6 +214,13 @@ export function UsersTable({ initial }: { initial: { me: { id: string; role: Rol
                       placeholder={u.name || "—"}
                       className="w-32 rounded border border-stone-200 px-2 py-1 text-xs text-stone-700 focus:outline-none focus:ring-1 focus:ring-stone-400 disabled:bg-stone-50 disabled:opacity-60"
                     />
+                  </td>
+                  <td className="px-3 py-2 text-xs text-stone-700 tabular-nums hidden lg:table-cell">
+                    {u.ownedContacts > 0 ? (
+                      u.ownedContacts
+                    ) : (
+                      <span className="text-stone-400">—</span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-[11px] text-stone-500 hidden sm:table-cell">
                     {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : "—"}
