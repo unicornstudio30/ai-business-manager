@@ -12,8 +12,14 @@
 
 import { notion, NOTION_DBS, NOTION_DATA_SOURCES, isNotionConfigured } from "./client";
 import { ALL_KINDS } from "../marketing/points";
+import { ALL_KINDS as SALES_KINDS } from "../sales/points";
 
 type SetupResult = { added: string[]; existed: string[]; error?: string };
+
+// Sales action items that show up as Notion multi_select options on the CRM
+// "Actions" column. Users check them in Notion → sync → app creates
+// sales_activities rows.
+const SALES_ACTION_ITEMS: string[] = SALES_KINDS.map((k) => k.label);
 
 const CRM_PROPERTIES_TO_ADD: Record<string, any> = {
   "Closed Reason": { rich_text: {} },
@@ -21,9 +27,15 @@ const CRM_PROPERTIES_TO_ADD: Record<string, any> = {
   // one line per stage/action log (newest first). Read-only from Notion's
   // perspective — treat it as an audit trail.
   "Log Actions": { rich_text: {} },
+  // User-facing multi-select. Check any of these items in Notion on a
+  // contact → next sync creates matching sales_activities rows credited to
+  // the contact owner. Idempotent (source-keyed per contact+item).
+  "Actions": {
+    multi_select: { options: SALES_ACTION_ITEMS.map((name) => ({ name })) },
+  },
 };
 
-export async function setupNotionCrmColumns(): Promise<SetupResult> {
+export async function setupNotionCrmColumns(): Promise<SetupResult & { mergedActionsOptions?: string[] }> {
   if (!isNotionConfigured()) {
     return { added: [], existed: [], error: "NOTION_TOKEN not set" };
   }
@@ -36,13 +48,39 @@ export async function setupNotionCrmColumns(): Promise<SetupResult> {
     const db = await n.databases.retrieve({ database_id: NOTION_DBS.contacts });
     const existingProps = (db as any).properties ?? {};
 
+    // 1. New props (Closed Reason, Log Actions) — add if missing.
     const propsToAdd: Record<string, any> = {};
     for (const [name, schema] of Object.entries(CRM_PROPERTIES_TO_ADD)) {
+      if (name === "Actions") continue;  // handled separately (multi-select merge)
       if (existingProps[name]) {
         existed.push(name);
       } else {
         propsToAdd[name] = schema;
       }
+    }
+
+    // 2. Actions multi_select: merge options if already present, create if not.
+    const actionsProp = existingProps["Actions"];
+    let mergedOptions = SALES_ACTION_ITEMS;
+    if (!actionsProp) {
+      propsToAdd["Actions"] = CRM_PROPERTIES_TO_ADD["Actions"];
+    } else if (actionsProp.type === "multi_select") {
+      const existingOpts: { name: string; id?: string }[] = actionsProp.multi_select?.options ?? [];
+      const existingNames = new Set(existingOpts.map((o) => o.name));
+      const toAdd = SALES_ACTION_ITEMS.filter((n) => !existingNames.has(n));
+      if (toAdd.length > 0) {
+        const merged = [
+          ...existingOpts.map((o) => (o.id ? { id: o.id, name: o.name } : { name: o.name })),
+          ...toAdd.map((name) => ({ name })),
+        ];
+        propsToAdd["Actions"] = { multi_select: { options: merged } };
+        mergedOptions = merged.map((o) => o.name);
+      } else {
+        existed.push("Actions");
+        mergedOptions = existingOpts.map((o) => o.name);
+      }
+    } else {
+      existed.push(`Actions (as ${actionsProp.type}, not multi_select — left alone)`);
     }
 
     if (Object.keys(propsToAdd).length > 0) {
@@ -52,11 +90,11 @@ export async function setupNotionCrmColumns(): Promise<SetupResult> {
       } as any);
       added.push(...Object.keys(propsToAdd));
     }
+
+    return { added, existed, mergedActionsOptions: mergedOptions };
   } catch (err: any) {
     return { added, existed, error: err?.message || String(err) };
   }
-
-  return { added, existed };
 }
 
 // Ensures the Content Calendar has a "Type" select column populated with

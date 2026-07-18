@@ -111,6 +111,15 @@ export const ALL_KINDS: { kind: ActivityKind; label: string }[] = [
   { kind: "other",               label: "Other" },
 ];
 
+// Reverse lookup: Notion multi_select stores labels ("Discovery call"), not
+// slugs. Turns a label back into its kind for auto-sync from contacts.actionsDone.
+export function kindFromLabel(label: string | null | undefined): ActivityKind | null {
+  if (!label) return null;
+  const needle = label.trim().toLowerCase();
+  const hit = ALL_KINDS.find((k) => k.label.trim().toLowerCase() === needle);
+  return hit?.kind ?? null;
+}
+
 export const ALL_CHANNELS: { channel: Channel; label: string }[] = [
   { channel: "linkedin",  label: "LinkedIn" },
   { channel: "email",     label: "Email" },

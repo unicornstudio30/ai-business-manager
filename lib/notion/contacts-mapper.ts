@@ -143,6 +143,9 @@ export function notionToContact(page: PageObjectResponse): NewContact {
     relation: JSON.stringify(multiSelect(props["Relation"])),
     // Top 50 = whether "Top 50" is one of the values in the Category multi-select.
     top50: multiSelect(props["Category"]).includes("Top 50") ? 1 : 0,
+    // Sales action items ticked on this contact in Notion's "Actions"
+    // multi_select. Auto-sync turns each into a sales_activities row.
+    actionsDone: JSON.stringify(multiSelect(props["Actions"])),
     // Lead owner from Notion "Person" column. Tries the People property type
     // first; falls back to rich-text / select if you stored it as a string.
     ownerName: people(props["Person"]) || people(props["Owner"]) || null,

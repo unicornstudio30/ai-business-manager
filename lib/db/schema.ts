@@ -73,6 +73,12 @@ export const contacts = sqliteTable(
     // /top-50 page surfaces these for CSV download (all + per platform).
     top50: integer("top50").notNull().default(0),
 
+    // Sales action items ticked on this contact in Notion's CRM "Actions"
+    // multi_select column. JSON array of labels (e.g. ["DM sent", "Discovery
+    // call"]). Sell or Die auto-sync creates one sales_activities row per
+    // (contact, item) combo — idempotent via source key.
+    actionsDone: text("actions_done"),
+
     createdAt: now(),
     updatedAt: ts("updated_at").$defaultFn(() => new Date()),
     dirty: integer("dirty").notNull().default(0),

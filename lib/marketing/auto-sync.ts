@@ -20,10 +20,12 @@ import { db, schema } from "../db/client";
 import { pointsFor, weekStartFor, type ActivityKind, type Platform } from "./points";
 import {
   pointsFor as salesPointsFor,
+  kindFromLabel,
   type ActivityKind as SalesKind,
   type Channel as SalesChannel,
 } from "../sales/points";
 import { kindForStage } from "../sales/stage-credits";
+import { normalizeChannelFromPlatform } from "../sales/channel-from-platform";
 import { resolveOwnerName } from "../name-matcher";
 
 type PlatformLike = string | null | undefined;
@@ -254,6 +256,59 @@ type SalesAutoRow = {
 // CRM Status → sales credit map lives in lib/sales/stage-credits.ts so the
 // manual log modal and this auto-sync stay in lockstep.
 
+// Read the JSON-encoded array of labels stored in contacts.actionsDone
+// (populated from Notion's "Actions" multi_select column).
+function parseActionsDone(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.filter((x) => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+// For each contact with items checked in Notion's "Actions" multi_select,
+// generate one sales_activities row per (contact, item) pair. Idempotent
+// via source key `notion_action:<contactId>:<kind>`.
+function buildContactActionRows(
+  contacts: Array<{
+    id: string;
+    name: string | null;
+    platform: string | null;
+    ownerName: string | null;
+    actionsDone: string | null;
+    updatedAt: Date | null;
+  }>,
+  users: LiteUser[],
+  fallbackOwner: LiteUser
+): SalesAutoRow[] {
+  const out: SalesAutoRow[] = [];
+  for (const c of contacts) {
+    const labels = parseActionsDone(c.actionsDone);
+    if (labels.length === 0) continue;
+    const channel = normalizeChannelFromPlatform(c.platform);
+    const userId = resolveUserId(c.ownerName, users) || fallbackOwner.id;
+    const when = c.updatedAt ?? new Date();
+    for (const label of labels) {
+      const kind = kindFromLabel(label);
+      if (!kind) continue;    // ignore unknown labels
+      out.push({
+        userId,
+        weekStart: weekStartFor(when),
+        channel,
+        kind,
+        count: 1,
+        points: salesPointsFor(channel, kind, 1),
+        source: `notion_action:${c.id}:${kind}`,
+        notes: c.name ? `${label} · ${c.name.slice(0, 80)}` : label,
+        contactId: c.id,
+      });
+    }
+  }
+  return out;
+}
+
 function buildStageRows(
   contacts: Array<{
     id: string;
@@ -390,7 +445,8 @@ export async function runMarketingAutoSync(): Promise<AutoSyncResult> {
     ));
 
   // Contacts with a Notion Status set — feeds stage-based Sell or Die credit
-  // (each Status flip earns points for the owner).
+  // (each Status flip earns points for the owner). Also carries actionsDone
+  // (from Notion "Actions" multi_select) for the Action-tracking auto-sync.
   const contactsForStage = await db
     .select({
       id: schema.contacts.id,
@@ -401,9 +457,9 @@ export async function runMarketingAutoSync(): Promise<AutoSyncResult> {
       updatedAt: schema.contacts.updatedAt,
       platform: schema.contacts.platform,
       ownerName: schema.contacts.ownerName,
+      actionsDone: schema.contacts.actionsDone,
     })
-    .from(schema.contacts)
-    .where(isNotNull(schema.contacts.status));
+    .from(schema.contacts);
 
   // 3. Build rows
   const contentRows = buildContentRows(content, users, owner);
@@ -411,7 +467,8 @@ export async function runMarketingAutoSync(): Promise<AutoSyncResult> {
   const crmRows = buildCrmRows(crmActivities, users, owner);
   const salesActivityRows = buildSalesRows(crmActivities, users, owner);
   const stageRows = buildStageRows(contactsForStage, users, owner);
-  const salesRows = [...salesActivityRows, ...stageRows];
+  const actionRows = buildContactActionRows(contactsForStage, users, owner);
+  const salesRows = [...salesActivityRows, ...stageRows, ...actionRows];
 
   // 4. Track unmapped owner names (from CRM activities, stage-tracked
   // contacts, and Content Calendar Person columns) so admins can see
