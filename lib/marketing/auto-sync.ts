@@ -23,6 +23,7 @@ import {
   type ActivityKind as SalesKind,
   type Channel as SalesChannel,
 } from "../sales/points";
+import { kindForStage } from "../sales/stage-credits";
 import { resolveOwnerName } from "../name-matcher";
 
 type PlatformLike = string | null | undefined;
@@ -249,29 +250,8 @@ type SalesAutoRow = {
   notes: string | null;
 };
 
-// CRM Status → sales credit map. When a contact reaches one of these
-// stages in Notion, the owner earns the mapped kind at auto-sync time.
-// Source key is `contact_stage:<contactId>:<status>` so each stage is
-// credited exactly once per contact (moving stages awards fresh credit).
-//
-// Stages NOT in this map are skipped (Prospect/Connection = added but no
-// action; per-stage follow-ups already covered by follow_up_sent activity
-// rows; Follow up later = deferred).
-const STAGE_TO_SALES: Record<string, SalesKind> = {
-  "1st message":                 "dm_sent",
-  "Inmail":                      "dm_sent",
-  "Lead":                        "discovery_call",   // they replied / engaged
-  "Qualified":                   "objection_handled", // qualification done
-  "Not qualified":               "objection_handled",
-  "Proposal Sent":               "proposal_sent",
-  "Post Proposal Follow-up-1":   "follow_up",
-  "Post Proposal Follow-up-2":   "follow_up",
-  "Booking":                     "discovery_call",   // call scheduled
-  "First call":                  "demo",             // call happened
-  "Partnership":                 "close_won",
-  "Lost":                        "close_lost",
-  "Closed without Partnership":  "close_lost",
-};
+// CRM Status → sales credit map lives in lib/sales/stage-credits.ts so the
+// manual log modal and this auto-sync stay in lockstep.
 
 function buildStageRows(
   contacts: Array<{
@@ -291,7 +271,7 @@ function buildStageRows(
   const cutoff = lookbackCutoff();
   for (const c of contacts) {
     if (!c.status) continue;
-    const kind = STAGE_TO_SALES[c.status];
+    const kind = kindForStage(c.status as any);
     if (!kind) continue;
     // Best available "when did this stage happen" — prefer explicit
     // statusDate (Notion Status date column), then updated_at, then created_at.
