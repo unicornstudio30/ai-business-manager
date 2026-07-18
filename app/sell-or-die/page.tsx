@@ -67,6 +67,7 @@ export default async function SellOrDiePage({
         meId={me?.id ?? null}
         canSetTarget={canSetTarget}
         setTargetApiPath="/api/sales/target"
+        hrefForUser={(userId) => `/sell-or-die/user/${userId}`}
         emptyMessage="No sales activity yet. Log a DM, discovery call, or close — or hit Auto-sync to pull recent CRM outreach."
       />
     </div>

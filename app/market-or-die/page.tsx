@@ -66,6 +66,7 @@ export default async function MarketOrDiePage({
         meId={me?.id ?? null}
         canSetTarget={canSetTarget}
         setTargetApiPath="/api/marketing/target"
+        hrefForUser={(userId) => `/market-or-die/user/${userId}`}
         emptyMessage="No active users yet. Add team members in Users & roles to start the leaderboard."
       />
     </div>

@@ -61,6 +61,7 @@ export default async function BuildOrDiePage({
         meId={me?.id ?? null}
         canSetTarget={canSetTarget}
         setTargetApiPath="/api/build/target"
+        hrefForUser={(userId) => `/build-or-die/user/${userId}`}
         emptyMessage="No builds yet. Log a feature delivery, integration, or deploy to get started."
       />
     </div>

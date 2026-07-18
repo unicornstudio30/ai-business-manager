@@ -18,7 +18,9 @@ type Props = {
   canSetTarget: boolean;
   // Which /api/*/target endpoint the SetTargetButton should POST to
   setTargetApiPath: string;
-  // Which /api/*/log endpoint to remove entries (unused today but for symmetry)
+  // Builds the drill-down link per row (Market/Sell/Build each pass their own).
+  // Return null to render the name as plain text (non-clickable).
+  hrefForUser?: (userId: string) => string | null;
   emptyMessage?: string;
 };
 
@@ -71,6 +73,7 @@ export function LeaderboardView({
   meId,
   canSetTarget,
   setTargetApiPath,
+  hrefForUser,
   emptyMessage,
 }: Props) {
   const totalWeekPoints = rows.reduce((s, r) => s + r.weekPoints, 0);
@@ -185,7 +188,17 @@ export function LeaderboardView({
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-semibold text-stone-900 truncate">{r.name}</span>
+                        {hrefForUser && hrefForUser(r.userId) ? (
+                          <Link
+                            href={hrefForUser(r.userId)!}
+                            className="text-sm font-semibold text-stone-900 hover:underline truncate"
+                            title="See this user's activity"
+                          >
+                            {r.name}
+                          </Link>
+                        ) : (
+                          <span className="text-sm font-semibold text-stone-900 truncate">{r.name}</span>
+                        )}
                         {levelBadge(r.level)}
                         {isMe && (
                           <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">You</span>
