@@ -196,7 +196,7 @@ export function LogActivityModal({
             </div>
             <div>
               <label htmlFor="m-kind" className="text-xs font-medium text-stone-700 mb-1.5 block">
-                Activity
+                Type <span className="text-stone-400 font-normal">(matches Notion Content Calendar Type)</span>
               </label>
               <select
                 id="m-kind"
