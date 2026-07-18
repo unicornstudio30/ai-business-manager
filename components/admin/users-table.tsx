@@ -21,7 +21,14 @@ type UserRow = {
   role: Role;
   active: boolean;
   notionPerson: string | null;
-  ownedContacts: number;
+  // Contacts owned by this user, bucketed by CRM Status (from lib/stages.ts).
+  ownedBreakdown: {
+    cold: number;
+    leads: number;
+    clients: number;
+    archived: number;
+    total: number;
+  };
   createdAt: string | null;
   lastLoginAt: string | null;
 };
@@ -148,8 +155,8 @@ export function UsersTable({ initial }: { initial: { me: { id: string; role: Rol
               <th className="text-left px-3 py-2 hidden md:table-cell" title="Maps the user to the Notion 'Person' value on contacts. Defaults to user name if blank.">
                 Notion Person
               </th>
-              <th className="text-left px-3 py-2 hidden lg:table-cell tabular-nums" title="Contacts in CRM currently attributed to this user via Notion Person → name resolution">
-                Leads
+              <th className="text-left px-3 py-2 hidden lg:table-cell" title="Contacts owned by this user in CRM, bucketed by Status. Cold = Prospect/Connection/1st message/Inmail/Prospect follow-ups. Leads = Lead → First call (active pipeline). Clients = Partnership.">
+                CRM Status
               </th>
               <th className="text-left px-3 py-2 hidden sm:table-cell">Last login</th>
               <th className="text-right px-3 py-2 w-28">Actions</th>
@@ -215,11 +222,30 @@ export function UsersTable({ initial }: { initial: { me: { id: string; role: Rol
                       className="w-32 rounded border border-stone-200 px-2 py-1 text-xs text-stone-700 focus:outline-none focus:ring-1 focus:ring-stone-400 disabled:bg-stone-50 disabled:opacity-60"
                     />
                   </td>
-                  <td className="px-3 py-2 text-xs text-stone-700 tabular-nums hidden lg:table-cell">
-                    {u.ownedContacts > 0 ? (
-                      u.ownedContacts
+                  <td className="px-3 py-2 hidden lg:table-cell">
+                    {u.ownedBreakdown.total === 0 ? (
+                      <span className="text-xs text-stone-400">—</span>
                     ) : (
-                      <span className="text-stone-400">—</span>
+                      <div className="inline-flex items-center gap-1 text-[11px] tabular-nums">
+                        <span
+                          className="inline-flex items-center gap-0.5 rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-sky-800"
+                          title="Cold — Prospect / Connection / 1st message / Inmail / Prospect follow-ups"
+                        >
+                          Cold {u.ownedBreakdown.cold}
+                        </span>
+                        <span
+                          className="inline-flex items-center gap-0.5 rounded border border-green-200 bg-green-50 px-1.5 py-0.5 text-green-800"
+                          title="Leads — Lead through First call (active pipeline)"
+                        >
+                          Leads {u.ownedBreakdown.leads}
+                        </span>
+                        <span
+                          className="inline-flex items-center gap-0.5 rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-violet-800"
+                          title="Clients — Partnership"
+                        >
+                          Clients {u.ownedBreakdown.clients}
+                        </span>
+                      </div>
                     )}
                   </td>
                   <td className="px-3 py-2 text-[11px] text-stone-500 hidden sm:table-cell">

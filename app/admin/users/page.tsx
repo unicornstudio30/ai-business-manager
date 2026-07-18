@@ -38,17 +38,20 @@ export default async function AdminUsersPage() {
       <UsersTable
         initial={{
           me: { id: me.id, role: me.role as UserRole as "owner" | "admin" | "salesperson" | "viewer" },
-          users: users.map((u) => ({
-            id: u.id,
-            email: u.email,
-            name: u.name,
-            role: u.role as "owner" | "admin" | "salesperson" | "viewer",
-            active: !!u.active,
-            notionPerson: u.notionPerson ?? null,
-            ownedContacts: ownedCounts.get(u.id) ?? 0,
-            createdAt: u.createdAt?.toISOString() ?? null,
-            lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
-          })),
+          users: users.map((u) => {
+            const bd = ownedCounts.get(u.id) ?? { cold: 0, leads: 0, clients: 0, archived: 0, total: 0 };
+            return {
+              id: u.id,
+              email: u.email,
+              name: u.name,
+              role: u.role as "owner" | "admin" | "salesperson" | "viewer",
+              active: !!u.active,
+              notionPerson: u.notionPerson ?? null,
+              ownedBreakdown: bd,
+              createdAt: u.createdAt?.toISOString() ?? null,
+              lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
+            };
+          }),
         }}
       />
 

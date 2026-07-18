@@ -25,6 +25,14 @@ type UserSummary = {
 type OwnerMappingRow = {
   ownerName: string;
   contactCount: number;
+  // Split by CRM Status — see lib/db/owner-mapping.ts::StatusBreakdown
+  breakdown: {
+    cold: number;
+    leads: number;
+    clients: number;
+    archived: number;
+    total: number;
+  };
   activityCount: number;
   mappedTo: UserSummary | null;
   matchedVia: "notion_person" | "name" | "fuzzy" | null;
@@ -108,11 +116,11 @@ export function OwnerMappingPanel({
         </div>
       ) : (
         <div className="surface overflow-x-auto">
-          <table className="w-full text-sm min-w-[560px]">
+          <table className="w-full text-sm min-w-[720px]">
             <thead className="bg-stone-50 text-[11px] uppercase tracking-wide text-stone-500">
               <tr>
                 <th className="text-left px-3 py-2">Notion "Person"</th>
-                <th className="text-left px-3 py-2 tabular-nums">Contacts</th>
+                <th className="text-left px-3 py-2">CRM Status</th>
                 <th className="text-left px-3 py-2 tabular-nums hidden sm:table-cell">Activity (120d)</th>
                 <th className="text-left px-3 py-2">Mapped to</th>
               </tr>
@@ -123,7 +131,36 @@ export function OwnerMappingPanel({
                 return (
                   <tr key={r.ownerName}>
                     <td className="px-3 py-2 font-medium text-stone-900">{r.ownerName}</td>
-                    <td className="px-3 py-2 text-stone-700 tabular-nums">{r.contactCount}</td>
+                    <td className="px-3 py-2">
+                      <div className="inline-flex items-center gap-1 text-[11px] tabular-nums">
+                        <span
+                          className="inline-flex items-center gap-0.5 rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-sky-800"
+                          title="Cold — Prospect / Connection / 1st message / Inmail / Prospect follow-ups"
+                        >
+                          Cold {r.breakdown.cold}
+                        </span>
+                        <span
+                          className="inline-flex items-center gap-0.5 rounded border border-green-200 bg-green-50 px-1.5 py-0.5 text-green-800"
+                          title="Leads — Lead through First call (active pipeline)"
+                        >
+                          Leads {r.breakdown.leads}
+                        </span>
+                        <span
+                          className="inline-flex items-center gap-0.5 rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-violet-800"
+                          title="Clients — Partnership"
+                        >
+                          Clients {r.breakdown.clients}
+                        </span>
+                        {r.breakdown.archived > 0 && (
+                          <span
+                            className="inline-flex items-center gap-0.5 rounded border border-stone-200 bg-stone-50 px-1.5 py-0.5 text-stone-600"
+                            title="Archived — Lost / Closed without Partnership / Not qualified / Follow up later"
+                          >
+                            Arch {r.breakdown.archived}
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-3 py-2 text-stone-500 tabular-nums hidden sm:table-cell">{r.activityCount}</td>
                     <td className="px-3 py-2">
                       {r.mappedTo && r.matchedVia === "fuzzy" ? (

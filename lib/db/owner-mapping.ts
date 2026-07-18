@@ -10,6 +10,39 @@
 import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
 import { db, schema } from "./client";
 import { resolveOwnerName, type NameMatchTier } from "../name-matcher";
+import { HOT_LEAD_STAGES, STAGE_GROUPS, isActiveClient, isTerminal, type Stage } from "../stages";
+
+// Split contacts by CRM Status into meaningful buckets. Everything is
+// driven by the actual Status field in Notion — no arbitrary counts.
+//   cold   — top-of-funnel (Prospect / Connection / 1st message / Inmail /
+//            Prospect follow-ups)
+//   leads  — active pipeline (Lead through First call = HOT_LEAD_STAGES)
+//   clients — Partnership
+//   (archived stages — Lost / Closed / Not qualified / Follow up later —
+//    are excluded from these three counts)
+const COLD_STAGES = new Set<string>([...STAGE_GROUPS.Cold]);
+const LEAD_STAGES = new Set<string>(HOT_LEAD_STAGES);
+
+export type StatusBreakdown = {
+  cold: number;
+  leads: number;
+  clients: number;
+  archived: number;    // Lost / Closed without Partnership / Not qualified / Follow up later
+  total: number;       // sum incl archived
+};
+
+function bucketStatus(status: string | null): keyof StatusBreakdown | null {
+  if (!status) return null;
+  if (LEAD_STAGES.has(status)) return "leads";
+  if (COLD_STAGES.has(status)) return "cold";
+  if (isActiveClient(status)) return "clients";
+  if (isTerminal(status) || status === "Follow up later") return "archived";
+  return null;
+}
+
+function emptyBreakdown(): StatusBreakdown {
+  return { cold: 0, leads: 0, clients: 0, archived: 0, total: 0 };
+}
 
 export type OwnerName = string;
 
@@ -22,8 +55,9 @@ export type UserSummary = {
 
 export type OwnerMappingRow = {
   ownerName: OwnerName;
-  contactCount: number;
-  activityCount: number;      // activities in the last 120 days on those contacts
+  contactCount: number;            // total, incl. archived
+  breakdown: StatusBreakdown;      // cold / leads / clients / archived (from CRM Status)
+  activityCount: number;           // recent activities
   // Which app-user this owner_name currently resolves to (if any).
   //   - "notion_person": exact match on override column (deterministic)
   //   - "name": exact match on user's display name
@@ -42,11 +76,10 @@ export type OwnerMappingReport = {
   unmappedOwnerNames: number;                // ownerName rows with mappedTo === null
 };
 
-// How many contacts each active user owns via the (notion_person || name)
-// resolution. Runs its own owner_name → user resolution, then counts contacts.
+// How many contacts each active user owns, bucketed by CRM Status.
 export type UserOwnedCount = {
   userId: string;
-  ownedContacts: number;
+  breakdown: StatusBreakdown;
 };
 
 // Shared resolver — same tiers as auto-sync so both surfaces agree.
@@ -72,15 +105,16 @@ export async function getOwnerMappingReport(): Promise<OwnerMappingReport> {
       .where(eq(schema.users.active, 1))
   );
 
-  // Distinct owner_name + count of contacts holding it
-  const ownerCounts = await db
+  // Distinct (owner_name, status) with counts — so we can bucket by CRM Status.
+  const ownerStatusCounts = await db
     .select({
       ownerName: schema.contacts.ownerName,
+      status: schema.contacts.status,
       cnt: sql<number>`count(*)`,
     })
     .from(schema.contacts)
     .where(and(isNotNull(schema.contacts.ownerName), ne(schema.contacts.ownerName, "")))
-    .groupBy(schema.contacts.ownerName);
+    .groupBy(schema.contacts.ownerName, schema.contacts.status);
 
   // Also: number of contacts with no owner_name at all
   const [{ n: totalUnowned = 0 } = { n: 0 }] = (await db
@@ -88,10 +122,10 @@ export async function getOwnerMappingReport(): Promise<OwnerMappingReport> {
     .from(schema.contacts)
     .where(sql`${schema.contacts.ownerName} is null or ${schema.contacts.ownerName} = ''`)) as { n: number }[];
 
-  // Recent activity count per contact — bucket by owner_name for a health metric
+  // Recent activity count per owner — cheap health metric
   const cutoff = new Date();
   cutoff.setUTCDate(cutoff.getUTCDate() - 120);
-  const perContactActivity = await db
+  const perOwnerActivity = await db
     .select({
       ownerName: schema.contacts.ownerName,
       cnt: sql<number>`count(*)`,
@@ -104,34 +138,45 @@ export async function getOwnerMappingReport(): Promise<OwnerMappingReport> {
     ))
     .groupBy(schema.contacts.ownerName);
   const activityByOwner = new Map(
-    perContactActivity.map((r) => [r.ownerName ?? "", Number(r.cnt ?? 0)])
+    perOwnerActivity.map((r) => [r.ownerName ?? "", Number(r.cnt ?? 0)])
   );
+
+  // Roll up per-owner breakdowns
+  const perOwner = new Map<string, StatusBreakdown>();
+  for (const r of ownerStatusCounts) {
+    const ownerName = r.ownerName ?? "";
+    if (!ownerName) continue;
+    const bucket = bucketStatus(r.status);
+    const n = Number(r.cnt ?? 0);
+    const cur = perOwner.get(ownerName) ?? emptyBreakdown();
+    if (bucket && bucket !== "total") cur[bucket] += n;
+    cur.total += n;
+    perOwner.set(ownerName, cur);
+  }
 
   const rows: OwnerMappingRow[] = [];
   let mapped = 0;
   let unmapped = 0;
   let totalWithOwner = 0;
-  for (const r of ownerCounts) {
-    const ownerName = r.ownerName ?? "";
-    if (!ownerName) continue;
-    const contactCount = Number(r.cnt ?? 0);
-    totalWithOwner += contactCount;
+  for (const [ownerName, breakdown] of perOwner.entries()) {
+    totalWithOwner += breakdown.total;
     const resolved = resolveUser(ownerName, users);
     if (resolved) mapped += 1;
     else unmapped += 1;
     rows.push({
       ownerName,
-      contactCount,
+      contactCount: breakdown.total,
+      breakdown,
       activityCount: activityByOwner.get(ownerName) ?? 0,
       mappedTo: resolved?.user ?? null,
       matchedVia: resolved?.via ?? null,
     });
   }
 
-  // Sort: unmapped first (attention needed), then by contact count desc
+  // Sort: unmapped first (attention needed), then by active pipeline (leads) desc
   rows.sort((a, b) => {
     if (!!a.mappedTo !== !!b.mappedTo) return a.mappedTo ? 1 : -1;
-    return b.contactCount - a.contactCount;
+    return b.breakdown.leads - a.breakdown.leads || b.contactCount - a.contactCount;
   });
 
   return {
@@ -144,9 +189,11 @@ export async function getOwnerMappingReport(): Promise<OwnerMappingReport> {
   };
 }
 
-// Fast lookup: how many contacts each active user currently owns (attribution
-// resolved). Used by the Users & roles table to show "N leads owned" per user.
-export async function getUserOwnedCounts(): Promise<Map<string, number>> {
+// Per-user breakdown of owned contacts by CRM Status.
+// Cold / Leads / Clients derived from lib/stages.ts groupings — same as the
+// dashboard uses. Archived (Lost / Closed / Not qualified / Follow up later)
+// tracked but not surfaced by default.
+export async function getUserOwnedCounts(): Promise<Map<string, StatusBreakdown>> {
   const users: UserSummary[] = (
     await db
       .select({
@@ -159,22 +206,28 @@ export async function getUserOwnedCounts(): Promise<Map<string, number>> {
       .where(eq(schema.users.active, 1))
   );
 
-  const ownerCounts = await db
+  const ownerStatusCounts = await db
     .select({
       ownerName: schema.contacts.ownerName,
+      status: schema.contacts.status,
       cnt: sql<number>`count(*)`,
     })
     .from(schema.contacts)
     .where(and(isNotNull(schema.contacts.ownerName), ne(schema.contacts.ownerName, "")))
-    .groupBy(schema.contacts.ownerName);
+    .groupBy(schema.contacts.ownerName, schema.contacts.status);
 
-  const counts = new Map<string, number>();
-  for (const r of ownerCounts) {
+  const byUser = new Map<string, StatusBreakdown>();
+  for (const r of ownerStatusCounts) {
     const ownerName = r.ownerName ?? "";
     if (!ownerName) continue;
     const resolved = resolveUser(ownerName, users);
     if (!resolved) continue;
-    counts.set(resolved.user.id, (counts.get(resolved.user.id) ?? 0) + Number(r.cnt ?? 0));
+    const cur = byUser.get(resolved.user.id) ?? emptyBreakdown();
+    const bucket = bucketStatus(r.status);
+    const n = Number(r.cnt ?? 0);
+    if (bucket && bucket !== "total") cur[bucket] += n;
+    cur.total += n;
+    byUser.set(resolved.user.id, cur);
   }
-  return counts;
+  return byUser;
 }
