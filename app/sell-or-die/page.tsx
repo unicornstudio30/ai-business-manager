@@ -44,8 +44,10 @@ export default async function SellOrDiePage({
             Every DM, call, demo, and close counts. Move deals or the streak dies.
           </p>
           <p className="text-xs text-stone-400 mt-1">
-            Auto-fed from <strong>Notion CRM</strong> outreach (DMs, follow-ups, emails).
-            Log discovery calls, demos, proposals, and closes manually.
+            Auto-fed from <strong>Notion CRM</strong>: every Status flip credits the
+            lead's owner (Lead → discovery, Proposal Sent → proposal, Partnership → won,
+            etc.), plus logged outreach (DMs / follow-ups / emails). Log manual
+            calls / demos / negotiations from here too.
           </p>
         </div>
         <div className="flex items-start gap-2 flex-wrap">

@@ -220,6 +220,70 @@ type SalesAutoRow = {
   notes: string | null;
 };
 
+// CRM Status → sales credit map. When a contact reaches one of these
+// stages in Notion, the owner earns the mapped kind at auto-sync time.
+// Source key is `contact_stage:<contactId>:<status>` so each stage is
+// credited exactly once per contact (moving stages awards fresh credit).
+//
+// Stages NOT in this map are skipped (Prospect/Connection = added but no
+// action; per-stage follow-ups already covered by follow_up_sent activity
+// rows; Follow up later = deferred).
+const STAGE_TO_SALES: Record<string, SalesKind> = {
+  "1st message":                 "dm_sent",
+  "Inmail":                      "dm_sent",
+  "Lead":                        "discovery_call",   // they replied / engaged
+  "Qualified":                   "objection_handled", // qualification done
+  "Not qualified":               "objection_handled",
+  "Proposal Sent":               "proposal_sent",
+  "Post Proposal Follow-up-1":   "follow_up",
+  "Post Proposal Follow-up-2":   "follow_up",
+  "Booking":                     "discovery_call",   // call scheduled
+  "First call":                  "demo",             // call happened
+  "Partnership":                 "close_won",
+  "Lost":                        "close_lost",
+  "Closed without Partnership":  "close_lost",
+};
+
+function buildStageRows(
+  contacts: Array<{
+    id: string;
+    name: string | null;
+    status: string | null;
+    statusDate: Date | null;
+    createdAt: Date | null;
+    updatedAt: Date | null;
+    platform: string | null;
+    ownerName: string | null;
+  }>,
+  users: LiteUser[],
+  fallbackOwner: LiteUser
+): SalesAutoRow[] {
+  const out: SalesAutoRow[] = [];
+  const cutoff = lookbackCutoff();
+  for (const c of contacts) {
+    if (!c.status) continue;
+    const kind = STAGE_TO_SALES[c.status];
+    if (!kind) continue;
+    // Best available "when did this stage happen" — prefer explicit
+    // statusDate (Notion Status date column), then updated_at, then created_at.
+    const when = c.statusDate ?? c.updatedAt ?? c.createdAt;
+    if (!when || when < cutoff) continue;
+    const channelNorm = normalizeSalesChannel(c.platform);
+    const userId = resolveUserId(c.ownerName, users) || fallbackOwner.id;
+    out.push({
+      userId,
+      weekStart: weekStartFor(when),
+      channel: channelNorm,
+      kind,
+      count: 1,
+      points: salesPointsFor(channelNorm, kind, 1),
+      source: `contact_stage:${c.id}:${c.status}`,
+      notes: c.name ? `Stage → ${c.status} · ${c.name.slice(0, 80)}` : `Stage → ${c.status}`,
+    });
+  }
+  return out;
+}
+
 function buildSalesRows(
   rows: Array<{
     id: string;
@@ -311,16 +375,38 @@ export async function runMarketingAutoSync(): Promise<AutoSyncResult> {
       gte(schema.activities.createdAt, cutoff),
     ));
 
+  // Contacts with a Notion Status set — feeds stage-based Sell or Die credit
+  // (each Status flip earns points for the owner).
+  const contactsForStage = await db
+    .select({
+      id: schema.contacts.id,
+      name: schema.contacts.name,
+      status: schema.contacts.status,
+      statusDate: schema.contacts.statusDate,
+      createdAt: schema.contacts.createdAt,
+      updatedAt: schema.contacts.updatedAt,
+      platform: schema.contacts.platform,
+      ownerName: schema.contacts.ownerName,
+    })
+    .from(schema.contacts)
+    .where(isNotNull(schema.contacts.status));
+
   // 3. Build rows
   const contentRows = buildContentRows(content, owner);
   const netRows = buildNetworkingRows(networking, owner);
   const crmRows = buildCrmRows(crmActivities, users, owner);
-  const salesRows = buildSalesRows(crmActivities, users, owner);
+  const salesActivityRows = buildSalesRows(crmActivities, users, owner);
+  const stageRows = buildStageRows(contactsForStage, users, owner);
+  const salesRows = [...salesActivityRows, ...stageRows];
 
-  // 4. Track unmapped owner names (for surfacing back to the user)
+  // 4. Track unmapped owner names (from both CRM activities + stage-tracked
+  // contacts) so admins see everyone who's slipping through.
   const unmapped = new Set<string>();
   for (const r of crmActivities) {
     if (r.ownerName && !resolveUserId(r.ownerName, users)) unmapped.add(r.ownerName);
+  }
+  for (const c of contactsForStage) {
+    if (c.ownerName && !resolveUserId(c.ownerName, users)) unmapped.add(c.ownerName);
   }
 
   // 5. Insert per source-type so we can report exact per-source counts.
