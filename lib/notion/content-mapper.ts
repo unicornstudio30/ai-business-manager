@@ -11,6 +11,18 @@ const text = (p: any): string | null => {
 
 const select = (p: any): string | null => p?.select?.name ?? p?.status?.name ?? null;
 const multiSelect = (p: any): string[] => p?.multi_select?.map((o: any) => o.name) ?? [];
+// Read the first user from a Notion `people` property. Falls back to a plain
+// select/rich-text value when someone has the column set up as text.
+const people = (p: any): string | null => {
+  if (!p) return null;
+  if (p.type === "people" && Array.isArray(p.people) && p.people.length > 0) {
+    const first = p.people[0];
+    return first?.name || first?.person?.email || null;
+  }
+  if (p.type === "rich_text" || p.type === "title") return text(p);
+  if (p.type === "select") return p.select?.name ?? null;
+  return null;
+};
 const date = (p: any): Date | null => {
   const s = p?.date?.start;
   if (!s) return null;
@@ -33,6 +45,8 @@ export function notionToContentItem(page: PageObjectResponse): Omit<ContentItem,
     title: text(props["Title"]) || "(untitled)",
     type: select(props["Type"]),
     topics: select(props["Topics"]),
+    // Content owner — same "Person" column pattern as the CRM.
+    personName: people(props["Person"]) || people(props["Owner"]) || null,
     repurposePlatform: JSON.stringify(multiSelect(props["Repurpose Platform"])),
     reusePlatform: JSON.stringify(multiSelect(props["Reuse Platform "])),  // note: Notion column has trailing space
     linkedinStatus: select(props["LinkedIn Status"]),

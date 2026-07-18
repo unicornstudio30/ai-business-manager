@@ -110,9 +110,14 @@ export const contentItems = sqliteTable(
 
     title: text("title").notNull().default(""),
     type: text("type"),                          // storytelling | lead magnet | Contrarian | educational | informational
-    topics: text("topics"),                      // far past | recent past | present | trending | manufactured
+    topics: text("topics"),                      // free-form Notion "Topics" select value (whatever you defined there)
     repurposePlatform: text("repurpose_platform"),  // JSON multi-select
     reusePlatform: text("reuse_platform"),          // JSON multi-select
+
+    // Content owner — pulled from the Notion Content Calendar "Person" column.
+    // Same fuzzy-name-matcher logic as contacts.owner_name attributes this to
+    // an app user for Market or Die auto-sync credit.
+    personName: text("person_name"),
 
     // Per-platform tracking (LinkedIn / X / Facebook)
     linkedinStatus: text("linkedin_status"),

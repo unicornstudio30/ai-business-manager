@@ -79,34 +79,63 @@ type AutoRow = {
   notes: string | null;
 };
 
+// Skip crediting when the platform status explicitly says "not yet
+// published". Anything else — Published, empty status, or unknown value —
+// counts as long as the publish date is set. This is intentionally lenient:
+// many rows in the Content Calendar have a publish date filled in but the
+// status left blank, and we'd rather credit those than miss them.
+const NOT_PUBLISHED_STATUSES = new Set([
+  "draft", "scheduled", "planning", "planned", "idea",
+  "in review", "in-review", "ready", "queued",
+]);
+function isCountableStatus(status: string | null): boolean {
+  if (!status) return true;                                     // null = lenient
+  return !NOT_PUBLISHED_STATUSES.has(status.trim().toLowerCase());
+}
+
 function buildContentRows(
   content: typeof schema.contentItems.$inferSelect[],
-  owner: LiteUser
+  users: LiteUser[],
+  fallbackOwner: LiteUser
 ): AutoRow[] {
   const out: AutoRow[] = [];
   const cutoff = lookbackCutoff();
 
   for (const c of content) {
-    const pairs: { date: Date | null; platform: Platform; tag: string; kind: ActivityKind }[] = [
-      { date: c.linkedinPublishDate, platform: "linkedin", tag: "linkedin:publish", kind: "post" },
-      { date: c.xPublishDate,        platform: "x",        tag: "x:publish",        kind: "post" },
-      { date: c.facebookPublishDate, platform: "facebook", tag: "facebook:publish", kind: "post" },
-      { date: c.linkedinReuseDate,   platform: "linkedin", tag: "linkedin:reuse",   kind: "post" },
-      { date: c.xReuseDate,          platform: "x",        tag: "x:reuse",          kind: "post" },
-      { date: c.facebookReuseDate,   platform: "facebook", tag: "facebook:reuse",   kind: "post" },
+    // Attribute to the content's owner (Notion "Person" column) via the same
+    // fuzzy resolver used for CRM. Falls back to the workspace owner when no
+    // person is set or no user matches.
+    const userId = resolveUserId(c.personName, users) || fallbackOwner.id;
+
+    const pairs: {
+      date: Date | null;
+      status: string | null;
+      platform: Platform;
+      tag: string;
+      kind: ActivityKind;
+    }[] = [
+      { date: c.linkedinPublishDate, status: c.linkedinStatus, platform: "linkedin", tag: "linkedin:publish", kind: "post" },
+      { date: c.xPublishDate,        status: c.xStatus,        platform: "x",        tag: "x:publish",        kind: "post" },
+      { date: c.facebookPublishDate, status: c.facebookStatus, platform: "facebook", tag: "facebook:publish", kind: "post" },
+      { date: c.linkedinReuseDate,   status: c.linkedinStatus, platform: "linkedin", tag: "linkedin:reuse",   kind: "post" },
+      { date: c.xReuseDate,          status: c.xStatus,        platform: "x",        tag: "x:reuse",          kind: "post" },
+      { date: c.facebookReuseDate,   status: c.facebookStatus, platform: "facebook", tag: "facebook:reuse",   kind: "post" },
     ];
 
     for (const p of pairs) {
       if (!p.date || p.date < cutoff) continue;
+      // Skip only when status explicitly says the piece isn't out yet
+      // (draft/scheduled/planning/etc.). Blank status still counts.
+      if (!isCountableStatus(p.status)) continue;
       out.push({
-        userId: owner.id,
+        userId,
         weekStart: weekStartFor(p.date),
         platform: p.platform,
         kind: p.kind,
         count: 1,
         points: pointsFor(p.platform, p.kind, 1),
         source: `content:${c.id}:${p.tag}`,
-        notes: c.title ? `Content: ${c.title.slice(0, 120)}` : null,
+        notes: [c.title, c.topics].filter(Boolean).join(" · ").slice(0, 160) || null,
       });
     }
   }
@@ -392,21 +421,25 @@ export async function runMarketingAutoSync(): Promise<AutoSyncResult> {
     .where(isNotNull(schema.contacts.status));
 
   // 3. Build rows
-  const contentRows = buildContentRows(content, owner);
+  const contentRows = buildContentRows(content, users, owner);
   const netRows = buildNetworkingRows(networking, owner);
   const crmRows = buildCrmRows(crmActivities, users, owner);
   const salesActivityRows = buildSalesRows(crmActivities, users, owner);
   const stageRows = buildStageRows(contactsForStage, users, owner);
   const salesRows = [...salesActivityRows, ...stageRows];
 
-  // 4. Track unmapped owner names (from both CRM activities + stage-tracked
-  // contacts) so admins see everyone who's slipping through.
+  // 4. Track unmapped owner names (from CRM activities, stage-tracked
+  // contacts, and Content Calendar Person columns) so admins can see
+  // everyone slipping through the resolver.
   const unmapped = new Set<string>();
   for (const r of crmActivities) {
     if (r.ownerName && !resolveUserId(r.ownerName, users)) unmapped.add(r.ownerName);
   }
   for (const c of contactsForStage) {
     if (c.ownerName && !resolveUserId(c.ownerName, users)) unmapped.add(c.ownerName);
+  }
+  for (const c of content) {
+    if (c.personName && !resolveUserId(c.personName, users)) unmapped.add(c.personName);
   }
 
   // 5. Insert per source-type so we can report exact per-source counts.

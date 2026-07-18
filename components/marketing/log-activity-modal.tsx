@@ -1,11 +1,13 @@
 "use client";
 
 // Quick-log modal for adding a marketing activity. Live point preview as the
-// user picks platform/kind/count so they see what they'll earn before saving.
+// user picks platform/kind/count. Optionally attach the log to a specific
+// piece from the Unicorn Studio Content Calendar — picking one pre-fills the
+// platform and appends the title/topic to notes.
 
-import { useState, useTransition, FormEvent } from "react";
+import { useState, useEffect, useTransition, FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { X, Loader2, AlertCircle, Sparkles, Trophy } from "lucide-react";
+import { X, Loader2, AlertCircle, Sparkles, Trophy, BookOpen } from "lucide-react";
 import {
   ALL_KINDS,
   ALL_PLATFORMS,
@@ -13,6 +15,17 @@ import {
   type ActivityKind,
   type Platform,
 } from "@/lib/marketing/points";
+
+type ContentPlatform = { key: "linkedin" | "x" | "facebook"; label: string; status: string | null; publishDate: string | null };
+type ContentPick = {
+  id: string;
+  title: string;
+  topics: string | null;
+  type: string | null;
+  personName: string | null;
+  platforms: ContentPlatform[];
+  updatedAt: string | null;
+};
 
 export function LogActivityModal({
   open,
@@ -28,11 +41,46 @@ export function LogActivityModal({
   const [kind, setKind] = useState<ActivityKind>("post");
   const [count, setCount] = useState(1);
   const [notes, setNotes] = useState("");
+  const [contentId, setContentId] = useState<string>("");
+  const [contentOptions, setContentOptions] = useState<ContentPick[]>([]);
+  const [contentLoading, setContentLoading] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  // Load recent content items when the modal opens (once)
+  useEffect(() => {
+    if (!open || contentOptions.length > 0 || contentLoading) return;
+    setContentLoading(true);
+    fetch("/api/content/recent")
+      .then((r) => r.json())
+      .then((data) => setContentOptions(data.items ?? []))
+      .catch(() => setContentOptions([]))
+      .finally(() => setContentLoading(false));
+  }, [open, contentOptions.length, contentLoading]);
+
   if (!open) return null;
   const preview = pointsFor(platform, kind, count);
+
+  const picked = contentOptions.find((c) => c.id === contentId) || null;
+
+  function selectContent(id: string) {
+    setContentId(id);
+    if (!id) return;
+    const c = contentOptions.find((x) => x.id === id);
+    if (!c) return;
+    // Pre-fill platform from the first platform that has anything set on this
+    // content item (prefer LinkedIn if multiple). Only prefill if it's a valid
+    // Platform value.
+    const firstPlat = c.platforms[0];
+    if (firstPlat) {
+      const map: Record<string, Platform> = { linkedin: "linkedin", x: "x", facebook: "facebook" };
+      const p = map[firstPlat.key];
+      if (p) setPlatform(p);
+    }
+    // Append title + topic to notes for context (don't clobber user typing)
+    const label = [c.title, c.topics].filter(Boolean).join(" · ");
+    if (label && !notes) setNotes(label);
+  }
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -42,16 +90,16 @@ export function LogActivityModal({
         const res = await fetch("/api/marketing/log", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ platform, kind, count, notes, weekStart }),
+          body: JSON.stringify({ platform, kind, count, notes, weekStart, contentId: contentId || undefined }),
         });
         const data = await res.json();
         if (!res.ok) {
           setError(data?.error || `HTTP ${res.status}`);
           return;
         }
-        // Reset + close + refresh
         setCount(1);
         setNotes("");
+        setContentId("");
         router.refresh();
         onClose();
       } catch (e: any) {
@@ -84,6 +132,50 @@ export function LogActivityModal({
         </div>
 
         <form onSubmit={submit} className="p-5 flex flex-col gap-3">
+          {/* From Unicorn Studio Content Calendar */}
+          <div>
+            <label htmlFor="m-content" className="text-xs font-medium text-stone-700 mb-1.5 block inline-flex items-center gap-1">
+              <BookOpen className="size-3.5 text-stone-400" />
+              From Content Calendar
+              <span className="text-stone-400 font-normal">(optional — pulls title, topic, platform)</span>
+            </label>
+            <select
+              id="m-content"
+              value={contentId}
+              onChange={(e) => selectContent(e.target.value)}
+              disabled={contentLoading}
+              className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-300 disabled:opacity-60"
+            >
+              <option value="">
+                {contentLoading ? "Loading…" : "— Choose a content piece —"}
+              </option>
+              {contentOptions.map((c) => {
+                const plats = c.platforms.map((p) => p.label).join(", ") || "no platforms yet";
+                const label = c.topics
+                  ? `${c.title} · ${c.topics} · ${plats}`
+                  : `${c.title} · ${plats}`;
+                return (
+                  <option key={c.id} value={c.id}>
+                    {label.slice(0, 90)}
+                  </option>
+                );
+              })}
+            </select>
+            {picked && picked.platforms.length > 0 && (
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {picked.platforms.map((p) => (
+                  <span
+                    key={p.key}
+                    className="inline-flex items-center gap-1 rounded border border-stone-200 bg-stone-50 px-1.5 py-0.5 text-[10px] text-stone-700"
+                  >
+                    {p.label}
+                    {p.status && <span className="text-stone-400">· {p.status}</span>}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label htmlFor="m-platform" className="text-xs font-medium text-stone-700 mb-1.5 block">
