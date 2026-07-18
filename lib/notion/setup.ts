@@ -17,6 +17,10 @@ type SetupResult = { added: string[]; existed: string[]; error?: string };
 
 const CRM_PROPERTIES_TO_ADD: Record<string, any> = {
   "Closed Reason": { rich_text: {} },
+  // Rolling log of Sell or Die activities on this contact. The app appends
+  // one line per stage/action log (newest first). Read-only from Notion's
+  // perspective — treat it as an audit trail.
+  "Log Actions": { rich_text: {} },
 };
 
 export async function setupNotionCrmColumns(): Promise<SetupResult> {

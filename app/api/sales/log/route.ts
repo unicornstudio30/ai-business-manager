@@ -1,11 +1,11 @@
 // POST /api/sales/log
-// Two shapes:
-//   mode='stage'    Body: { mode:'stage', stage, channel?, contactId?, notes?, weekStart? }
-//                   Picks the sales kind + points from lib/sales/stage-credits.
-//                   Source key: contact_stage:<contactId>:<stage> (idempotent)
-//                   or manual_stage:<userId>:<stage>:<ts> (freeform).
-//   mode='activity' Body: { mode:'activity', channel, kind, count?, notes?, weekStart? }
-//                   Old-style abstract action (dm_sent / discovery_call / …).
+// Unified body: { contactId?, stage?, kind?, count?, notes?, weekStart? }
+//
+// Must include EITHER stage OR kind (both is fine — logs two rows). Channel
+// is derived from the picked contact's `platform` field (LinkedIn / X /
+// Facebook / …) rather than a user-picked dropdown. When contactId is set
+// and the contact has a notion_page_id, an entry is appended to the CRM's
+// "Log Actions" column (best-effort).
 //
 // DELETE /api/sales/log?id=...
 
@@ -16,12 +16,13 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth/server";
 import { db, schema } from "@/lib/db/client";
-import { deleteSalesActivity, logSalesActivity } from "@/lib/db/sales-leaderboard";
-import { ALL_CHANNELS, ALL_KINDS, pointsFor, weekStartFor, type ActivityKind, type Channel } from "@/lib/sales/points";
+import { deleteSalesActivity } from "@/lib/db/sales-leaderboard";
+import { ALL_KINDS, pointsFor, weekStartFor, type ActivityKind } from "@/lib/sales/points";
 import { kindForStage } from "@/lib/sales/stage-credits";
+import { normalizeChannelFromPlatform } from "@/lib/sales/channel-from-platform";
 import { STAGES, type Stage } from "@/lib/stages";
+import { appendContactLogEntry } from "@/lib/notion/contact-log";
 
-const VALID_CHANNELS = new Set(ALL_CHANNELS.map((c) => c.channel));
 const VALID_KINDS = new Set(ALL_KINDS.map((k) => k.kind));
 const VALID_STAGES = new Set(STAGES as readonly string[]);
 
@@ -30,40 +31,56 @@ export async function POST(req: NextRequest) {
   if (!me) return NextResponse.json({ error: "Auth required" }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
-  const mode = body?.mode === "activity" ? "activity" : "stage";
   const notes = typeof body?.notes === "string" ? body.notes.slice(0, 1000) : null;
   const weekStart = typeof body?.weekStart === "string" ? body.weekStart : weekStartFor();
-  const channelRaw = String(body?.channel || "linkedin");
-  const channel: Channel = (VALID_CHANNELS.has(channelRaw as Channel) ? channelRaw : "linkedin") as Channel;
+  const contactId = typeof body?.contactId === "string" && body.contactId ? body.contactId : null;
+  const stageInput = typeof body?.stage === "string" && body.stage ? body.stage : null;
+  const kindInput = typeof body?.kind === "string" && body.kind ? body.kind : null;
+  const count = Number.isFinite(body?.count) ? Math.max(1, Math.min(100, Math.floor(body.count))) : 1;
 
-  if (mode === "stage") {
-    const stage = String(body?.stage || "");
-    if (!VALID_STAGES.has(stage)) {
-      return NextResponse.json({ error: "Invalid stage" }, { status: 400 });
-    }
-    const kind = kindForStage(stage as Stage);
+  if (!stageInput && !kindInput) {
+    return NextResponse.json({ error: "Pick a stage or an action" }, { status: 400 });
+  }
+  if (stageInput && !VALID_STAGES.has(stageInput)) {
+    return NextResponse.json({ error: "Invalid stage" }, { status: 400 });
+  }
+  if (kindInput && !VALID_KINDS.has(kindInput as ActivityKind)) {
+    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+  }
+
+  // Load the picked contact to derive channel + name + notion_page_id.
+  let contact:
+    | { id: string; name: string | null; platform: string | null; notionPageId: string | null }
+    | null = null;
+  if (contactId) {
+    const [row] = await db
+      .select({
+        id: schema.contacts.id,
+        name: schema.contacts.name,
+        platform: schema.contacts.platform,
+        notionPageId: schema.contacts.notionPageId,
+      })
+      .from(schema.contacts)
+      .where(eq(schema.contacts.id, contactId))
+      .limit(1);
+    contact = row ?? null;
+  }
+
+  const channel = normalizeChannelFromPlatform(contact?.platform);
+  const inserted: any[] = [];
+  const notionLogLines: string[] = [];
+
+  // 1) Stage row
+  if (stageInput) {
+    const kind = kindForStage(stageInput as Stage);
     if (!kind) {
-      return NextResponse.json({ error: `Stage '${stage}' doesn't earn credit (Prospect/Follow-up/Follow up later stages are skipped)` }, { status: 400 });
-    }
-    const contactId = typeof body?.contactId === "string" && body.contactId ? body.contactId : null;
-    // Build source key + enriched notes
-    let source: string | null = null;
-    let enrichedNotes: string | null = notes;
-    if (contactId) {
-      const [contact] = await db
-        .select({ id: schema.contacts.id, name: schema.contacts.name, status: schema.contacts.status })
-        .from(schema.contacts)
-        .where(eq(schema.contacts.id, contactId))
-        .limit(1);
-      if (contact) {
-        // Same shape as auto-sync so re-syncing after a manual log is a no-op.
-        source = `contact_stage:${contact.id}:${stage}`;
-        if (!enrichedNotes) {
-          enrichedNotes = `Stage → ${stage} · ${contact.name?.slice(0, 80) ?? "(no name)"}`;
-        }
-      }
+      return NextResponse.json({
+        error: `Stage '${stageInput}' doesn't earn credit (Prospect / Connection / follow-up stages skipped)`,
+      }, { status: 400 });
     }
     const points = pointsFor(channel, kind, 1);
+    const stageNotes = notes ?? (contact?.name ? `Stage → ${stageInput} · ${contact.name.slice(0, 80)}` : `Stage → ${stageInput}`);
+    const source = contact ? `contact_stage:${contact.id}:${stageInput}` : null;
     const [row] = await db
       .insert(schema.salesActivities)
       .values({
@@ -73,49 +90,59 @@ export async function POST(req: NextRequest) {
         kind,
         count: 1,
         points,
-        notes: enrichedNotes,
+        notes: stageNotes,
         source,
-        contactId,
+        contactId: contact?.id ?? null,
       })
       .onConflictDoNothing({ target: schema.salesActivities.source })
       .returning();
-
-    revalidatePath("/sell-or-die");
-    return NextResponse.json({ ok: true, activity: row ?? null, deduped: !row });
-  }
-
-  // mode === "activity" — freeform abstract action. Optional contactId links
-  // this row back to a Notion contact so per-lead views can group both stage
-  // + action logs together.
-  const kind = String(body?.kind || "");
-  const count = Number.isFinite(body?.count) ? Math.max(1, Math.min(100, Math.floor(body.count))) : 1;
-  if (!VALID_KINDS.has(kind as ActivityKind)) {
-    return NextResponse.json({ error: "Invalid kind" }, { status: 400 });
-  }
-  const contactId = typeof body?.contactId === "string" && body.contactId ? body.contactId : null;
-  // Enrich notes with contact name when a lead is picked.
-  let enrichedNotes: string | null = notes;
-  if (contactId) {
-    const [contact] = await db
-      .select({ name: schema.contacts.name })
-      .from(schema.contacts)
-      .where(eq(schema.contacts.id, contactId))
-      .limit(1);
-    if (contact && !enrichedNotes) {
-      enrichedNotes = `${kind.replace(/_/g, " ")} · ${contact.name?.slice(0, 80) ?? "(no name)"}`;
+    if (row) {
+      inserted.push({ type: "stage", row });
+      notionLogLines.push(`${new Date().toISOString().slice(0, 10)} · Stage → ${stageInput} · ${channel} · +${points} pts (by ${me.name || me.email})`);
     }
   }
-  const row = await logSalesActivity({
-    userId: me.id,
-    channel,
-    kind: kind as ActivityKind,
-    count,
-    notes: enrichedNotes,
-    weekStart,
-    contactId,
-  });
+
+  // 2) Action row
+  if (kindInput) {
+    const kind = kindInput as ActivityKind;
+    const points = pointsFor(channel, kind, count);
+    const actionNotes = notes ?? (contact?.name ? `${kind.replace(/_/g, " ")} × ${count} · ${contact.name.slice(0, 80)}` : `${kind.replace(/_/g, " ")} × ${count}`);
+    const [row] = await db
+      .insert(schema.salesActivities)
+      .values({
+        userId: me.id,
+        weekStart,
+        channel,
+        kind,
+        count,
+        points,
+        notes: actionNotes,
+        source: null,
+        contactId: contact?.id ?? null,
+      })
+      .returning();
+    if (row) {
+      inserted.push({ type: "action", row });
+      notionLogLines.push(`${new Date().toISOString().slice(0, 10)} · ${kind.replace(/_/g, " ")} × ${count} · ${channel} · +${points} pts (by ${me.name || me.email})`);
+    }
+  }
+
+  // 3) Push to Notion "Log Actions" column (best-effort, fire and forget-ish)
+  if (contact?.notionPageId && notionLogLines.length > 0) {
+    // Await so the response reflects final state; failures are swallowed.
+    for (const line of notionLogLines) {
+      await appendContactLogEntry(contact.notionPageId, line);
+    }
+  }
+
   revalidatePath("/sell-or-die");
-  return NextResponse.json({ ok: true, activity: row });
+  return NextResponse.json({
+    ok: true,
+    inserted: inserted.length,
+    rows: inserted,
+    channel,
+    contact: contact ? { id: contact.id, name: contact.name } : null,
+  });
 }
 
 export async function DELETE(req: NextRequest) {
