@@ -11,7 +11,7 @@
 
 import { useState, useEffect, useTransition, FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { X, Loader2, AlertCircle, Sparkles, DollarSign, ChevronDown, ChevronRight } from "lucide-react";
+import { X, Loader2, AlertCircle, Sparkles, DollarSign, ListChecks, Zap } from "lucide-react";
 import { ALL_KINDS, pointsFor, type ActivityKind } from "@/lib/sales/points";
 import { STAGE_CREDIT_LIST, kindForStage } from "@/lib/sales/stage-credits";
 import { normalizeChannelFromPlatform } from "@/lib/sales/channel-from-platform";
@@ -34,9 +34,12 @@ export function LogSalesActivityModal({
   const [myContacts, setMyContacts] = useState<MyContact[]>([]);
   const [contactsLoading, setContactsLoading] = useState(false);
 
+  // Stage vs action are mutually exclusive to avoid double-crediting: a
+  // stage (e.g. Lead) already IS an action (discovery_call) under the hood,
+  // so logging both would count the same thing twice.
+  const [logType, setLogType] = useState<"stage" | "action">("stage");
   const [stage, setStage] = useState<Stage | "">("");
-  const [actionOpen, setActionOpen] = useState(false);
-  const [kind, setKind] = useState<ActivityKind>("dm_sent");
+  const [kind, setKind] = useState<ActivityKind | "">("");
   const [count, setCount] = useState(1);
   const [notes, setNotes] = useState("");
 
@@ -58,25 +61,26 @@ export function LogSalesActivityModal({
   const picked = myContacts.find((c) => c.id === contactId) || null;
   const channel = normalizeChannelFromPlatform(picked?.platform);
 
-  const stagePoints = stage ? (() => {
+  const stagePoints = stage && logType === "stage" ? (() => {
     const k = kindForStage(stage as Stage);
     return k ? pointsFor(channel, k, 1) : 0;
   })() : 0;
   const stageEarnsCredit = stage ? kindForStage(stage as Stage) !== null : false;
 
-  const actionPoints = actionOpen ? pointsFor(channel, kind, count) : 0;
+  const actionPoints = kind && logType === "action" ? pointsFor(channel, kind as ActivityKind, count) : 0;
   const totalPreview = stagePoints + actionPoints;
 
   function submit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!stage && !actionOpen) {
-      setError("Pick a stage or open Log action");
-      return;
-    }
-    if (stage && !stageEarnsCredit) {
-      setError(`Stage '${stage}' doesn't earn credit — pick another or skip stage`);
-      return;
+    if (logType === "stage") {
+      if (!stage) { setError("Pick a stage"); return; }
+      if (!stageEarnsCredit) {
+        setError(`Stage '${stage}' doesn't earn credit — pick another`);
+        return;
+      }
+    } else {
+      if (!kind) { setError("Pick an action"); return; }
     }
     startTransition(async () => {
       try {
@@ -85,8 +89,9 @@ export function LogSalesActivityModal({
           notes: notes || undefined,
           weekStart,
         };
-        if (stage) body.stage = stage;
-        if (actionOpen) {
+        if (logType === "stage") {
+          body.stage = stage;
+        } else {
           body.kind = kind;
           body.count = count;
         }
@@ -101,7 +106,7 @@ export function LogSalesActivityModal({
           return;
         }
         setStage("");
-        setActionOpen(false);
+        setKind("");
         setCount(1);
         setNotes("");
         setContactId("");
@@ -124,7 +129,7 @@ export function LogSalesActivityModal({
         <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200">
           <div className="flex items-center gap-2">
             <DollarSign className="size-5 text-emerald-600" />
-            <h2 className="text-base font-semibold text-stone-900">Log sales activity</h2>
+            <h2 className="text-base font-semibold text-stone-900">Log stage &amp; action</h2>
           </div>
           <button
             type="button"
@@ -170,87 +175,101 @@ export function LogSalesActivityModal({
             )}
           </div>
 
-          {/* Log Stage — primary */}
+          {/* Mutually exclusive: a stage flip is already an action under the
+              hood (Lead = discovery_call), so pick ONE to avoid double-count. */}
           <div>
-            <label htmlFor="s-stage" className="text-xs font-medium text-stone-700 mb-1.5 block">
-              Log stage <span className="text-stone-400 font-normal">(from CRM Status column)</span>
-            </label>
-            <select
-              id="s-stage"
-              value={stage}
-              onChange={(e) => setStage(e.target.value as Stage | "")}
-              className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-300"
-            >
-              <option value="">— Don't log a stage —</option>
-              {STAGE_CREDIT_LIST.map((s) => (
-                <option key={s.stage} value={s.stage}>
-                  {s.label}
-                  {s.kind ? "" : " · no credit"}
-                </option>
-              ))}
-            </select>
-            {stage && !stageEarnsCredit && (
-              <div className="mt-1 text-[11px] text-amber-700 inline-flex items-center gap-1">
-                <AlertCircle className="size-3" />
-                This stage doesn't earn credit (Prospect / Connection / follow-up stages).
-              </div>
-            )}
+            <div className="text-xs font-medium text-stone-700 mb-1.5">
+              What are you logging?
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setLogType("stage")}
+                className={`flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium rounded-md border transition-colors ${
+                  logType === "stage"
+                    ? "border-emerald-500 bg-emerald-50 text-emerald-800"
+                    : "border-stone-200 bg-white text-stone-600 hover:border-stone-300"
+                }`}
+              >
+                <ListChecks className="size-3.5" /> Stage tracking
+              </button>
+              <button
+                type="button"
+                onClick={() => setLogType("action")}
+                className={`flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium rounded-md border transition-colors ${
+                  logType === "action"
+                    ? "border-emerald-500 bg-emerald-50 text-emerald-800"
+                    : "border-stone-200 bg-white text-stone-600 hover:border-stone-300"
+                }`}
+              >
+                <Zap className="size-3.5" /> Action tracking
+              </button>
+            </div>
           </div>
 
-          {/* Log Action — collapsible under Log Stage */}
-          <div className="rounded-lg border border-stone-200">
-            <button
-              type="button"
-              onClick={() => setActionOpen((v) => !v)}
-              className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-stone-700 hover:bg-stone-50"
-            >
-              <span className="inline-flex items-center gap-1.5">
-                {actionOpen ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
-                Also log an action
-                <span className="text-stone-400 font-normal">(optional)</span>
-              </span>
-              {actionOpen && actionPoints > 0 && (
-                <span className="text-[11px] text-emerald-700 tabular-nums">+{actionPoints} pts</span>
-              )}
-            </button>
-            {actionOpen && (
-              <div className="border-t border-stone-100 p-3 flex flex-col gap-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label htmlFor="s-kind" className="text-xs font-medium text-stone-700 mb-1.5 block">
-                      Action
-                    </label>
-                    <select
-                      id="s-kind"
-                      value={kind}
-                      onChange={(e) => setKind(e.target.value as ActivityKind)}
-                      className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-300"
-                    >
-                      {ALL_KINDS.map((k) => (
-                        <option key={k.kind} value={k.kind}>
-                          {k.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label htmlFor="s-count" className="text-xs font-medium text-stone-700 mb-1.5 block">
-                      How many?
-                    </label>
-                    <input
-                      id="s-count"
-                      type="number"
-                      min={1}
-                      max={100}
-                      value={count}
-                      onChange={(e) => setCount(Math.max(1, Math.min(100, Number(e.target.value) || 1)))}
-                      className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-300"
-                    />
-                  </div>
+          {logType === "stage" ? (
+            <div>
+              <label htmlFor="s-stage" className="text-xs font-medium text-stone-700 mb-1.5 block">
+                CRM Status stage <span className="text-stone-400 font-normal">(every value from Notion's Status column)</span>
+              </label>
+              <select
+                id="s-stage"
+                value={stage}
+                onChange={(e) => setStage(e.target.value as Stage | "")}
+                className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-300"
+              >
+                <option value="">— Pick a stage —</option>
+                {STAGE_CREDIT_LIST.map((s) => (
+                  <option key={s.stage} value={s.stage}>
+                    {s.label}
+                    {s.kind ? "" : " · no credit"}
+                  </option>
+                ))}
+              </select>
+              {stage && !stageEarnsCredit && (
+                <div className="mt-1 text-[11px] text-amber-700 inline-flex items-center gap-1">
+                  <AlertCircle className="size-3" />
+                  Prospect / Connection / follow-up stages don't earn credit — pick another.
                 </div>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="s-kind" className="text-xs font-medium text-stone-700 mb-1.5 block">
+                  Action
+                </label>
+                <select
+                  id="s-kind"
+                  value={kind}
+                  onChange={(e) => setKind(e.target.value as ActivityKind | "")}
+                  className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-300"
+                >
+                  <option value="">— Pick an action —</option>
+                  {ALL_KINDS.map((k) => (
+                    <option key={k.kind} value={k.kind}>
+                      {k.label}
+                    </option>
+                  ))}
+                </select>
               </div>
-            )}
-          </div>
+              <div>
+                <label htmlFor="s-count" className="text-xs font-medium text-stone-700 mb-1.5 block">
+                  How many?
+                </label>
+                <input
+                  id="s-count"
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={count}
+                  disabled={!kind}
+                  onChange={(e) => setCount(Math.max(1, Math.min(100, Number(e.target.value) || 1)))}
+                  className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-300 disabled:bg-stone-50 disabled:opacity-60"
+                />
+              </div>
+            </div>
+          )}
 
           <div>
             <label htmlFor="s-notes" className="text-xs font-medium text-stone-700 mb-1.5 block">

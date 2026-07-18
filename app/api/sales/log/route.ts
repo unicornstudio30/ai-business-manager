@@ -41,6 +41,13 @@ export async function POST(req: NextRequest) {
   if (!stageInput && !kindInput) {
     return NextResponse.json({ error: "Pick a stage or an action" }, { status: 400 });
   }
+  // Mutually exclusive: a stage flip already implies its mapped action
+  // (Lead → discovery_call). Logging both would double-count the same event.
+  if (stageInput && kindInput) {
+    return NextResponse.json({
+      error: "Pick EITHER a stage OR an action, not both (stage flips already imply their action).",
+    }, { status: 400 });
+  }
   if (stageInput && !VALID_STAGES.has(stageInput)) {
     return NextResponse.json({ error: "Invalid stage" }, { status: 400 });
   }
