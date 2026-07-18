@@ -35,6 +35,7 @@ export async function logSalesActivity(input: {
   count?: number;
   notes?: string | null;
   weekStart?: string;
+  contactId?: string | null;
 }): Promise<SalesActivity> {
   const ws = input.weekStart || weekStartFor();
   const count = Math.max(1, input.count ?? 1);
@@ -49,6 +50,7 @@ export async function logSalesActivity(input: {
       count,
       points,
       notes: input.notes ?? null,
+      contactId: input.contactId ?? null,
     },
   })) as SalesActivity;
 }

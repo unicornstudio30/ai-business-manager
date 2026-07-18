@@ -431,12 +431,18 @@ export const salesActivities = sqliteTable("sales_activities", {
   count: integer("count").notNull().default(1),
   points: integer("points").notNull(),
   notes: text("notes"),
+  // Optional link to the CRM contact this activity was performed against.
+  // Set on both Log Stage + Log Action when a lead is picked, and populated
+  // by auto-sync from CRM activities (activities.contact_id) and stage
+  // flips (contact.id). Enables per-lead activity feeds.
+  contactId: text("contact_id"),
   // Idempotency key for auto-fed rows (from CRM activities table).
   source: text("source"),
   createdAt: now(),
 }, (t) => ({
   userWeekIdx: index("sales_activities_user_week_idx").on(t.userId, t.weekStart),
   weekIdx: index("sales_activities_week_idx").on(t.weekStart),
+  contactIdx: index("sales_activities_contact_idx").on(t.contactId),
   sourceUnique: uniqueIndex("sales_activities_source_unique").on(t.source),
 }));
 

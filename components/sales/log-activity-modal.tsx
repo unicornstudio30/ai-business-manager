@@ -78,7 +78,7 @@ export function LogSalesActivityModal({
         const body =
           mode === "stage"
             ? { mode: "stage", stage, channel, contactId: contactId || undefined, notes, weekStart }
-            : { mode: "activity", channel, kind, count, notes, weekStart };
+            : { mode: "activity", channel, kind, count, notes, weekStart, contactId: contactId || undefined };
         const res = await fetch("/api/sales/log", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -271,6 +271,32 @@ export function LogSalesActivityModal({
                   onChange={(e) => setCount(Math.max(1, Math.min(100, Number(e.target.value) || 1)))}
                   className="w-32 rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-300"
                 />
+              </div>
+
+              {/* Same "For which lead?" picker as Log Stage — ties actions
+                  back to a Notion contact so per-lead views group both
+                  stage + action logs together. */}
+              <div>
+                <label htmlFor="s-contact-action" className="text-xs font-medium text-stone-700 mb-1.5 block">
+                  For which lead? <span className="text-stone-400 font-normal">(optional; links this action to a Notion contact)</span>
+                </label>
+                <select
+                  id="s-contact-action"
+                  value={contactId}
+                  onChange={(e) => setContactId(e.target.value)}
+                  disabled={contactsLoading}
+                  className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-300 disabled:opacity-60"
+                >
+                  <option value="">
+                    {contactsLoading ? "Loading your leads…" : myContacts.length === 0 ? "You don't own any CRM leads yet" : "— No specific lead —"}
+                  </option>
+                  {myContacts.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                      {c.status ? ` · currently ${c.status}` : ""}
+                    </option>
+                  ))}
+                </select>
               </div>
             </>
           )}

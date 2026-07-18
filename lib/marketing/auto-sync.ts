@@ -248,6 +248,7 @@ type SalesAutoRow = {
   points: number;
   source: string;
   notes: string | null;
+  contactId: string | null;
 };
 
 // CRM Status → sales credit map lives in lib/sales/stage-credits.ts so the
@@ -288,6 +289,7 @@ function buildStageRows(
       points: salesPointsFor(channelNorm, kind, 1),
       source: `contact_stage:${c.id}:${c.status}`,
       notes: c.name ? `Stage → ${c.status} · ${c.name.slice(0, 80)}` : `Stage → ${c.status}`,
+      contactId: c.id,
     });
   }
   return out;
@@ -298,6 +300,7 @@ function buildSalesRows(
     id: string;
     type: string;
     createdAt: Date | null;
+    contactId: string | null;
     contactPlatform: string | null;
     ownerName: string | null;
     contactName: string | null;
@@ -322,6 +325,7 @@ function buildSalesRows(
       points: salesPointsFor(channel, kind, 1),
       source: `crm_activity:${r.id}`,
       notes: r.contactName ? `${r.type.replace(/_/g, " ")} · ${r.contactName.slice(0, 80)}` : r.type,
+      contactId: r.contactId,
     });
   }
   return out;
@@ -373,6 +377,7 @@ export async function runMarketingAutoSync(): Promise<AutoSyncResult> {
       id: schema.activities.id,
       type: schema.activities.type,
       createdAt: schema.activities.createdAt,
+      contactId: schema.activities.contactId,
       contactPlatform: schema.contacts.platform,
       ownerName: schema.contacts.ownerName,
       contactName: schema.contacts.name,
@@ -468,6 +473,7 @@ export async function runMarketingAutoSync(): Promise<AutoSyncResult> {
           points: r.points,
           notes: r.notes,
           source: r.source,
+          contactId: r.contactId,
         })))
         .onConflictDoNothing({ target: schema.salesActivities.source })
         .returning({ id: schema.salesActivities.id });

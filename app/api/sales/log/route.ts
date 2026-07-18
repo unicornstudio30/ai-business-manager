@@ -75,6 +75,7 @@ export async function POST(req: NextRequest) {
         points,
         notes: enrichedNotes,
         source,
+        contactId,
       })
       .onConflictDoNothing({ target: schema.salesActivities.source })
       .returning();
@@ -83,19 +84,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, activity: row ?? null, deduped: !row });
   }
 
-  // mode === "activity" — freeform abstract action (existing path)
+  // mode === "activity" — freeform abstract action. Optional contactId links
+  // this row back to a Notion contact so per-lead views can group both stage
+  // + action logs together.
   const kind = String(body?.kind || "");
   const count = Number.isFinite(body?.count) ? Math.max(1, Math.min(100, Math.floor(body.count))) : 1;
   if (!VALID_KINDS.has(kind as ActivityKind)) {
     return NextResponse.json({ error: "Invalid kind" }, { status: 400 });
+  }
+  const contactId = typeof body?.contactId === "string" && body.contactId ? body.contactId : null;
+  // Enrich notes with contact name when a lead is picked.
+  let enrichedNotes: string | null = notes;
+  if (contactId) {
+    const [contact] = await db
+      .select({ name: schema.contacts.name })
+      .from(schema.contacts)
+      .where(eq(schema.contacts.id, contactId))
+      .limit(1);
+    if (contact && !enrichedNotes) {
+      enrichedNotes = `${kind.replace(/_/g, " ")} · ${contact.name?.slice(0, 80) ?? "(no name)"}`;
+    }
   }
   const row = await logSalesActivity({
     userId: me.id,
     channel,
     kind: kind as ActivityKind,
     count,
-    notes,
+    notes: enrichedNotes,
     weekStart,
+    contactId,
   });
   revalidatePath("/sell-or-die");
   return NextResponse.json({ ok: true, activity: row });
