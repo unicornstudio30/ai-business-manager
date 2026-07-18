@@ -6,8 +6,11 @@ import { Trophy, Swords } from "lucide-react";
 
 import { getCurrentUser } from "@/lib/auth/server";
 import { getLeaderboard } from "@/lib/db/marketing";
+import { computeLeaderboardTrend } from "@/lib/db/leaderboard-engine";
+import { db, schema } from "@/lib/db/client";
 import { addWeeks, fmtWeekLabel, weekStartFor } from "@/lib/marketing/points";
 import { LeaderboardView } from "@/components/leaderboards/leaderboard-view";
+import { LeaderboardTrend } from "@/components/leaderboards/leaderboard-trend";
 import { LogActivityButton } from "@/components/marketing/log-activity-button";
 import { AutoSyncButton } from "@/components/marketing/auto-sync-button";
 
@@ -22,7 +25,10 @@ export default async function MarketOrDiePage({
   const me = await getCurrentUser();
   const thisWeek = weekStartFor();
   const ws = params.week || thisWeek;
-  const { weekStart, rows } = await getLeaderboard(ws);
+  const [{ weekStart, rows }, trend] = await Promise.all([
+    getLeaderboard(ws),
+    computeLeaderboardTrend({ activityTable: schema.marketingActivities as any, days: 14 }),
+  ]);
 
   const canSetTarget = me?.role === "owner" || me?.role === "admin";
   const prevWeek = addWeeks(weekStart, -1);
@@ -54,6 +60,8 @@ export default async function MarketOrDiePage({
           <LogActivityButton weekStart={weekStart} />
         </div>
       </div>
+
+      <LeaderboardTrend data={trend} tone="amber" title="Team marketing points — last 14 days" />
 
       <LeaderboardView
         rows={rows}

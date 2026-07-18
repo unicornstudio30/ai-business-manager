@@ -12,6 +12,7 @@ import {
 } from "@/lib/db/history";
 import { getOutreachSummary } from "@/lib/db/outreach-summary";
 import { OutreachSummaryPanel } from "@/components/history/outreach-summary";
+import { EventsPerDayChart, type DayBucket } from "@/components/history/events-per-day-chart";
 import { CHANNEL_LABELS, CHANNEL_COLORS, INBOX_CHANNELS, type InboxChannel } from "@/lib/inbox";
 
 // Channels worth surfacing as filter pills (skip "comment" + "other" — they
@@ -144,6 +145,28 @@ export default async function HistoryPage({ searchParams }: PageProps) {
   }
   const sortedDates = Array.from(groups.keys()).sort((a, b) => b.localeCompare(a));
 
+  // Chart data: bucket EVERY day in the range (fill zeros) × count per type.
+  const chartData: DayBucket[] = (() => {
+    const buckets = new Map<string, DayBucket>();
+    for (let i = 0; i < days; i++) {
+      const d = new Date();
+      d.setUTCDate(d.getUTCDate() - (days - 1 - i));
+      const key = d.toISOString().slice(0, 10);
+      buckets.set(key, {
+        date: key,
+        label: d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }),
+      });
+    }
+    for (const e of events) {
+      const key = e.timestamp.toISOString().slice(0, 10);
+      const b = buckets.get(key);
+      if (!b) continue;
+      const t = e.type as keyof DayBucket;
+      (b as any)[t] = (Number((b as any)[t] ?? 0)) + 1;
+    }
+    return Array.from(buckets.values());
+  })();
+
   // Helper: build a URL preserving the other params
   function buildUrl(overrides: Record<string, string | undefined>): string {
     const params = new URLSearchParams();
@@ -199,6 +222,9 @@ export default async function HistoryPage({ searchParams }: PageProps) {
 
       {/* INPUT vs OUTPUT scorecard — always for the selected date range, ignores type filters */}
       <OutreachSummaryPanel summary={summary} periodLabel={`last ${days}d`} />
+
+      {/* Stacked-bar chart of events per day, colored by type */}
+      <EventsPerDayChart data={chartData} days={days} />
 
       {/* Category tabs */}
       <div className="flex gap-1 border-b border-stone-200 -mx-1">

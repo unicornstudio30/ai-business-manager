@@ -3,7 +3,7 @@
 // bucket by week, compute streaks + ranks" pipeline; only the tables and the
 // per-leaderboard target/level helpers differ.
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
 import type { SQLiteTable, SQLiteColumn } from "drizzle-orm/sqlite-core";
 import { db, schema } from "./client";
 import { addWeeks, weekStartFor } from "../marketing/points";
@@ -201,4 +201,58 @@ export async function setTarget(opts: {
       ...(opts.extraCols ?? {}),
     } as any);
   }
+}
+
+// Daily-team-total time series for a leaderboard's activity table. Used by
+// the trend chart shown at the top of each leaderboard page. Returns points
+// per UTC day for the last `days` days, filled in with zeros on quiet days.
+export type TrendPoint = { date: string; label: string; points: number; activities: number };
+
+export async function computeLeaderboardTrend(opts: {
+  activityTable: ActivityTable;
+  days?: number;
+}): Promise<TrendPoint[]> {
+  const days = opts.days ?? 14;
+  const now = new Date();
+  const start = new Date();
+  start.setUTCDate(now.getUTCDate() - (days - 1));
+  start.setUTCHours(0, 0, 0, 0);
+
+  const rows = (await db
+    .select({
+      createdAt: (opts.activityTable as any).createdAt,
+      points: (opts.activityTable as any).points,
+    })
+    .from(opts.activityTable as any)
+    .where(gte((opts.activityTable as any).createdAt, start))) as any[];
+
+  const buckets = new Map<string, { points: number; activities: number }>();
+  for (let i = 0; i < days; i++) {
+    const d = new Date(start);
+    d.setUTCDate(start.getUTCDate() + i);
+    buckets.set(d.toISOString().slice(0, 10), { points: 0, activities: 0 });
+  }
+  for (const r of rows) {
+    const d = r.createdAt as Date | null;
+    if (!d) continue;
+    const key = d.toISOString().slice(0, 10);
+    const cur = buckets.get(key) ?? { points: 0, activities: 0 };
+    cur.points += Number(r.points ?? 0);
+    cur.activities += 1;
+    buckets.set(key, cur);
+  }
+
+  return Array.from(buckets.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([date, v]) => ({
+      date,
+      // Short label: "Mon 7" for the axis
+      label: new Date(date + "T00:00:00Z").toLocaleDateString("en-US", {
+        weekday: "short",
+        day: "numeric",
+        timeZone: "UTC",
+      }),
+      points: v.points,
+      activities: v.activities,
+    }));
 }

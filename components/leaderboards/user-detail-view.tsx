@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Trophy, Flame, Sparkles, Calendar as CalendarIcon } from "lucide-react";
 import type { DetailActivity, LeaderboardVariant, UserDetail } from "@/lib/db/leaderboard-detail";
 import { weekStartFor } from "@/lib/marketing/points";
+import { UserSparkline } from "./user-sparkline";
 
 export type PeriodMode = "day" | "week" | "month";
 const VALID_PERIODS: PeriodMode[] = ["day", "week", "month"];
@@ -13,11 +14,12 @@ export function parsePeriod(raw: string | undefined): PeriodMode {
   return (VALID_PERIODS as string[]).includes(raw ?? "") ? (raw as PeriodMode) : "day";
 }
 
-const VARIANT_META: Record<LeaderboardVariant, { title: string; toneChip: string; toneIcon: string; backHref: string; secondaryLabel: string }> = {
+const VARIANT_META: Record<LeaderboardVariant, { title: string; toneChip: string; toneIcon: string; toneBar: "amber" | "emerald" | "blue"; backHref: string; secondaryLabel: string }> = {
   market: {
     title: "Market or Die",
     toneChip: "bg-amber-100 text-amber-800",
     toneIcon: "text-amber-600",
+    toneBar: "amber",
     backHref: "/market-or-die",
     secondaryLabel: "Platform",
   },
@@ -25,6 +27,7 @@ const VARIANT_META: Record<LeaderboardVariant, { title: string; toneChip: string
     title: "Sell or Die",
     toneChip: "bg-emerald-100 text-emerald-800",
     toneIcon: "text-emerald-600",
+    toneBar: "emerald",
     backHref: "/sell-or-die",
     secondaryLabel: "Channel",
   },
@@ -32,6 +35,7 @@ const VARIANT_META: Record<LeaderboardVariant, { title: string; toneChip: string
     title: "Build or Die",
     toneChip: "bg-blue-100 text-blue-800",
     toneIcon: "text-blue-600",
+    toneBar: "blue",
     backHref: "/build-or-die",
     secondaryLabel: "Stack",
   },
@@ -119,6 +123,17 @@ export function UserDetailView({
   const periodHref = (p: PeriodMode) => `${meta.backHref}/user/${detail.user.id}?period=${p}`;
   const currentLabel = period === "day" ? "today" : period === "week" ? "this week" : "this month";
 
+  // Chart data: newest at the right (ascending order for the sparkline)
+  const sparklineData = [...sortedKeys].reverse().map((key) => {
+    const items = groups.get(key)!;
+    return {
+      key,
+      label: periodLabel(key, period).split(",")[0].replace(/^Week of /, "").slice(0, 6),
+      points: items.reduce((s, a) => s + a.points, 0),
+      activities: items.length,
+    };
+  });
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -172,6 +187,16 @@ export function UserDetailView({
         <StatTile label="Lifetime pts" value={detail.lifetimePoints} Icon={Trophy} />
         <StatTile label={`L${detail.level} default target / week`} value={detail.defaultTarget} Icon={Flame} />
       </div>
+
+      {/* Sparkline of points per period bucket */}
+      {sparklineData.length > 0 && (
+        <div className="rounded-2xl border border-stone-200 bg-white p-4">
+          <div className="text-xs font-medium text-stone-600 uppercase tracking-wide mb-2">
+            Points per {period}
+          </div>
+          <UserSparkline data={sparklineData} tone={meta.toneBar} />
+        </div>
+      )}
 
       {/* Grouped activity list */}
       {detail.activities.length === 0 ? (

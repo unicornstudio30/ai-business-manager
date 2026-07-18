@@ -5,8 +5,11 @@ import { Trophy, Hammer } from "lucide-react";
 
 import { getCurrentUser } from "@/lib/auth/server";
 import { getBuildLeaderboard } from "@/lib/db/build-leaderboard";
+import { computeLeaderboardTrend } from "@/lib/db/leaderboard-engine";
+import { schema } from "@/lib/db/client";
 import { addWeeks, fmtWeekLabel, weekStartFor } from "@/lib/marketing/points";
 import { LeaderboardView } from "@/components/leaderboards/leaderboard-view";
+import { LeaderboardTrend } from "@/components/leaderboards/leaderboard-trend";
 import { LogBuildActivityButton } from "@/components/builds/log-activity-button";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +23,10 @@ export default async function BuildOrDiePage({
   const me = await getCurrentUser();
   const thisWeek = weekStartFor();
   const ws = params.week || thisWeek;
-  const { weekStart, rows } = await getBuildLeaderboard(ws);
+  const [{ weekStart, rows }, trend] = await Promise.all([
+    getBuildLeaderboard(ws),
+    computeLeaderboardTrend({ activityTable: schema.buildActivities as any, days: 14 }),
+  ]);
 
   const canSetTarget = me?.role === "owner" || me?.role === "admin";
   const prevWeek = addWeeks(weekStart, -1);
@@ -49,6 +55,8 @@ export default async function BuildOrDiePage({
           <LogBuildActivityButton weekStart={weekStart} />
         </div>
       </div>
+
+      <LeaderboardTrend data={trend} tone="blue" title="Team build points — last 14 days" />
 
       <LeaderboardView
         rows={rows}

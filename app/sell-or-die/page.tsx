@@ -6,8 +6,11 @@ import { Trophy, DollarSign } from "lucide-react";
 
 import { getCurrentUser } from "@/lib/auth/server";
 import { getSalesLeaderboard } from "@/lib/db/sales-leaderboard";
+import { computeLeaderboardTrend } from "@/lib/db/leaderboard-engine";
+import { schema } from "@/lib/db/client";
 import { addWeeks, fmtWeekLabel, weekStartFor } from "@/lib/marketing/points";
 import { LeaderboardView } from "@/components/leaderboards/leaderboard-view";
+import { LeaderboardTrend } from "@/components/leaderboards/leaderboard-trend";
 import { LogSalesActivityButton } from "@/components/sales/log-activity-button";
 import { AutoSyncButton } from "@/components/marketing/auto-sync-button";
 
@@ -22,7 +25,10 @@ export default async function SellOrDiePage({
   const me = await getCurrentUser();
   const thisWeek = weekStartFor();
   const ws = params.week || thisWeek;
-  const { weekStart, rows } = await getSalesLeaderboard(ws);
+  const [{ weekStart, rows }, trend] = await Promise.all([
+    getSalesLeaderboard(ws),
+    computeLeaderboardTrend({ activityTable: schema.salesActivities as any, days: 14 }),
+  ]);
 
   const canSetTarget = me?.role === "owner" || me?.role === "admin";
   const prevWeek = addWeeks(weekStart, -1);
@@ -55,6 +61,8 @@ export default async function SellOrDiePage({
           <LogSalesActivityButton weekStart={weekStart} />
         </div>
       </div>
+
+      <LeaderboardTrend data={trend} tone="emerald" title="Team sales points — last 14 days" />
 
       <LeaderboardView
         rows={rows}
