@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { getNetworkingNextDrafts, type NextDraftReason } from "@/lib/db/networking-next-drafts";
 
+import { isEnabled } from "@/lib/feature-flags";
+import { FeatureDisabled } from "@/components/feature-disabled";
 export const dynamic = "force-dynamic";
 
 const REASON_META: Record<NextDraftReason, { label: string; icon: any; chip: string; explain: string }> = {
@@ -52,6 +54,7 @@ const REASON_META: Record<NextDraftReason, { label: string; icon: any; chip: str
 };
 
 export default async function NextDraftPage() {
+  if (!isEnabled("NETWORKING_DRAFTS")) return <FeatureDisabled flag="NETWORKING_DRAFTS" title="Next networking draft" />;
   const queue = await getNetworkingNextDrafts(50);
 
   // Group by reason

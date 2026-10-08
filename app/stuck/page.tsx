@@ -1,4 +1,5 @@
-import { stuckDeals, STUCK_THRESHOLDS_DAYS } from "@/lib/db/stuck-deals";
+import { stuckDeals } from "@/lib/db/stuck-deals";
+import { isEnabled } from "@/lib/feature-flags";
 import { StuckRow } from "@/components/stuck/stuck-row";
 import { AlertTriangle } from "lucide-react";
 
@@ -6,6 +7,7 @@ export const dynamic = "force-dynamic";
 
 export default async function StuckPage() {
   const items = await stuckDeals();
+  const aiEnabled = isEnabled("DRAFTING");
 
   // Group by stage for visual structure
   const byStage = new Map<string, typeof items>();
@@ -31,7 +33,7 @@ export default async function StuckPage() {
         <div className="rounded-xl border border-dashed border-stone-300 bg-white p-12 text-center">
           <p className="text-sm text-stone-600 mb-1">No stuck deals. Pipeline is moving.</p>
           <p className="text-xs text-stone-500">
-            Items will appear here when a contact stays in a stage longer than its threshold ({STUCK_THRESHOLDS_DAYS["Proposal Sent"]}d for Proposal Sent, {STUCK_THRESHOLDS_DAYS["1st Lead Follow up"]}d for 1st Lead Follow up, etc.).
+            Items will appear here when a contact stays in a stage longer than its threshold (set per stage in lib/stage-config.ts).
           </p>
         </div>
       ) : (
@@ -49,6 +51,7 @@ export default async function StuckPage() {
                 threshold={item.threshold}
                 overBy={item.overBy}
                 suggestedAction={item.suggestedAction}
+                aiEnabled={aiEnabled}
               />
             ))}
           </div>

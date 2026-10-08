@@ -16,6 +16,8 @@ import { InboxRow } from "@/components/inbox/inbox-row";
 import { DmReminders } from "@/components/dm/dm-reminders";
 import { DmHistoryFeed } from "@/components/dm/dm-history-feed";
 
+import { isEnabled } from "@/lib/feature-flags";
+import { FeatureDisabled } from "@/components/feature-disabled";
 export const dynamic = "force-dynamic";
 
 export default async function DmPage({
@@ -23,6 +25,7 @@ export default async function DmPage({
 }: {
   searchParams: Promise<{ channel?: string }>;
 }) {
+  if (!isEnabled("INBOX")) return <FeatureDisabled flag="INBOX" title="DM inbox" />;
   const sp = await searchParams;
   const selectedChannel = (sp.channel as InboxChannel | undefined) ?? undefined;
 

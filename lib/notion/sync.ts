@@ -2,6 +2,7 @@
 // - PULL: paginated query of each Notion DB; upsert into local SQLite.
 // - PUSH: scan local rows with dirty=1; push changes to Notion; mark dirty=0.
 // - Last-write-wins by timestamp; Notion wins on ties (the user is more often there).
+// - PBM is read-only: PUSH only runs when PBM_FLAG_NOTION_WRITES=on (off by default).
 
 import { db, schema } from "../db/client";
 import { eq, sql } from "drizzle-orm";
@@ -10,6 +11,8 @@ import { notionToContact, contactToNotionProperties } from "./contacts-mapper";
 import { notionToContentItem, contentToNotionProperties } from "./content-mapper";
 import { notionToTrackerEntry } from "./tracker-mapper";
 import { emitInferredActivities } from "./inferred-activities";
+import { getStages } from "./stage-source";
+import { isEnabled } from "../feature-flags";
 import type { PageObjectResponse } from "@notionhq/client";
 
 type SyncResult = { entity: string; pulled: number; pushed: number; error?: string };
@@ -71,8 +74,9 @@ function getDeadline(): number {
 
 async function pullContacts(deadlineMs?: number): Promise<number> {
   let count = 0;
+  const stageOrder = await getStages();
   for await (const page of paginatedQuery(NOTION_DATA_SOURCES.contacts, 100, deadlineMs)) {
-    const row = notionToContact(page);
+    const row = notionToContact(page, stageOrder);
     // Fetch the FULL existing row so we can diff fields (engageTouch, status)
     // and emit inferred activities when CRM updates happen in Notion.
     const existing = await db
@@ -102,6 +106,14 @@ async function pullContacts(deadlineMs?: number): Promise<number> {
         await db
           .update(schema.contacts)
           .set({ ...row, dirty: 0 })
+          .where(eq(schema.contacts.id, prev.id));
+        count++;
+      } else if (row.status !== prev.status || row.ownerName !== prev.ownerName) {
+        // Notion unchanged, but the mapping changed (e.g. stage names now read
+        // straight from Notion). Correct the mirror without inferring activity.
+        await db
+          .update(schema.contacts)
+          .set({ status: row.status, ownerName: row.ownerName })
           .where(eq(schema.contacts.id, prev.id));
         count++;
       }
@@ -169,6 +181,7 @@ async function pullTracker(deadlineMs?: number): Promise<number> {
 // ──────────────────── push (local dirty → Notion) ────────────────────
 
 async function pushContacts(): Promise<number> {
+  if (!isEnabled("NOTION_WRITES")) return 0;
   const dirty = await db.select().from(schema.contacts).where(eq(schema.contacts.dirty, 1));
   if (dirty.length === 0) return 0;
   const n = notion();
@@ -202,6 +215,7 @@ async function pushContacts(): Promise<number> {
 }
 
 async function pushContent(): Promise<number> {
+  if (!isEnabled("NOTION_WRITES")) return 0;
   const dirty = await db.select().from(schema.contentItems).where(eq(schema.contentItems.dirty, 1));
   if (dirty.length === 0) return 0;
   const n = notion();

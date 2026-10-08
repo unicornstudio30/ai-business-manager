@@ -16,17 +16,11 @@
 
 import { db, schema } from "./client";
 import { parseJson } from "../utils";
-import { HOT_LEAD_STAGES } from "../stages";
+import { HOT_LEAD_STAGES, CLOSED_STAGES as CLOSED } from "../stages";
 import { computeIcpScore } from "../icp-scoring";
 import type { Contact } from "./schema";
 
-const CLOSED_STAGES = new Set([
-  "Partnership",
-  "Lost",
-  "Closed without Partnership",
-  "Not qualified",
-  "Close",
-]);
+const CLOSED_STAGES = new Set<string>(CLOSED);
 const HOT = new Set<string>([...HOT_LEAD_STAGES]);
 
 export type EngagementQueueItem = {

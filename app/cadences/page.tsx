@@ -2,9 +2,12 @@ import { db, schema } from "@/lib/db/client";
 import { computeCadence, dueToday, dueSoon } from "@/lib/cadences";
 import { CadenceRow } from "@/components/cadences/cadence-row";
 
+import { isEnabled } from "@/lib/feature-flags";
+import { FeatureDisabled } from "@/components/feature-disabled";
 export const dynamic = "force-dynamic";
 
 export default async function CadencesPage() {
+  if (!isEnabled("FOLLOW_UP_QUEUES")) return <FeatureDisabled flag="FOLLOW_UP_QUEUES" title="Cadences" />;
   const contacts = await db.select().from(schema.contacts);
   const items = contacts
     .map((c) => computeCadence(c))

@@ -18,18 +18,11 @@ import { db, schema } from "../db/client";
 import { eq } from "drizzle-orm";
 import { platformToChannel } from "../inbox";
 import type { Contact } from "../db/schema";
+import { STAGE_ROLES } from "../stage-config";
+import { hasRole, isWon } from "../stages";
 
-const REPLY_TARGET_STAGES = new Set([
-  "Lead",
-  "1st Lead Follow up",
-  "2nd Lead Follow up",
-  "Qualified",
-]);
-const WAITING_STAGES = new Set([
-  "1st message",
-  "1st Prospect Follow-up",
-  "2nd Prospect Follow up",
-]);
+const REPLY_TARGET_STAGES = new Set<string>(STAGE_ROLES.replied);
+const WAITING_STAGES = new Set<string>(STAGE_ROLES.waiting);
 
 export async function emitInferredActivities(
   prev: Contact,
@@ -74,7 +67,7 @@ export async function emitInferredActivities(
 
     // 3) First-time outreach: Prospect → 1st message
     // Skip if engageTouch increment already covered this (avoid double-count)
-    if (prevStatus === "Prospect" && nextStatus === "1st message" && nextTouch <= prevTouch) {
+    if (hasRole(prevStatus, "notContacted") && hasRole(nextStatus, "connectionSent") && nextTouch <= prevTouch) {
       await db.insert(schema.activities).values({
         contactId,
         type: "dm_sent",
@@ -108,29 +101,15 @@ export async function emitInferredActivities(
     });
     emitted++;
 
-    // Auto-promote to "Lead" if lead magnet was added AND status is below "Lead"
-    if (added.includes("lead magnet")) {
-      const BELOW_LEAD = new Set(["Prospect", "1st message", "1st Prospect Follow-up", "2nd Prospect Follow up"]);
-      if (BELOW_LEAD.has(next.status ?? "")) {
-        await db
-          .update(schema.contacts)
-          .set({
-            status: "Lead",
-            statusDate: stamp,
-            dirty: 1,                      // push back to Notion on next sync
-            updatedAt: new Date(),
-          })
-          .where(eq(schema.contacts.id, contactId));
-      }
-    }
+    // Stage is never changed here: the Pipeline app is the only automated
+    // writer of Stage. (This used to auto-promote to "Lead" when a lead
+    // magnet was added and push it back to Notion.)
   }
 
   if (prevStatus !== nextStatus) {
     // 5) Closed deals — emit closed_reason placeholder (just a marker, no content)
     if (
-      (nextStatus === "Partnership" ||
-        nextStatus === "Lost" ||
-        nextStatus === "Closed without Partnership") &&
+      (isWon(nextStatus) || hasRole(nextStatus, "loss")) &&
       prevStatus !== nextStatus
     ) {
       // Only emit a marker note — actual reason gets captured manually in /wins-losses

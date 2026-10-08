@@ -11,6 +11,7 @@
 //                     lib/marketing/points.ts). Existing options are kept.
 
 import { notion, NOTION_DBS, NOTION_DATA_SOURCES, isNotionConfigured } from "./client";
+import { isEnabled, DISABLED_REASON } from "../feature-flags";
 import { ALL_KINDS } from "../marketing/points";
 import { ALL_KINDS as SALES_KINDS } from "../sales/points";
 
@@ -36,6 +37,9 @@ const CRM_PROPERTIES_TO_ADD: Record<string, any> = {
 };
 
 export async function setupNotionCrmColumns(): Promise<SetupResult & { mergedActionsOptions?: string[] }> {
+  if (!isEnabled("NOTION_WRITES")) {
+    return { added: [], existed: [], error: DISABLED_REASON.NOTION_WRITES };
+  }
   if (!isNotionConfigured()) {
     return { added: [], existed: [], error: "NOTION_TOKEN not set" };
   }
@@ -103,6 +107,9 @@ export async function setupNotionCrmColumns(): Promise<SetupResult & { mergedAct
 // present in Notion (e.g. custom genre values like "storytelling") so no
 // data is lost.
 export async function setupNotionContentColumns(): Promise<SetupResult & { mergedTypeOptions?: string[] }> {
+  if (!isEnabled("NOTION_WRITES")) {
+    return { added: [], existed: [], error: DISABLED_REASON.NOTION_WRITES };
+  }
   if (!isNotionConfigured()) {
     return { added: [], existed: [], error: "NOTION_TOKEN not set" };
   }

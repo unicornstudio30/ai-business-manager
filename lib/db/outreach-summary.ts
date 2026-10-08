@@ -2,6 +2,7 @@
 // scorecard for any time window. Aggregates across activities +
 // deals_closed + daily_sales_kpis.
 
+import { isWon } from "../stages";
 import { db, schema } from "./client";
 import { and, gte, lte, isNotNull, inArray } from "drizzle-orm";
 
@@ -73,7 +74,7 @@ export async function getOutreachSummary(opts: { since: Date; until?: Date }): P
         lte(schema.dailySalesKpis.date, until)
       )),
   ]);
-  const dealsWon = closedContacts.filter((c) => c.status === "Partnership").length;
+  const dealsWon = closedContacts.filter((c) => isWon(c.status)).length;
   const kpiSum = (key: "inboundLeads" | "responses" | "callsBooked") =>
     kpis.reduce((s, k) => s + ((k[key] as number | null) ?? 0), 0);
 

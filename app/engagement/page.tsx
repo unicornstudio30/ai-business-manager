@@ -16,9 +16,12 @@ import { EngagementReminders } from "@/components/engagement/engagement-reminder
 import { EngagementQueuePlatform } from "@/components/engagement/engagement-queue-platform";
 import { PlatformEngagementSection } from "@/components/engagement/platform-engagement";
 
+import { isEnabled } from "@/lib/feature-flags";
+import { FeatureDisabled } from "@/components/feature-disabled";
 export const dynamic = "force-dynamic";
 
 export default async function EngagementPage() {
+  if (!isEnabled("FOLLOW_UP_QUEUES")) return <FeatureDisabled flag="FOLLOW_UP_QUEUES" title="Engagement queue" />;
   const today = new Date();
 
   const [kpis, queue, byPlatform, effective] = await Promise.all([

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Download, ExternalLink, Flame } from "lucide-react";
 import type { EngagementByPlatform, EngagementLevel } from "@/lib/db/engagement-by-platform";
-import { STAGE_COLORS, type Stage } from "@/lib/stages";
+import { stageColor, type Stage } from "@/lib/stages";
 import { icpColor } from "@/lib/icp-scoring";
 import { fmtDate } from "@/lib/utils";
 
@@ -101,7 +101,7 @@ export function PlatformEngagementSection({ data }: { data: EngagementByPlatform
                     </div>
                     <div className="flex items-center gap-1.5 mt-1 ml-11 flex-wrap text-[10px] text-stone-500">
                       {c.status && (
-                        <span className={`inline-flex items-center rounded px-1 py-px ${STAGE_COLORS[c.status as Stage] ?? "bg-stone-100 text-stone-700 border-stone-200"}`}>
+                        <span className={`inline-flex items-center rounded px-1 py-px ${stageColor(c.status) ?? "bg-stone-100 text-stone-700 border-stone-200"}`}>
                           {c.status}
                         </span>
                       )}

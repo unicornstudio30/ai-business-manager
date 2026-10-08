@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Check, Copy, ArrowUpRight, AlertTriangle, ExternalLink, Sparkles } from "lucide-react";
 import { fmtDate } from "@/lib/utils";
-import { STAGE_COLORS, type Stage } from "@/lib/stages";
+import { stageColor, type Stage } from "@/lib/stages";
 import type { Contact } from "@/lib/db/schema";
 
 type Props = {
@@ -13,6 +13,8 @@ type Props = {
   threshold: number;
   overBy: number;
   suggestedAction: string;
+  // AI "what to send next" — off while drafting lives in the Pipeline app.
+  aiEnabled?: boolean;
 };
 
 type AiState =
@@ -21,7 +23,7 @@ type AiState =
   | { status: "ok"; text: string; cached: boolean }
   | { status: "error"; error: string };
 
-export function StuckRow({ contact, daysStuck, threshold, overBy, suggestedAction }: Props) {
+export function StuckRow({ contact, daysStuck, threshold, overBy, suggestedAction, aiEnabled = false }: Props) {
   const [copied, setCopied] = useState(false);
   const [ai, setAi] = useState<AiState>({ status: "idle" });
 
@@ -68,7 +70,7 @@ export function StuckRow({ contact, daysStuck, threshold, overBy, suggestedActio
               {contact.name || "(no name)"}
             </Link>
             {contact.status && (
-              <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${STAGE_COLORS[contact.status as Stage] ?? "bg-stone-100 text-stone-800 border-stone-200"}`}>
+              <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${stageColor(contact.status) ?? "bg-stone-100 text-stone-800 border-stone-200"}`}>
                 {contact.status}
               </span>
             )}
@@ -77,7 +79,7 @@ export function StuckRow({ contact, daysStuck, threshold, overBy, suggestedActio
           <p className="text-sm text-stone-700 mb-1">
             <span className="text-stone-500">Playbook:</span> {suggestedAction}
           </p>
-          {ai.status === "idle" && (
+          {aiEnabled && ai.status === "idle" && (
             <button
               onClick={loadAi}
               className="inline-flex items-center gap-1 text-[11px] text-violet-700 hover:underline mb-1"

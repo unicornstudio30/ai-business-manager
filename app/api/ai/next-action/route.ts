@@ -4,7 +4,9 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { getNextAction } from "@/lib/ai/next-action";
 
+import { isEnabled, disabledResponse } from "@/lib/feature-flags";
 export async function GET(req: Request) {
+  if (!isEnabled("DRAFTING")) return disabledResponse("DRAFTING");
   const { searchParams } = new URL(req.url);
   const contactId = searchParams.get("contact_id");
   if (!contactId) {

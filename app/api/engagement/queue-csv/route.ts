@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 import { NextRequest } from "next/server";
 import { getEngagementQueueByPlatform } from "@/lib/db/engagement-queue";
 
+import { isEnabled, disabledResponse } from "@/lib/feature-flags";
 function esc(v: unknown): string {
   if (v === null || v === undefined) return "";
   const s = String(v);
@@ -14,6 +15,7 @@ function esc(v: unknown): string {
 }
 
 export async function GET(req: NextRequest) {
+  if (!isEnabled("FOLLOW_UP_QUEUES")) return disabledResponse("FOLLOW_UP_QUEUES");
   const platformFilter = req.nextUrl.searchParams.get("platform");
   const data = await getEngagementQueueByPlatform();
 

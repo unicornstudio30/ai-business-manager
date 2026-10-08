@@ -4,56 +4,44 @@
 import type { PageObjectResponse } from "@notionhq/client";
 import type { NewContact } from "../db/schema";
 import { trackForPlatform } from "../sequences";
-import { STAGES, type Stage } from "../stages";
+import { canonicalStage } from "../stages";
+import { STAGE_PROPERTY } from "../stage-config";
 
 type Props = PageObjectResponse["properties"];
-
-// Aliases for Status values that drift from the canonical STAGES list.
-// Keys are the spellings Notion may emit; values are the canonical Stage.
-const STATUS_ALIAS: Record<string, Stage> = {
-  "In-mail": "Inmail",
-  "Close": "Closed without Partnership",
-};
-
-const STAGE_INDEX: Record<string, number> = Object.fromEntries(
-  STAGES.map((s, i) => [s, i])
-);
 
 // Read the Status property from a Notion page. Handles BOTH single-select and
 // multi_select column types (the latter is what the user actually has). When
 // multiple values are picked (data-quality issue, but we tolerate it), pick the
-// one furthest along in the pipeline — terminal stages naturally win.
-function readStatus(p: any): string | null {
+// one furthest along in `stageOrder` (Notion's option order, from
+// lib/notion/stage-source.ts).
+function readStatus(p: any, stageOrder: readonly string[]): string | null {
   if (!p) return null;
   // single-select
   if (p.type === "select") {
     const raw = p.select?.name;
-    if (!raw) return null;
-    return STATUS_ALIAS[raw] ?? raw;
+    return raw ? canonicalStage(raw) : null;
   }
   // multi-select (the actual shape in this CRM)
   if (p.type === "multi_select") {
-    const names: string[] = (p.multi_select ?? []).map((o: any) => o.name);
+    const names: string[] = (p.multi_select ?? []).map((o: any) => canonicalStage(o.name));
     if (names.length === 0) return null;
-    const canonical = names.map((n) => STATUS_ALIAS[n] ?? n);
-    // Pick the most-advanced known stage; if none match STAGES, take the
-    // first raw value so the data isn't lost entirely.
+    // Pick the most-advanced known stage; if none are known, take the first
+    // raw value so the data isn't lost entirely.
     let best: string | null = null;
     let bestIdx = -1;
-    for (const c of canonical) {
-      const idx = STAGE_INDEX[c];
-      if (idx !== undefined && idx > bestIdx) {
+    for (const c of names) {
+      const idx = stageOrder.indexOf(c);
+      if (idx > bestIdx) {
         bestIdx = idx;
         best = c;
       }
     }
-    return best ?? canonical[0];
+    return best ?? names[0];
   }
   // Notion's "status" property type (yet another shape — defensive)
   if (p.type === "status") {
     const raw = p.status?.name;
-    if (!raw) return null;
-    return STATUS_ALIAS[raw] ?? raw;
+    return raw ? canonicalStage(raw) : null;
   }
   return null;
 }
@@ -110,7 +98,7 @@ const number = (p: any): number | null => {
   return null;
 };
 
-export function notionToContact(page: PageObjectResponse): NewContact {
+export function notionToContact(page: PageObjectResponse, stageOrder: readonly string[] = []): NewContact {
   const props = page.properties as Props;
   const name = text(props["Name"]) || "(untitled)";
   const platform = select(props["Platform"]);
@@ -128,7 +116,7 @@ export function notionToContact(page: PageObjectResponse): NewContact {
     category: JSON.stringify(multiSelect(props["Category"])),
     position: JSON.stringify(multiSelect(props["Position"])),
     profession: JSON.stringify(multiSelect(props["Proffesion"])),
-    status: readStatus(props["Status"]),
+    status: readStatus(props[STAGE_PROPERTY], stageOrder),
     statusDate: date(props["Status Date"]),
     followUpDate: date(props["Follow-up Date"]),
     closedDate: date(props["Closed date"]),
@@ -158,6 +146,8 @@ export function notionToContact(page: PageObjectResponse): NewContact {
 
 // For pushing local edits back to Notion. Only sends fields the user
 // commonly edits in the web app; leaves the rest untouched.
+// Unused while PBM is read-only (PBM_FLAG_NOTION_WRITES off). Note: it never
+// sends Status — Stage is written only by the Pipeline app.
 export function contactToNotionProperties(
   c: Partial<NewContact>
 ): Record<string, any> {
@@ -167,14 +157,6 @@ export function contactToNotionProperties(
   }
   if (c.email !== undefined) {
     out["Email Address"] = { rich_text: [{ text: { content: c.email || "" } }] };
-  }
-  if (c.status !== undefined && c.status !== null) {
-    out["Status"] = { select: { name: c.status } };
-  }
-  if (c.statusDate !== undefined) {
-    out["Status Date"] = c.statusDate
-      ? { date: { start: c.statusDate.toISOString().slice(0, 10) } }
-      : { date: null };
   }
   if (c.followUpDate !== undefined) {
     out["Follow-up Date"] = c.followUpDate

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowUpRight, AlertTriangle } from "lucide-react";
-import { STAGE_COLORS, type Stage } from "@/lib/stages";
+import { stageColor, type Stage } from "@/lib/stages";
 import type { StuckDeal } from "@/lib/db/stuck-deals";
 
 export function StuckWidget({ items }: { items: StuckDeal[] }) {
@@ -32,7 +32,7 @@ export function StuckWidget({ items }: { items: StuckDeal[] }) {
                 </div>
               </div>
               {item.contact.status && (
-                <span className={`text-[11px] rounded px-1.5 py-0.5 border whitespace-nowrap ${STAGE_COLORS[item.contact.status as Stage]}`}>
+                <span className={`text-[11px] rounded px-1.5 py-0.5 border whitespace-nowrap ${stageColor(item.contact.status)}`}>
                   {item.contact.status}
                 </span>
               )}

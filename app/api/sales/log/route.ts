@@ -5,7 +5,8 @@
 // is derived from the picked contact's `platform` field (LinkedIn / X /
 // Facebook / …) rather than a user-picked dropdown. When contactId is set
 // and the contact has a notion_page_id, an entry is appended to the CRM's
-// "Log Actions" column (best-effort).
+// "Log Actions" column (best-effort) — only when PBM_FLAG_NOTION_WRITES=on.
+// The PBM sales_activities row is always written.
 //
 // DELETE /api/sales/log?id=...
 
@@ -20,11 +21,10 @@ import { deleteSalesActivity } from "@/lib/db/sales-leaderboard";
 import { ALL_KINDS, pointsFor, weekStartFor, type ActivityKind } from "@/lib/sales/points";
 import { kindForStage } from "@/lib/sales/stage-credits";
 import { normalizeChannelFromPlatform } from "@/lib/sales/channel-from-platform";
-import { STAGES, type Stage } from "@/lib/stages";
 import { appendContactLogEntry } from "@/lib/notion/contact-log";
+import { getStages } from "@/lib/notion/stage-source";
 
 const VALID_KINDS = new Set(ALL_KINDS.map((k) => k.kind));
-const VALID_STAGES = new Set(STAGES as readonly string[]);
 
 export async function POST(req: NextRequest) {
   const me = await getCurrentUser();
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
       error: "Pick EITHER a stage OR an action, not both (stage flips already imply their action).",
     }, { status: 400 });
   }
-  if (stageInput && !VALID_STAGES.has(stageInput)) {
+  if (stageInput && !(await getStages()).includes(stageInput)) {
     return NextResponse.json({ error: "Invalid stage" }, { status: 400 });
   }
   if (kindInput && !VALID_KINDS.has(kindInput as ActivityKind)) {
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
 
   // 1) Stage row
   if (stageInput) {
-    const kind = kindForStage(stageInput as Stage);
+    const kind = kindForStage(stageInput);
     if (!kind) {
       return NextResponse.json({
         error: `Stage '${stageInput}' doesn't earn credit (Prospect / Connection / follow-up stages skipped)`,

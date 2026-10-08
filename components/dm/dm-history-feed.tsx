@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Send, MessageCircle, ArrowDownLeft, ExternalLink } from "lucide-react";
 import type { DmHistoryItem } from "@/lib/db/dm-history";
 import { CHANNEL_COLORS, type InboxChannel } from "@/lib/inbox";
-import { STAGE_COLORS, type Stage } from "@/lib/stages";
+import { stageColor, type Stage } from "@/lib/stages";
 import { fmtDate } from "@/lib/utils";
 
 const TYPE_META: Record<string, { label: string; icon: typeof Send; tone: string }> = {
@@ -84,7 +84,7 @@ export function DmHistoryFeed({ items }: { items: DmHistoryItem[] }) {
                           <span className="text-sm text-stone-500">(deleted contact)</span>
                         )}
                         {item.contact?.status && (
-                          <span className={`inline-flex items-center rounded px-1.5 py-px text-[10px] font-medium ${STAGE_COLORS[item.contact.status as Stage] ?? "bg-stone-100 text-stone-700 border-stone-200"}`}>
+                          <span className={`inline-flex items-center rounded px-1.5 py-px text-[10px] font-medium ${stageColor(item.contact.status) ?? "bg-stone-100 text-stone-700 border-stone-200"}`}>
                             {item.contact.status}
                           </span>
                         )}

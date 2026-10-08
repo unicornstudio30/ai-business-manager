@@ -13,14 +13,9 @@ import { desc, inArray, gte } from "drizzle-orm";
 import { computeIcpScore } from "../icp-scoring";
 import { parseJson } from "../utils";
 import type { Contact } from "./schema";
+import { CLOSED_STAGES as CLOSED } from "../stages";
 
-const CLOSED_STAGES = new Set([
-  "Partnership",
-  "Lost",
-  "Closed without Partnership",
-  "Not qualified",
-  "Close",
-]);
+const CLOSED_STAGES = new Set<string>(CLOSED);
 
 export type EngagementLevel = "highly_engaged" | "touched" | "cold";
 

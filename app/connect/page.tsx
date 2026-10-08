@@ -20,9 +20,12 @@ import { getEffectiveOutreachLimits } from "@/lib/outreach-config";
 import { ConnectReminders } from "@/components/connect/connect-reminders";
 import { ConnectQueuePlatform } from "@/components/connect/connect-queue-platform";
 
+import { isEnabled } from "@/lib/feature-flags";
+import { FeatureDisabled } from "@/components/feature-disabled";
 export const dynamic = "force-dynamic";
 
 export default async function ConnectPage() {
+  if (!isEnabled("FOLLOW_UP_QUEUES")) return <FeatureDisabled flag="FOLLOW_UP_QUEUES" title="Connect queue" />;
   const today = new Date();
   const [kpis, queue, effective] = await Promise.all([
     getNotionDerivedKpis(today),

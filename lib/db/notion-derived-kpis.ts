@@ -14,6 +14,8 @@
 //
 // Output: a fully-derived DerivedKpis snapshot for any given day.
 
+import { STAGE_ROLES } from "../stage-config";
+import { STAGE_GROUPS, isClosed, isTerminal, isWon, stageGroup } from "../stages";
 import { db, schema } from "./client";
 import { and, gte, lt, eq, inArray, sql } from "drizzle-orm";
 import { platformToChannel, type InboxChannel } from "../inbox";
@@ -30,20 +32,14 @@ function endOfDay(d: Date): Date {
   return x;
 }
 
-// Stage groupings from the 18-stage pipeline
-const CONNECTION_STAGES = ["1st message"];                                                                      // initial outreach
-const INMAIL_STAGE = "Inmail";                                                                                  // cold message, no connection request
-const ENGAGED_STAGES = ["Lead", "1st Lead Follow up", "2nd Lead Follow up"];
-const QUALIFIED_STAGE = "Qualified";
-const PROPOSAL_STAGE = "Proposal Sent";
-const BOOKING_STAGE = "Booking";
-const FIRST_CALL_STAGE = "First call";
-const WIN_STAGE = "Partnership";
-const LOSS_STAGES = ["Lost", "Closed without Partnership", "Not qualified", "Close"];
-const PROSPECT_FOLLOW_UPS = ["1st Prospect Follow-up", "2nd Prospect Follow up"];
-const LEAD_FOLLOW_UPS = ["1st Lead Follow up", "2nd Lead Follow up"];
-const POST_PROPOSAL_FOLLOW_UPS = ["Post Proposal Follow-up-1", "Post Proposal Follow-up-2"];
-const ALL_FOLLOW_UP_STAGES = [...PROSPECT_FOLLOW_UPS, ...LEAD_FOLLOW_UPS, ...POST_PROPOSAL_FOLLOW_UPS];
+// Stage roles and groups come from lib/stage-config.ts.
+const CONNECTION_STAGES: readonly string[] = STAGE_ROLES.connectionSent;
+const INMAIL_STAGES: readonly string[] = STAGE_ROLES.inmailSent;
+const ENGAGED_STAGES: readonly string[] = STAGE_GROUPS.Engaged;
+const QUALIFIED_STAGES: readonly string[] = STAGE_ROLES.qualified;
+const PROPOSAL_STAGES: readonly string[] = STAGE_ROLES.proposalSent;
+const BOOKING_STAGES: readonly string[] = STAGE_ROLES.booking;
+const ALL_FOLLOW_UP_STAGES: readonly string[] = STAGE_ROLES.followUp;
 
 export type ByPlatform = Partial<Record<InboxChannel, number>>;
 
@@ -163,12 +159,13 @@ export async function getNotionDerivedKpis(forDate: Date): Promise<DerivedKpis> 
     // ─ Pipeline snapshot ─
     if (status) {
       pipeline.total++;
-      if (status === "Prospect" || status === "1st message" || PROSPECT_FOLLOW_UPS.includes(status)) pipeline.cold++;
-      else if (ENGAGED_STAGES.includes(status)) pipeline.engaged++;
-      else if (status === QUALIFIED_STAGE) pipeline.qualified++;
-      else if (status === PROPOSAL_STAGE || POST_PROPOSAL_FOLLOW_UPS.includes(status)) pipeline.proposal++;
-      else if (status === BOOKING_STAGE || status === FIRST_CALL_STAGE) pipeline.booking++;
-      else if (status === WIN_STAGE || LOSS_STAGES.includes(status)) pipeline.closed++;
+      const group = stageGroup(status);
+      if (isClosed(status)) pipeline.closed++;
+      else if (group === "Cold") pipeline.cold++;
+      else if (group === "Engaged") pipeline.engaged++;
+      else if (group === "Qualified") pipeline.qualified++;
+      else if (group === "Proposal") pipeline.proposal++;
+      else if (group === "Call") pipeline.booking++;
     }
 
     // ─ New prospects today (savedDate is today) ─
@@ -191,7 +188,7 @@ export async function getNotionDerivedKpis(forDate: Date): Promise<DerivedKpis> 
         newConnectionsToday.push({ id: c.id, name: c.name || "(no name)", platform: c.platform });
       }
       // InMail sent (Status = "Inmail" + statusDate = today)
-      if (status === INMAIL_STAGE) {
+      if (INMAIL_STAGES.includes(status)) {
         inmailsSent.total++;
         bumpPlatform(inmailsSent.byPlatform, channel);
       }
@@ -201,19 +198,19 @@ export async function getNotionDerivedKpis(forDate: Date): Promise<DerivedKpis> 
         bumpPlatform(followUpsSent.byPlatform, channel);
       }
       // Response received (moved INTO a Lead/Qualified stage today)
-      if (ENGAGED_STAGES.includes(status) || status === QUALIFIED_STAGE) {
+      if (ENGAGED_STAGES.includes(status) || QUALIFIED_STAGES.includes(status)) {
         responsesReceived++;
       }
-      if (status === QUALIFIED_STAGE) qualifications++;
-      if (status === PROPOSAL_STAGE) {
+      if (QUALIFIED_STAGES.includes(status)) qualifications++;
+      if (PROPOSAL_STAGES.includes(status)) {
         proposalsSent++;
         newProposalsToday.push({ id: c.id, name: c.name || "(no name)", statusDate: sd });
       }
-      if (status === BOOKING_STAGE) {
+      if (BOOKING_STAGES.includes(status)) {
         bookings++;
         meetingsToday.push({ id: c.id, name: c.name || "(no name)", status, statusDate: sd, platform: c.platform });
       }
-      if (status === FIRST_CALL_STAGE) {
+      if ((STAGE_ROLES.firstCall as readonly string[]).includes(status)) {
         callsHeld++;
         meetingsToday.push({ id: c.id, name: c.name || "(no name)", status, statusDate: sd, platform: c.platform });
       }
@@ -221,15 +218,15 @@ export async function getNotionDerivedKpis(forDate: Date): Promise<DerivedKpis> 
 
     // ─ Closed today (closedDate is today) ─
     if (inDay(cd)) {
-      if (status === WIN_STAGE) dealsWon++;
-      else if (LOSS_STAGES.includes(status)) dealsLost++;
+      if (isWon(status)) dealsWon++;
+      else if (isTerminal(status)) dealsLost++;
     }
 
     // ─ Cross outreach: contacts with 2+ channels in Notion's Cross outreach multi-select ─
     if (c.crossOutreach) {
       try {
         const channels: string[] = JSON.parse(c.crossOutreach);
-        if (Array.isArray(channels) && channels.length >= 2 && status !== WIN_STAGE && !LOSS_STAGES.includes(status)) {
+        if (Array.isArray(channels) && channels.length >= 2 && !isClosed(status)) {
           multiChannelContacts.push({
             id: c.id,
             name: c.name || "(no name)",
@@ -241,13 +238,13 @@ export async function getNotionDerivedKpis(forDate: Date): Promise<DerivedKpis> 
     }
 
     // ─ Engage Touch distribution (only count contacts still in active pipeline) ─
-    if (status && status !== WIN_STAGE && !LOSS_STAGES.includes(status)) {
+    if (status && !isClosed(status)) {
       const touch = String(c.engageTouch ?? 0);
       engageTouchDistribution[touch] = (engageTouchDistribution[touch] ?? 0) + 1;
     }
 
     // ─ Overdue follow-ups (followUpDate < today + status not closed/won) ─
-    if (fud && fud < start && status !== WIN_STAGE && !LOSS_STAGES.includes(status)) {
+    if (fud && fud < start && !isClosed(status)) {
       const daysLate = Math.floor((start.getTime() - fud.getTime()) / 86400000);
       followUpsOverdue.push({
         id: c.id,

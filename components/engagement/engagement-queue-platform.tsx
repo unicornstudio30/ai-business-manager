@@ -6,7 +6,7 @@
 
 import Link from "next/link";
 import { ExternalLink, Download, Star, Flame, Sparkles } from "lucide-react";
-import { STAGE_COLORS, type Stage } from "@/lib/stages";
+import { stageColor, type Stage } from "@/lib/stages";
 import { icpColor } from "@/lib/icp-scoring";
 import type { EngagementQueueByPlatform } from "@/lib/db/engagement-queue";
 
@@ -83,7 +83,7 @@ export function EngagementQueuePlatform({ data }: { data: EngagementQueueByPlatf
                       </div>
                       <div className="flex items-center gap-1.5 mt-1.5 flex-wrap text-[10px] text-stone-500">
                         {c.status && (
-                          <span className={`inline-flex items-center rounded px-1 py-px ${STAGE_COLORS[c.status as Stage] ?? "bg-stone-100 text-stone-700 border-stone-200"}`}>
+                          <span className={`inline-flex items-center rounded px-1 py-px ${stageColor(c.status) ?? "bg-stone-100 text-stone-700 border-stone-200"}`}>
                             {c.status}
                           </span>
                         )}

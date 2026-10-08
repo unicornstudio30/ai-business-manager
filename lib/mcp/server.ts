@@ -1,12 +1,21 @@
 // MCP server definition — exposes Unicorn Studio's web app as tools for Claude.
 // Reuses all existing query/mutation code; doesn't duplicate logic.
 //
-//   READ: briefing, list_contacts, get_contact, hot_leads, needs_follow_up,
-//         engagement_queue, cadences_due, icp_score, analytics, inbox,
-//         stuck_deals, wins_losses, stage_definitions
-//   WRITE: create_activity, sync_notion
-//   AI:    next_message, stuck_suggestion, daily_summary, classify_icp
-//         (server-side OpenRouter — callable from Claude.ai)
+// PBM is a READ-ONLY reporting layer over the Notion CRM. Notion is the
+// system of record and the Pipeline app is the only automated writer of
+// Stage; it also owns the inbox, next action and drafts. Overlapping tools
+// keep their names and response shapes but return empty data plus
+// { disabled: true, reason, flag } while their feature flag is off
+// (lib/feature-flags.ts).
+//
+//   READ: briefing, list_contacts, get_contact, hot_leads, icp_score,
+//         analytics (seat), stuck_deals (seat), wins_losses, stage_definitions,
+//         list_seats, *_leaderboard (seat)
+//   OFF by default: inbox, needs_follow_up, engagement_queue, cadences_due,
+//         next_message, stuck_suggestion, comment_draft
+//   WRITE (PBM's own DB only): create_activity, sync_notion (pull-only),
+//         classify_icp, set_outreach_limit, networking drafts
+//   AI:   daily_summary, classify_icp (server-side OpenRouter)
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -33,7 +42,9 @@ import { stuckDeals, stuckByStage } from "@/lib/db/stuck-deals";
 import { listClosedDeals, winLossSummary } from "@/lib/db/wins-losses";
 import { computeIcpScore } from "@/lib/icp-scoring";
 import { syncNotion, syncStatus } from "@/lib/notion/sync";
-import { STAGES } from "@/lib/stages";
+import { getStageDefinitions } from "@/lib/notion/stage-source";
+import { isEnabled, disabledFields } from "@/lib/feature-flags";
+import { filterLeaderboardBySeat, getSeat, listSeats } from "@/lib/db/seats";
 import { generateNextMessage } from "@/lib/ai/next-message";
 import { getStuckSuggestion } from "@/lib/ai/stuck-suggestion";
 import { getDailySummary } from "@/lib/ai/daily-summary";
@@ -191,6 +202,7 @@ export function buildMcpServer(): McpServer {
       },
     },
     async ({ days, limit }) => {
+      if (!isEnabled("FOLLOW_UP_QUEUES")) return ok({ count: 0, contacts: [], ...disabledFields("FOLLOW_UP_QUEUES") });
       const rows = await getNeedsFollowUp(days ?? 11, limit ?? 20);
       return ok({ count: rows.length, contacts: rows });
     }
@@ -213,6 +225,14 @@ export function buildMcpServer(): McpServer {
       },
     },
     async ({ onlyHot, limit }) => {
+      if (!isEnabled("FOLLOW_UP_QUEUES")) {
+        return ok({
+          queue: [],
+          today_counts: await getTodayCounts(),
+          daily_targets: DAILY_TARGETS,
+          ...disabledFields("FOLLOW_UP_QUEUES"),
+        });
+      }
       const queue = await listEngagementQueue({
         onlyHot: onlyHot ?? true,
         limit: limit ?? 50,
@@ -238,6 +258,7 @@ export function buildMcpServer(): McpServer {
       },
     },
     async ({ withinDays }) => {
+      if (!isEnabled("FOLLOW_UP_QUEUES")) return ok({ due_today: [], due_soon: [], ...disabledFields("FOLLOW_UP_QUEUES") });
       const contacts = await db.select().from(schema.contacts);
       const items = contacts
         .map((c) => computeCadence(c))
@@ -253,11 +274,15 @@ export function buildMcpServer(): McpServer {
     "analytics",
     {
       title: "Pipeline Analytics",
-      description: "Pipeline funnel counts (Cold→Won) + 30-day activity trend.",
-      inputSchema: {},
+      description:
+        "Pipeline funnel counts (Cold→Won) + 30-day activity trend. " +
+        "Pass seat=<Notion Person value> (see list_seats) to limit to one LinkedIn seat's contacts; omit for all seats.",
+      inputSchema: {
+        seat: z.string().optional().describe("Notion Person value, e.g. 'Saidur Rahman'. Omit for all seats."),
+      },
     },
-    async () => {
-      const [funnel, trend] = await Promise.all([funnelCounts(), activityTrend30d()]);
+    async ({ seat }) => {
+      const [funnel, trend] = await Promise.all([funnelCounts({ seat }), activityTrend30d({ seat })]);
       return ok({ funnel, activity_trend_30d: trend });
     }
   );
@@ -267,12 +292,14 @@ export function buildMcpServer(): McpServer {
     {
       title: "Stage Definitions",
       description:
-        "Returns the canonical list of all 18 pipeline stages in order, and their dashboard-group mapping (Cold/Engaged/Qualified/Proposal/Call/Won/Archive).",
+        "Returns every pipeline stage, read live from the Notion CRM's Status options (in Notion's order), " +
+        "and their dashboard-group mapping (Cold/Engaged/Qualified/Proposal/Call/Won/Archive). " +
+        "'ungrouped' lists Notion stages that have no group in lib/stage-config.ts yet.",
       inputSchema: {},
     },
     async () => {
-      const { STAGE_GROUPS } = await import("@/lib/stages");
-      return ok({ stages: STAGES, stage_groups: STAGE_GROUPS });
+      const defs = await getStageDefinitions();
+      return ok({ stages: defs.stages, stage_groups: defs.stage_groups, ungrouped: defs.ungrouped, source: defs.source });
     }
   );
 
@@ -289,6 +316,7 @@ export function buildMcpServer(): McpServer {
       },
     },
     async ({ channel }) => {
+      if (!isEnabled("INBOX")) return ok({ items: [], counts: { total: 0, byChannel: {} }, ...disabledFields("INBOX") });
       const [items, counts] = await Promise.all([inboxView({ channel }), inboxCounts()]);
       return ok({ items, counts });
     }
@@ -348,11 +376,17 @@ export function buildMcpServer(): McpServer {
       description:
         "Contacts that have stalled past their stage's freshness threshold. " +
         "Each item has stage, days stuck, days over threshold, and a suggested next action " +
-        "from Saidur's playbook.",
-      inputSchema: {},
+        "from Saidur's playbook. Pass seat=<Notion Person value> to limit to one LinkedIn seat.",
+      inputSchema: {
+        seat: z.string().optional().describe("Notion Person value. Omit for all seats."),
+      },
     },
-    async () => {
-      const [items, byStage] = await Promise.all([stuckDeals(), stuckByStage()]);
+    async ({ seat }) => {
+      const items = await stuckDeals({ seat });
+      const byStage: Record<string, number> = {};
+      for (const i of items) {
+        if (i.contact.status) byStage[i.contact.status] = (byStage[i.contact.status] ?? 0) + 1;
+      }
       return ok({ items, by_stage: byStage, total: items.length });
     }
   );
@@ -394,7 +428,8 @@ export function buildMcpServer(): McpServer {
     {
       title: "Sync Notion",
       description:
-        "Trigger a Notion sync. Per-entity to fit Vercel Hobby's 10s function limit. " +
+        "Pull the latest data from Notion into PBM (read-only: PBM never writes back to Notion). " +
+        "Per-entity to fit Vercel Hobby's 10s function limit. " +
         "Call with entity='contacts' | 'content_items' | 'tracker_entries' to scope. " +
         "Without an entity, runs all three sequentially.",
       inputSchema: {
@@ -427,6 +462,7 @@ export function buildMcpServer(): McpServer {
       },
     },
     async ({ contact_id, save }) => {
+      if (!isEnabled("NEXT_MESSAGE")) return ok({ error: "next_message is disabled", contact_id, ...disabledFields("NEXT_MESSAGE") });
       const result = await generateNextMessage({ contactId: contact_id, save: save ?? false });
       if (!result) return ok({ error: "OPENROUTER_API_KEY not set or contact not found", contact_id });
       return ok(result);
@@ -445,6 +481,7 @@ export function buildMcpServer(): McpServer {
       },
     },
     async ({ contact_id }) => {
+      if (!isEnabled("DRAFTING")) return ok({ error: "stuck_suggestion is disabled", contact_id, ...disabledFields("DRAFTING") });
       const result = await getStuckSuggestion(contact_id);
       if (!result) return ok({ error: "OPENROUTER_API_KEY not set or contact not found", contact_id });
       return ok(result);
@@ -511,6 +548,7 @@ export function buildMcpServer(): McpServer {
       },
     },
     async ({ postText, postUrl, contact_id, extraContext }) => {
+      if (!isEnabled("DRAFTING")) return ok({ error: "comment_draft is disabled", ...disabledFields("DRAFTING") });
       const result = await draftComment({ postText, postUrl, contactId: contact_id, extraContext });
       if (!result) return ok({ error: "OPENROUTER_API_KEY not set or no post content provided" });
       return ok(result);
@@ -557,6 +595,7 @@ export function buildMcpServer(): McpServer {
       },
     },
     async ({ limit }) => {
+      if (!isEnabled("NETWORKING_DRAFTS")) return ok({ error: "networking drafting is disabled", ...disabledFields("NETWORKING_DRAFTS") });
       const q = await getNetworkingNextDrafts(limit ?? 15);
       return ok({
         totals: q.totals,
@@ -591,6 +630,7 @@ export function buildMcpServer(): McpServer {
       },
     },
     async ({ contact_id }) => {
+      if (!isEnabled("NETWORKING_DRAFTS")) return ok({ error: "networking drafting is disabled", contact_id, ...disabledFields("NETWORKING_DRAFTS") });
       const contact = await getNetworkingContact(contact_id);
       if (!contact) return ok({ error: "Contact not found", contact_id });
 
@@ -1036,11 +1076,14 @@ export function buildMcpServer(): McpServer {
           .string()
           .optional()
           .describe("UTC Monday YYYY-MM-DD. Omit for this week."),
+        seat: z.string().optional().describe("Notion Person value (see list_seats) — only that seat's mapped user. Omit for all."),
       },
     },
-    async ({ weekStart }) => {
+    async ({ weekStart, seat }) => {
       const ws = weekStart || weekStartFor();
-      const { rows } = await getLeaderboard(ws);
+      const seatInfo = await getSeat(seat);
+      if (seat && !seatInfo) return ok({ error: `Unknown seat '${seat}'. Call list_seats for valid values.`, seat });
+      const { rows } = filterLeaderboardBySeat(await getLeaderboard(ws), seatInfo);
       return ok({
         weekStart: ws,
         weekLabel: fmtWeekLabel(ws),
@@ -1104,11 +1147,14 @@ export function buildMcpServer(): McpServer {
         "a DM. Pass weekStart=YYYY-MM-DD (UTC Monday); omit for the current week.",
       inputSchema: {
         weekStart: z.string().optional().describe("UTC Monday YYYY-MM-DD. Omit for this week."),
+        seat: z.string().optional().describe("Notion Person value (see list_seats) — only that seat's mapped user. Omit for all."),
       },
     },
-    async ({ weekStart }) => {
+    async ({ weekStart, seat }) => {
       const ws = weekStart || weekStartFor();
-      const { rows } = await getSalesLeaderboard(ws);
+      const seatInfo = await getSeat(seat);
+      if (seat && !seatInfo) return ok({ error: `Unknown seat '${seat}'. Call list_seats for valid values.`, seat });
+      const { rows } = filterLeaderboardBySeat(await getSalesLeaderboard(ws), seatInfo);
       return ok({
         weekStart: ws,
         weekLabel: fmtWeekLabel(ws),
@@ -1153,11 +1199,14 @@ export function buildMcpServer(): McpServer {
         "Pass weekStart=YYYY-MM-DD (UTC Monday); omit for the current week.",
       inputSchema: {
         weekStart: z.string().optional().describe("UTC Monday YYYY-MM-DD. Omit for this week."),
+        seat: z.string().optional().describe("Notion Person value (see list_seats) — only that seat's mapped user. Omit for all."),
       },
     },
-    async ({ weekStart }) => {
+    async ({ weekStart, seat }) => {
       const ws = weekStart || weekStartFor();
-      const { rows } = await getBuildLeaderboard(ws);
+      const seatInfo = await getSeat(seat);
+      if (seat && !seatInfo) return ok({ error: `Unknown seat '${seat}'. Call list_seats for valid values.`, seat });
+      const { rows } = filterLeaderboardBySeat(await getBuildLeaderboard(ws), seatInfo);
       return ok({
         weekStart: ws,
         weekLabel: fmtWeekLabel(ws),
@@ -1181,6 +1230,36 @@ export function buildMcpServer(): McpServer {
           streakWeeks: r.streakWeeks,
           activityCount: r.activityCount,
           lifetimePoints: r.lifetimePoints,
+        })),
+      });
+    }
+  );
+
+  // ────────────────────────────────────────────────────────────────────────
+  // SEATS — per-seat reporting
+  // ────────────────────────────────────────────────────────────────────────
+
+  server.registerTool(
+    "list_seats",
+    {
+      title: "Seats · LinkedIn Seats (Notion Person values)",
+      description:
+        "Lists every LinkedIn seat: each distinct Notion CRM 'Person' value, its contact count, " +
+        "and the app user it maps to (exact match on pinned Notion name or display name first, " +
+        "then an unambiguous fuzzy match). New Person values appear automatically after a sync. " +
+        "Pass a seat's name as `seat` to analytics, stuck_deals, sales_leaderboard, " +
+        "marketing_leaderboard or build_leaderboard.",
+      inputSchema: {},
+    },
+    async () => {
+      const seats = await listSeats();
+      return ok({
+        count: seats.length,
+        seats: seats.map((s) => ({
+          name: s.name,
+          contacts: s.contactCount,
+          mapped_to: s.user,
+          matched_via: s.matchedVia,
         })),
       });
     }

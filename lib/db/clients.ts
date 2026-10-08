@@ -1,7 +1,7 @@
-// Clients = contacts whose Status reached "Partnership" in the Sales CRM.
+// Clients = contacts in a Won-group stage (lib/stage-config.ts).
 // Pure compute over the contacts table — no new state.
 
-import { and, desc, eq, gte, like, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, like, or, sql } from "drizzle-orm";
 import { db, schema } from "./client";
 import type { Contact } from "./schema";
 import { ACTIVE_CLIENT_STAGES } from "../stages";
@@ -39,7 +39,7 @@ function healthFor(daysSinceTouch: number | null): ClientHealth {
 
 export async function getClientsView(search?: string): Promise<ClientsView> {
   const conds: any[] = [
-    eq(schema.contacts.status, ACTIVE_CLIENT_STAGES[0]),
+    inArray(schema.contacts.status, ACTIVE_CLIENT_STAGES),
   ];
   if (search) {
     const q = `%${search.toLowerCase()}%`;

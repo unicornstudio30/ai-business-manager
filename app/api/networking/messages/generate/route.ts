@@ -18,7 +18,9 @@ import {
 } from "@/lib/ai/write-message";
 import { isOpenRouterConfigured } from "@/lib/openrouter";
 
+import { isEnabled, disabledResponse } from "@/lib/feature-flags";
 export async function POST(req: NextRequest) {
+  if (!isEnabled("NETWORKING_DRAFTS")) return disabledResponse("NETWORKING_DRAFTS");
   if (!isOpenRouterConfigured()) {
     return NextResponse.json(
       { error: "OPENROUTER_API_KEY not set in .env.local" },

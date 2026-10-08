@@ -4,11 +4,12 @@
 // X follow / IG follow) OR an InMail / cold first message — i.e. the very
 // first touch with a prospect you're not yet linked to.
 //
-// Source: contacts in "Prospect" stage (haven't been outreached yet).
+// Source: contacts in a not-yet-contacted stage (STAGE_ROLES.notContacted).
 // Priority within each platform: Top 50 → Hot relations → ICP score desc.
 
 import { db, schema } from "./client";
-import { eq } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
+import { STAGE_ROLES } from "../stage-config";
 import { parseJson } from "../utils";
 import { computeIcpScore } from "../icp-scoring";
 import type { Contact } from "./schema";
@@ -41,7 +42,7 @@ export async function getConnectQueueByPlatform(): Promise<ConnectQueueByPlatfor
   const prospects = await db
     .select()
     .from(schema.contacts)
-    .where(eq(schema.contacts.status, "Prospect"));
+    .where(inArray(schema.contacts.status, [...STAGE_ROLES.notContacted]));
 
   const byPlatform: Record<string, ConnectQueueItem[]> = {};
   const totals = { total: 0, top50: 0 };

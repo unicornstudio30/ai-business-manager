@@ -9,6 +9,8 @@ import { ReminderBanner } from "@/components/reminder-banner";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { getCurrentUser } from "@/lib/auth/server";
 import type { UserRole } from "@/lib/db/schema";
+import { NAV_ITEMS } from "@/lib/nav-items";
+import { isEnabled } from "@/lib/feature-flags";
 
 export const metadata: Metadata = {
   title: "Unicorn Studio — AI Business Manager",
@@ -38,6 +40,7 @@ const ROLE_LABEL: Record<UserRole, string> = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
   const role = (user?.role as UserRole | undefined) ?? undefined;
+  const hiddenNav = NAV_ITEMS.filter((i) => i.flag && !isEnabled(i.flag)).map((i) => i.href);
 
   return (
     <html lang="en">
@@ -45,11 +48,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {user ? (
           <>
             <div className="flex min-h-screen">
-              <Sidebar role={role} />
+              <Sidebar role={role} hiddenHrefs={hiddenNav} />
               <div className="flex-1 flex flex-col min-w-0">
                 <ReminderBanner />
                 <header className="sticky top-0 z-40 flex items-center gap-2 bg-white/85 backdrop-blur-md border-b border-stone-200/70 px-3 py-3 sm:px-6 shadow-elevation-1">
-                  <MobileNav role={role} />
+                  <MobileNav role={role} hiddenHrefs={hiddenNav} />
                   <div className="text-sm text-stone-500 min-w-0 flex-1 truncate">
                     <span className="text-stone-900 font-semibold tracking-tight">Unicorn Studio</span>
                     <span className="hidden sm:inline"> — Business Manager</span>
@@ -70,7 +73,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               </div>
             </div>
             <QuickLog />
-            <MobileTabBar />
+            <MobileTabBar hiddenHrefs={hiddenNav} />
           </>
         ) : (
           // Unauthenticated: render the page bare (used by /login, /signup).

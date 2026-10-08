@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowUpRight, AlertCircle, Clock, ExternalLink } from "lucide-react";
 import { fmtDate } from "@/lib/utils";
 import { CHANNEL_COLORS, CHANNEL_LABELS, type InboxChannel } from "@/lib/inbox";
-import { STAGE_COLORS, type Stage } from "@/lib/stages";
+import { stageColor, type Stage } from "@/lib/stages";
 import type { Contact } from "@/lib/db/schema";
 
 type Props = {
@@ -35,7 +35,7 @@ export function InboxRow({ contact, reason, daysSince, channel }: Props) {
               {contact.name || "(no name)"}
             </Link>
             {contact.status && (
-              <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${STAGE_COLORS[contact.status as Stage] ?? "bg-stone-100 text-stone-800 border-stone-200"}`}>
+              <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${stageColor(contact.status) ?? "bg-stone-100 text-stone-800 border-stone-200"}`}>
                 {contact.status}
               </span>
             )}

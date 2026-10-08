@@ -4,6 +4,7 @@
 // doesn't break /api/sales/log.
 
 import { notion, isNotionConfigured } from "./client";
+import { isEnabled } from "../feature-flags";
 
 const MAX_ENTRIES = 40;      // keep the column readable in Notion
 const MAX_LINE_LEN = 160;    // truncate long notes
@@ -25,6 +26,8 @@ async function readCurrentLog(pageId: string): Promise<string> {
 }
 
 export async function appendContactLogEntry(pageId: string | null | undefined, line: string): Promise<void> {
+  // PBM is read-only: no Notion writes unless PBM_FLAG_NOTION_WRITES=on.
+  if (!isEnabled("NOTION_WRITES")) return;
   if (!pageId || !isNotionConfigured() || !line) return;
   try {
     const trimmed = line.replace(/\s+/g, " ").slice(0, MAX_LINE_LEN);

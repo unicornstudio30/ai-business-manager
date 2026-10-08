@@ -6,6 +6,7 @@
 //   marketing — work that builds reach: content created, content published
 //   system    — plumbing: notion sync events
 
+import { isWon } from "../stages";
 import { db, schema } from "./client";
 import { gte, lte, desc, eq, and, isNotNull } from "drizzle-orm";
 import { platformToChannel, type InboxChannel } from "../inbox";
@@ -184,7 +185,7 @@ export async function getHistory(filters: HistoryFilters = {}): Promise<HistoryE
     for (const c of rows) {
       if (!c.closedDate) continue;
       if (filters.contactSearch && !(c.name ?? "").toLowerCase().includes(filters.contactSearch.toLowerCase())) continue;
-      const isWin = c.status === "Partnership";
+      const isWin = isWon(c.status);
       events.push({
         id: `deal_closed:${c.id}`,
         timestamp: c.closedDate,

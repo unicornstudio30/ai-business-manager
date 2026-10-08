@@ -28,6 +28,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { UserRole } from "./db/schema";
+import type { FeatureFlag } from "./feature-flags";
 
 export type NavItem = {
   href: string;
@@ -36,17 +37,19 @@ export type NavItem = {
   // If set, item is only shown when the current user's role meets this bar.
   // Mirrors ROLE_RANK in lib/db/schema.ts.
   minRole?: UserRole;
+  // If set, item is hidden while this feature flag is off (lib/feature-flags.ts).
+  flag?: FeatureFlag;
 };
 
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Dashboard", icon: Home },
   { href: "/contacts", label: "CRM", icon: Users },
-  { href: "/connect", label: "Connect", icon: UserPlus },
-  { href: "/engagement", label: "Engage", icon: Flame },
-  { href: "/dm", label: "DM", icon: MessageSquare },
+  { href: "/connect", label: "Connect", icon: UserPlus, flag: "FOLLOW_UP_QUEUES" },
+  { href: "/engagement", label: "Engage", icon: Flame, flag: "FOLLOW_UP_QUEUES" },
+  { href: "/dm", label: "DM", icon: MessageSquare, flag: "INBOX" },
   { href: "/top-50", label: "Top 50", icon: Star },
   { href: "/stuck", label: "Stuck", icon: AlertTriangle },
-  { href: "/cadences", label: "Cadences", icon: Repeat2 },
+  { href: "/cadences", label: "Cadences", icon: Repeat2, flag: "FOLLOW_UP_QUEUES" },
   { href: "/tracker", label: "Sales Tracker", icon: NotebookPen },
   { href: "/content", label: "Content Calendar", icon: Calendar },
   { href: "/projects", label: "Projects", icon: Briefcase },
@@ -65,8 +68,12 @@ export const NAV_ITEMS: NavItem[] = [
 ];
 
 // Filter the nav list by the current user's role.
-export function visibleNavItems(role: UserRole | undefined): NavItem[] {
+// `hiddenHrefs` comes from the server (hiddenNavHrefs()) because flags read
+// server-only env vars and the nav renders on the client.
+export function visibleNavItems(role: UserRole | undefined, hiddenHrefs: string[] = []): NavItem[] {
   const RANK: Record<UserRole, number> = { owner: 100, admin: 80, salesperson: 40, viewer: 10 };
   const myRank = role ? RANK[role] : 0;
-  return NAV_ITEMS.filter((item) => !item.minRole || myRank >= RANK[item.minRole]);
+  return NAV_ITEMS.filter(
+    (item) => (!item.minRole || myRank >= RANK[item.minRole]) && !hiddenHrefs.includes(item.href)
+  );
 }

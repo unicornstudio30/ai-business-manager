@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Plus } from "lucide-react";
 import { LogSalesActivityModal } from "./log-activity-modal";
 
-export function LogSalesActivityButton({ weekStart }: { weekStart: string }) {
+export function LogSalesActivityButton({ weekStart, stages }: { weekStart: string; stages: string[] }) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -15,7 +15,7 @@ export function LogSalesActivityButton({ weekStart }: { weekStart: string }) {
       >
         <Plus className="size-4" /> Log stage &amp; action
       </button>
-      <LogSalesActivityModal open={open} onClose={() => setOpen(false)} weekStart={weekStart} />
+      <LogSalesActivityModal open={open} onClose={() => setOpen(false)} weekStart={weekStart} stages={stages} />
     </>
   );
 }

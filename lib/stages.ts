@@ -1,124 +1,89 @@
-// Unicorn Studio's Notion CRM pipeline.
-// Order matters: stages flow from coldest (top) to closed (bottom).
-// Single source of truth — UI, API, and Notion sync all import from here.
+// Stage helpers for PBM's reporting.
 //
-// Keep aligned with the Status select options in your Notion CRM database.
-// Legacy spellings (e.g. "In-mail") are aliased in lib/notion/contacts-mapper.ts.
+// The stage list and order live in Notion (Sales CRM "Status" options) and are
+// read at runtime by lib/notion/stage-source.ts (getStages()). How PBM
+// interprets each stage lives in lib/stage-config.ts. This module only derives
+// helpers from that config; it holds no stage names of its own.
 
-export const STAGES = [
-  // ── Cold: first-touch progression ──
-  "Prospect",
-  "Connection request",
-  "Connected",
-  "1st message",
-  "Inmail",
-  "1st Prospect Follow-up",
-  "2nd Prospect Follow up",
-  // ── Engaged: replies + qualification ──
-  "Lead",
-  "1st Lead Follow up",
-  "2nd Lead Follow up",
-  "Qualified",
-  "Not qualified",
-  // ── Proposal + close ──
-  "Proposal Sent",
-  "Post Proposal Follow-up-1",
-  "Post Proposal Follow-up-2",
-  "Booking",
-  "First call",
-  // ── Outcomes ──
-  "Closed without Partnership",
-  "Partnership",
-  "Lost",
-  "Follow up later",
-] as const;
+import {
+  GROUP_COLORS,
+  STAGE_ALIASES,
+  STAGE_GROUP_OF,
+  STAGE_GROUP_ORDER,
+  STAGE_ROLES,
+  UNGROUPED_COLOR,
+  type StageGroup,
+} from "./stage-config";
 
-export type Stage = (typeof STAGES)[number];
+export type { StageGroup } from "./stage-config";
+export { STAGE_GROUP_ORDER, FUNNEL_GROUPS, STAGE_ROLES } from "./stage-config";
 
-// Dashboard groupings — collapse stages into the chart bars
-export const STAGE_GROUPS = {
-  Cold: ["Prospect", "Connection request", "Connected", "1st message", "Inmail", "1st Prospect Follow-up", "2nd Prospect Follow up"],
-  Engaged: ["Lead", "1st Lead Follow up", "2nd Lead Follow up"],
-  Qualified: ["Qualified", "Not qualified"],
-  Proposal: ["Proposal Sent", "Post Proposal Follow-up-1", "Post Proposal Follow-up-2"],
-  Call: ["Booking", "First call"],
-  Won: ["Partnership"],
-  Archive: ["Closed without Partnership", "Lost", "Follow up later"],
-} as const satisfies Record<string, readonly Stage[]>;
+// Stages are plain strings — Notion owns the set.
+export type Stage = string;
 
-export type StageGroup = keyof typeof STAGE_GROUPS;
+export function canonicalStage(raw: string): string {
+  return STAGE_ALIASES[raw] ?? raw;
+}
 
-// The cards on the home dashboard
-export const HOT_LEAD_STAGES: Stage[] = [
-  "Lead",
-  "1st Lead Follow up",
-  "2nd Lead Follow up",
-  "Qualified",
-  "Proposal Sent",
-  "Post Proposal Follow-up-1",
-  "Post Proposal Follow-up-2",
-  "Booking",
-  "First call",
-];
-
-export const ACTIVE_CLIENT_STAGES: Stage[] = ["Partnership"];
-
-export const TERMINAL_STAGES: Stage[] = [
-  "Closed without Partnership",
-  "Lost",
-  "Not qualified",
-];
-
-// Stages that should NOT trigger the follow-up queue / cadence engine.
-// Inmail is a one-shot cold message (no connection needed) — if they don't
-// reply, we let them die quietly instead of chasing.
-export const NO_FOLLOW_UP_STAGES: Stage[] = ["Inmail"];
-
-// Tailwind color tokens per stage (UI badges)
-export const STAGE_COLORS: Record<Stage, string> = {
-  "Prospect": "bg-red-100 text-red-800 border-red-200",
-  "Connection request": "bg-sky-100 text-sky-800 border-sky-200",
-  "Connected": "bg-cyan-100 text-cyan-800 border-cyan-200",
-  "1st message": "bg-purple-100 text-purple-800 border-purple-200",
-  "Inmail": "bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200",
-  "1st Prospect Follow-up": "bg-pink-100 text-pink-800 border-pink-200",
-  "2nd Prospect Follow up": "bg-gray-100 text-gray-800 border-gray-200",
-  "Lead": "bg-green-100 text-green-800 border-green-200",
-  "1st Lead Follow up": "bg-orange-100 text-orange-800 border-orange-200",
-  "2nd Lead Follow up": "bg-emerald-100 text-emerald-800 border-emerald-200",
-  "Qualified": "bg-blue-100 text-blue-800 border-blue-200",
-  "Not qualified": "bg-purple-100 text-purple-800 border-purple-200",
-  "Proposal Sent": "bg-green-100 text-green-800 border-green-200",
-  "Post Proposal Follow-up-1": "bg-orange-100 text-orange-800 border-orange-200",
-  "Post Proposal Follow-up-2": "bg-teal-100 text-teal-800 border-teal-200",
-  "Booking": "bg-amber-100 text-amber-800 border-amber-200",
-  "First call": "bg-blue-100 text-blue-800 border-blue-200",
-  "Closed without Partnership": "bg-slate-100 text-slate-700 border-slate-200",
-  "Partnership": "bg-violet-100 text-violet-800 border-violet-200",
-  "Lost": "bg-zinc-100 text-zinc-700 border-zinc-200",
-  "Follow up later": "bg-yellow-100 text-yellow-800 border-yellow-200",
-};
+// Every configured stage per group (includes legacy names so old rows still
+// count). For only the stages that exist in Notion today, use
+// getStageDefinitions() in lib/notion/stage-source.ts.
+export const STAGE_GROUPS: Record<StageGroup, string[]> = Object.fromEntries(
+  STAGE_GROUP_ORDER.map((g) => [g, Object.keys(STAGE_GROUP_OF).filter((s) => STAGE_GROUP_OF[s] === g)])
+) as Record<StageGroup, string[]>;
 
 export function stageGroup(status: string | null | undefined): StageGroup | null {
   if (!status) return null;
-  for (const [group, members] of Object.entries(STAGE_GROUPS)) {
-    if ((members as readonly string[]).includes(status)) return group as StageGroup;
-  }
-  return null;
+  return STAGE_GROUP_OF[canonicalStage(status)] ?? null;
+}
+
+export function stagesInGroups(groups: readonly StageGroup[]): string[] {
+  return groups.flatMap((g) => STAGE_GROUPS[g]);
+}
+
+export const TERMINAL_STAGES: string[] = [...STAGE_ROLES.loss, ...STAGE_ROLES.disqualified];
+export const NO_FOLLOW_UP_STAGES: string[] = [...STAGE_ROLES.noFollowUp];
+export const WIN_STAGES: string[] = STAGE_GROUPS.Won;
+
+// Active pipeline (replied → call), excluding disqualified.
+export const HOT_LEAD_STAGES: string[] = stagesInGroups(["Engaged", "Qualified", "Proposal", "Call"]).filter(
+  (s) => !TERMINAL_STAGES.includes(s)
+);
+
+// Won stages count as active clients.
+export const ACTIVE_CLIENT_STAGES: string[] = WIN_STAGES;
+
+export function hasRole(status: string | null | undefined, role: keyof typeof STAGE_ROLES): boolean {
+  return !!status && (STAGE_ROLES[role] as readonly string[]).includes(canonicalStage(status));
+}
+
+export function isWon(status: string | null | undefined): boolean {
+  return stageGroup(status) === "Won";
 }
 
 export function isHotLead(status: string | null | undefined): boolean {
-  return !!status && HOT_LEAD_STAGES.includes(status as Stage);
+  return !!status && HOT_LEAD_STAGES.includes(canonicalStage(status));
 }
 
 export function isActiveClient(status: string | null | undefined): boolean {
-  return !!status && ACTIVE_CLIENT_STAGES.includes(status as Stage);
+  return isWon(status);
 }
 
 export function isTerminal(status: string | null | undefined): boolean {
-  return !!status && TERMINAL_STAGES.includes(status as Stage);
+  return !!status && TERMINAL_STAGES.includes(canonicalStage(status));
+}
+
+// Won, lost or disqualified — no longer in the active pipeline.
+export const CLOSED_STAGES: string[] = [...WIN_STAGES, ...TERMINAL_STAGES];
+export function isClosed(status: string | null | undefined): boolean {
+  return isWon(status) || isTerminal(status);
 }
 
 export function isExcludedFromFollowUp(status: string | null | undefined): boolean {
-  return !!status && NO_FOLLOW_UP_STAGES.includes(status as Stage);
+  return hasRole(status, "noFollowUp");
+}
+
+export function stageColor(status: string | null | undefined): string {
+  const g = stageGroup(status);
+  return g ? GROUP_COLORS[g] : UNGROUPED_COLOR;
 }

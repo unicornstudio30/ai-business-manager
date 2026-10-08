@@ -3,7 +3,7 @@
 // bucket by week, compute streaks + ranks" pipeline; only the tables and the
 // per-leaderboard target/level helpers differ.
 
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import type { SQLiteTable, SQLiteColumn } from "drizzle-orm/sqlite-core";
 import { db, schema } from "./client";
 import { addWeeks, weekStartFor } from "../marketing/points";
@@ -211,6 +211,8 @@ export type TrendPoint = { date: string; label: string; points: number; activiti
 export async function computeLeaderboardTrend(opts: {
   activityTable: ActivityTable;
   days?: number;
+  // Restrict to these users (per-seat view). Omit for the whole team.
+  userIds?: string[];
 }): Promise<TrendPoint[]> {
   const days = opts.days ?? 14;
   const now = new Date();
@@ -224,7 +226,16 @@ export async function computeLeaderboardTrend(opts: {
       points: (opts.activityTable as any).points,
     })
     .from(opts.activityTable as any)
-    .where(gte((opts.activityTable as any).createdAt, start))) as any[];
+    .where(
+      opts.userIds
+        ? and(
+            gte((opts.activityTable as any).createdAt, start),
+            opts.userIds.length > 0
+              ? inArray((opts.activityTable as any).userId, opts.userIds)
+              : sql`0`
+          )
+        : gte((opts.activityTable as any).createdAt, start)
+    )) as any[];
 
   const buckets = new Map<string, { points: number; activities: number }>();
   for (let i = 0; i < days; i++) {

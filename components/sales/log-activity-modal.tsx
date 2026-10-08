@@ -6,16 +6,16 @@
 //   • Log Stage (primary): pick a CRM Status stage to log a stage flip.
 //   • Log Action (nested, optional): "Also log an action" — pick a freeform
 //     action + count. Both can be submitted together in one save.
-//   • Every log with a contact pushes to the Notion CRM's "Log Actions"
-//     column as an audit trail (best-effort).
+//   • Logs are stored in PBM only (Notion "Log Actions" append is off while
+//     PBM is read-only).
 
 import { useState, useEffect, useTransition, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { X, Loader2, AlertCircle, Sparkles, DollarSign, ListChecks, Zap } from "lucide-react";
 import { ALL_KINDS, pointsFor, type ActivityKind } from "@/lib/sales/points";
-import { STAGE_CREDIT_LIST, kindForStage } from "@/lib/sales/stage-credits";
+import { stageCreditList, kindForStage } from "@/lib/sales/stage-credits";
 import { normalizeChannelFromPlatform } from "@/lib/sales/channel-from-platform";
-import { STAGES, type Stage } from "@/lib/stages";
+type Stage = string;
 
 type MyContact = { id: string; name: string; status: string | null; platform: string | null };
 
@@ -23,10 +23,13 @@ export function LogSalesActivityModal({
   open,
   onClose,
   weekStart,
+  stages,
 }: {
   open: boolean;
   onClose: () => void;
   weekStart: string;
+  // Stage names from Notion, in Notion's order.
+  stages: string[];
 }) {
   const router = useRouter();
 
@@ -219,7 +222,7 @@ export function LogSalesActivityModal({
                 className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-300"
               >
                 <option value="">— Pick a stage —</option>
-                {STAGE_CREDIT_LIST.map((s) => (
+                {stageCreditList(stages).map((s) => (
                   <option key={s.stage} value={s.stage}>
                     {s.label}
                     {s.kind ? "" : " · no credit"}
@@ -229,7 +232,7 @@ export function LogSalesActivityModal({
               {stage && !stageEarnsCredit && (
                 <div className="mt-1 text-[11px] text-amber-700 inline-flex items-center gap-1">
                   <AlertCircle className="size-3" />
-                  Prospect / Connection / follow-up stages don't earn credit — pick another.
+                  This stage doesn't earn credit — pick another.
                 </div>
               )}
             </div>

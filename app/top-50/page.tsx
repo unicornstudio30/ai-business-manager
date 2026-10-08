@@ -2,7 +2,7 @@ import Link from "next/link";
 import { db, schema } from "@/lib/db/client";
 import { eq, desc } from "drizzle-orm";
 import { computeIcpScore, icpColor } from "@/lib/icp-scoring";
-import { STAGE_COLORS, type Stage } from "@/lib/stages";
+import { stageColor, type Stage } from "@/lib/stages";
 import { fmtDate, parseJson } from "@/lib/utils";
 import { Star, Download, ExternalLink, AlertCircle } from "lucide-react";
 
@@ -128,7 +128,7 @@ export default async function Top50Page() {
                     </td>
                     <td className="px-4 py-3">
                       {c.status && (
-                        <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${STAGE_COLORS[c.status as Stage] ?? "bg-stone-100 text-stone-800 border-stone-200"}`}>
+                        <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${stageColor(c.status) ?? "bg-stone-100 text-stone-800 border-stone-200"}`}>
                           {c.status}
                         </span>
                       )}

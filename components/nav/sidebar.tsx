@@ -5,9 +5,9 @@ import { usePathname } from "next/navigation";
 import { visibleNavItems } from "@/lib/nav-items";
 import type { UserRole } from "@/lib/db/schema";
 
-export function Sidebar({ role }: { role?: UserRole }) {
+export function Sidebar({ role, hiddenHrefs = [] }: { role?: UserRole; hiddenHrefs?: string[] }) {
   const pathname = usePathname();
-  const items = visibleNavItems(role);
+  const items = visibleNavItems(role, hiddenHrefs);
 
   function isActive(href: string): boolean {
     if (href === "/") return pathname === "/";

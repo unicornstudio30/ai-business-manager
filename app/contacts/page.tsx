@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { listContacts } from "@/lib/db/queries";
 import { computeIcpScore, icpColor } from "@/lib/icp-scoring";
-import { STAGES, STAGE_COLORS, type Stage } from "@/lib/stages";
+import { stageColor } from "@/lib/stages";
+import { getStages } from "@/lib/notion/stage-source";
 import { fmtDate, daysAgo, parseJson } from "@/lib/utils";
 import { db, schema } from "@/lib/db/client";
 import { getCurrentUser } from "@/lib/auth/server";
@@ -23,7 +24,7 @@ export default async function ContactsPage({
   const icpScores = new Map(rowsRaw.map((c) => [c.id, computeIcpScore(c).score]));
 
   // Load distinct statuses present in the synced data so the Stage filter
-  // only shows what's actually in the CRM (not all 18 hardcoded stages).
+  // only shows what's actually in the CRM.
   // Includes counts so user sees pipeline distribution at a glance.
   // Aggregate in JS — Drizzle's sql<count>`count(*)` aliasing varies by driver.
   const allStatusRows = await db
@@ -34,14 +35,15 @@ export default async function ContactsPage({
     if (!r.status) continue;
     statusCounts.set(r.status, (statusCounts.get(r.status) ?? 0) + 1);
   }
-  // Order by canonical STAGES list (so Cold → Won flow is preserved),
+  // Order by Notion's stage order (so Cold → Won flow is preserved),
   // then any unrecognized statuses go at the bottom.
+  const stageOrder = await getStages();
   const orderedStatuses: { name: string; count: number }[] = [];
-  for (const s of STAGES) {
+  for (const s of stageOrder) {
     if (statusCounts.has(s)) orderedStatuses.push({ name: s, count: statusCounts.get(s)! });
   }
   for (const [s, n] of statusCounts) {
-    if (!STAGES.includes(s as Stage)) orderedStatuses.push({ name: s, count: n });
+    if (!stageOrder.includes(s)) orderedStatuses.push({ name: s, count: n });
   }
   // Apply "My leads" filter — match contact.ownerName to current user's name
   // (case-insensitive). Owner / admin still gets a toggle so they can drill
@@ -172,7 +174,7 @@ export default async function ContactsPage({
                     </td>
                     <td className="px-4 py-3">
                       {c.status && (
-                        <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${STAGE_COLORS[c.status as Stage] ?? "bg-stone-100 text-stone-800 border-stone-200"}`}>
+                        <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${stageColor(c.status) ?? "bg-stone-100 text-stone-800 border-stone-200"}`}>
                           {c.status}
                         </span>
                       )}
@@ -222,7 +224,7 @@ export default async function ContactsPage({
                   <div className="font-medium text-stone-900 truncate">{c.name || "(no name)"}</div>
                   <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                     {c.status && (
-                      <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${STAGE_COLORS[c.status as Stage] ?? "bg-stone-100 text-stone-800 border-stone-200"}`}>
+                      <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${stageColor(c.status) ?? "bg-stone-100 text-stone-800 border-stone-200"}`}>
                         {c.status}
                       </span>
                     )}

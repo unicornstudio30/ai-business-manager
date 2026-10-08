@@ -1,5 +1,5 @@
 import { Lightbulb, ArrowRight, ExternalLink } from "lucide-react";
-import { STAGE_COLORS, type Stage } from "@/lib/stages";
+import { stageColor, type Stage } from "@/lib/stages";
 import type { StageSuggestion } from "@/lib/stage-suggestions";
 
 const CONFIDENCE_COLORS = {
@@ -30,11 +30,11 @@ export function StageSuggestionsBanner({
                 Suggested stage move
                 {currentStage && (
                   <>
-                    <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[11px] font-medium ${STAGE_COLORS[currentStage as Stage]}`}>
+                    <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[11px] font-medium ${stageColor(currentStage)}`}>
                       {currentStage}
                     </span>
                     <ArrowRight className="size-3.5 text-stone-400" />
-                    <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[11px] font-medium ${STAGE_COLORS[s.toStage as Stage]}`}>
+                    <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[11px] font-medium ${stageColor(s.toStage)}`}>
                       {s.toStage}
                     </span>
                   </>

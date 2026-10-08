@@ -28,29 +28,40 @@ import { getEngagementQueueByPlatform } from "@/lib/db/engagement-queue";
 import { getConnectQueueByPlatform } from "@/lib/db/connect-queue";
 import { getEffectiveOutreachLimits } from "@/lib/outreach-config";
 import { PLATFORM_LIMITS, PLATFORMS_ORDER, target, type PlatformKey } from "@/lib/sales-limits";
+import { isEnabled } from "@/lib/feature-flags";
+import { listSeats } from "@/lib/db/seats";
+import { SeatFilter } from "@/components/seat-filter";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
-  const [stats, groups, hot, followUps, sync, funnel, trend, contacts, inbox, inboxC, stuck, streak, kpis, engagementQueue, connectQueue, effective] = await Promise.all([
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ seat?: string }>;
+}) {
+  const sp = await searchParams;
+  const seat = sp.seat || null;
+  // Inbox and follow-up queues moved to the Pipeline app (lib/feature-flags.ts).
+  const showInbox = isEnabled("INBOX");
+  const showQueues = isEnabled("FOLLOW_UP_QUEUES");
+  const [stats, groups, hot, followUps, sync, funnel, trend, inbox, inboxC, stuck, streak, kpis, engagementQueue, connectQueue, effective, seats] = await Promise.all([
     getDashboardStats(),
     getStageGroupCounts(),
     getHotLeads(12),
-    getNeedsFollowUp(11, 6),
+    showQueues ? getNeedsFollowUp(11, 6) : Promise.resolve([]),
     syncStatus(),
-    funnelCounts(),
-    activityTrend30d(),
-    db.select({ id: schema.contacts.id, name: schema.contacts.name }).from(schema.contacts),
-    inboxView(),
-    inboxCounts(),
-    stuckDeals(),
+    funnelCounts({ seat }),
+    activityTrend30d({ seat }),
+    showInbox ? inboxView() : Promise.resolve([]),
+    showInbox ? inboxCounts() : Promise.resolve({ total: 0, byChannel: {} as any }),
+    stuckDeals({ seat: seat ?? undefined }),
     getStreak(),
     getNotionDerivedKpis(new Date()),
-    getEngagementQueueByPlatform(),
-    getConnectQueueByPlatform(),
+    showQueues ? getEngagementQueueByPlatform() : Promise.resolve(null),
+    showQueues ? getConnectQueueByPlatform() : Promise.resolve(null),
     getEffectiveOutreachLimits(),
+    listSeats(),
   ]);
-  const contactName = new Map(contacts.map((c) => [c.id, c.name]));
 
   const notConfigured = !sync.configured;
 
@@ -101,7 +112,7 @@ export default async function Home() {
 
       <StreakHero streak={streak} />
 
-      <TodayQueue />
+      {showQueues && <TodayQueue />}
 
       {/* Row 1 — pipeline + commitments at a glance */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -116,20 +127,36 @@ export default async function Home() {
           so you see the actual names before the outreach pillars. */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <HotLeadsList contacts={hot} />
-        <FollowUpList contacts={followUps} />
+        {showQueues && <FollowUpList contacts={followUps} />}
       </div>
 
       {/* Row 3 — Connect / Engage / DM. Each card = today's progress + the next
           contacts to action. */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <ConnectWidget kpis={kpis} queue={connectQueue} target={connectTarget} />
-        <EngagementWidget kpis={kpis} queue={engagementQueue} target={engageTarget} />
-        <InboxWidget
-          items={inbox}
-          total={inboxC.total}
-          byChannel={inboxC.byChannel}
-          kpis={kpis}
-          target={dmTarget}
+      {(showQueues || showInbox) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {showQueues && connectQueue && <ConnectWidget kpis={kpis} queue={connectQueue} target={connectTarget} />}
+          {showQueues && engagementQueue && <EngagementWidget kpis={kpis} queue={engagementQueue} target={engageTarget} />}
+          {showInbox && (
+            <InboxWidget
+              items={inbox}
+              total={inboxC.total}
+              byChannel={inboxC.byChannel}
+              kpis={kpis}
+              target={dmTarget}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Per-seat reporting — stuck deals, funnel and activity trend below
+          follow the seat filter. */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="text-sm font-semibold text-stone-900">
+          Pipeline reporting{seat ? ` · ${seat}` : " · all seats"}
+        </div>
+        <SeatFilter
+          seats={seats.map((s) => ({ name: s.name, contactCount: s.contactCount, mapped: !!s.user }))}
+          current={seat}
         />
       </div>
 

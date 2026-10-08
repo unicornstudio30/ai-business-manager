@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { listContacts } from "@/lib/db/queries";
 import { db, schema } from "@/lib/db/client";
 import { z } from "zod";
-import { STAGES } from "@/lib/stages";
+import { isEnabled, disabledResponse } from "@/lib/feature-flags";
 
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
@@ -25,13 +25,15 @@ const CreateSchema = z.object({
   email: z.string().optional(),
   contactUrl: z.string().optional(),
   websiteUrl: z.string().optional(),
-  status: z.enum(STAGES).optional(),
   platform: z.string().optional(),
   country: z.string().optional(),
   remarks: z.string().optional(),
 });
 
+// Creating contacts is disabled while PBM is read-only — contacts are created
+// in Notion (or by the Pipeline app). Status is never accepted here.
 export async function POST(req: NextRequest) {
+  if (!isEnabled("NOTION_WRITES")) return disabledResponse("NOTION_WRITES", 403);
   const body = await req.json();
   const parsed = CreateSchema.safeParse(body);
   if (!parsed.success) {

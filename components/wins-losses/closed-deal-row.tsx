@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Trophy, X, ShieldOff, Save, Plus, ArrowUpRight } from "lucide-react";
 import { fmtDate } from "@/lib/utils";
-import { STAGE_COLORS, type Stage } from "@/lib/stages";
+import { stageColor, type Stage } from "@/lib/stages";
 import type { ClosedDeal } from "@/lib/db/wins-losses";
 
 const ICONS = {
@@ -39,12 +39,8 @@ export function ClosedDealRow({ deal }: { deal: ClosedDeal }) {
         content: reason.trim(),
       }),
     });
-    // Also update the contact's Closed Reason field — pushes to Notion on next sync.
-    await fetch(`/api/contacts/${deal.contact.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ closedReason: reason.trim() }),
-    });
+    // PBM is read-only toward Notion: the reason is kept as a PBM activity
+    // only (Closed Reason in Notion is edited there or by the Pipeline app).
     setSaving(false);
     setEditing(false);
     startTransition(() => router.refresh());
@@ -67,7 +63,7 @@ export function ClosedDealRow({ deal }: { deal: ClosedDeal }) {
               {deal.contact.name || "(no name)"}
             </Link>
             {deal.contact.status && (
-              <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${STAGE_COLORS[deal.contact.status as Stage]}`}>
+              <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${stageColor(deal.contact.status)}`}>
                 {deal.contact.status}
               </span>
             )}

@@ -4,10 +4,12 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { generateNextMessage } from "@/lib/ai/next-message";
 
+import { isEnabled, disabledResponse } from "@/lib/feature-flags";
 // POST /api/ai/next-message?contact_id=XXX[&save=true]
 // Drafts the next message in the contact's sequence. If save=true, also writes
 // it to the activities feed as a 'dm_sent' draft.
 export async function POST(req: Request) {
+  if (!isEnabled("NEXT_MESSAGE")) return disabledResponse("NEXT_MESSAGE");
   const { searchParams } = new URL(req.url);
   const contactId = searchParams.get("contact_id");
   const save = searchParams.get("save") === "true";

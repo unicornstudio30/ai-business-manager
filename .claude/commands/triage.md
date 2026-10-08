@@ -3,6 +3,8 @@ description: Find stuck contacts (no movement in 11+ days), draft stage-appropri
 allowed-tools: Bash, Read
 ---
 
+> **Retired.** Follow-up queues moved to the Pipeline app. `/api/contacts/needs-follow-up` returns 410 unless `PBM_FLAG_FOLLOW_UP_QUEUES=on`. Tell the user to use the Pipeline app instead of running the steps below.
+
 Review the CRM, find contacts that haven't moved in 11+ days, and draft the right next message for each.
 
 Use shell vars: `APP_URL`, `CLAUDE_API_KEY`.

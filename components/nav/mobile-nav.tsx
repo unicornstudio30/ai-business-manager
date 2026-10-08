@@ -22,7 +22,7 @@ import { Menu, X } from "lucide-react";
 import { visibleNavItems } from "@/lib/nav-items";
 import type { UserRole } from "@/lib/db/schema";
 
-export function MobileNav({ role }: { role?: UserRole }) {
+export function MobileNav({ role, hiddenHrefs = [] }: { role?: UserRole; hiddenHrefs?: string[] }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
@@ -118,7 +118,7 @@ export function MobileNav({ role }: { role?: UserRole }) {
           style={{ WebkitOverflowScrolling: "touch" }}
           aria-label="Full navigation"
         >
-          {visibleNavItems(role).map((item) => {
+          {visibleNavItems(role, hiddenHrefs).map((item) => {
             const active = isActive(item.href);
             return (
               <Link

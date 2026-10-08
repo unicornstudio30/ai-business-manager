@@ -4,10 +4,12 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { draftComment } from "@/lib/ai/comment-draft";
 
+import { isEnabled, disabledResponse } from "@/lib/feature-flags";
 // POST /api/ai/comment-draft
 // Body: { postText?: string, postUrl?: string, contactId?: string, extraContext?: string }
 // Returns: { ok: true, comment: string, contactId, contactName }
 export async function POST(req: Request) {
+  if (!isEnabled("DRAFTING")) return disabledResponse("DRAFTING");
   let body: any = {};
   try { body = await req.json(); } catch {}
 

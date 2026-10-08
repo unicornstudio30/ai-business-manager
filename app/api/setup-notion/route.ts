@@ -6,8 +6,10 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { setupNotionContentColumns, setupNotionCrmColumns } from "@/lib/notion/setup";
+import { isEnabled, disabledResponse } from "@/lib/feature-flags";
 
 export async function POST(req: NextRequest) {
+  if (!isEnabled("NOTION_WRITES")) return disabledResponse("NOTION_WRITES", 403);
   const target = req.nextUrl.searchParams.get("target") || "crm";
 
   if (target === "content") {

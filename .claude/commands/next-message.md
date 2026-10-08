@@ -3,6 +3,8 @@ description: Draft the next message in a contact's DM sequence (7-step LinkedIn 
 allowed-tools: Bash, Read
 ---
 
+> **Retired.** Next-message drafting and stage changes moved to the Pipeline app. PBM is read-only toward Notion: `/api/ai/next-message` returns 410 and `PATCH /api/contacts/[id]` returns 403 unless `PBM_FLAG_NEXT_MESSAGE` / `PBM_FLAG_NOTION_WRITES` are turned on. Tell the user to use the Pipeline app instead of running the steps below.
+
 For a single contact, look up their current step in the DM sequence and draft the next one with full context.
 
 Use shell vars: `APP_URL`, `CLAUDE_API_KEY`.

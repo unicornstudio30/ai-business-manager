@@ -13,7 +13,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Users, UserPlus, Flame, MessageSquare, type LucideIcon } from "lucide-react";
+import { Home, Users, UserPlus, Flame, MessageSquare, AlertTriangle, DollarSign, Trophy, type LucideIcon } from "lucide-react";
 
 type Tab = { href: string; label: string; icon: LucideIcon };
 
@@ -27,8 +27,17 @@ const TABS: Tab[] = [
   { href: "/dm",         label: "DM",      icon: MessageSquare },
 ];
 
-export function MobileTabBar() {
+// Reporting tabs that fill the slots of any hidden (feature-flagged) tabs.
+const FALLBACK_TABS: Tab[] = [
+  { href: "/stuck",       label: "Stuck", icon: AlertTriangle },
+  { href: "/sell-or-die", label: "Sell",  icon: DollarSign },
+  { href: "/wins-losses", label: "Wins",  icon: Trophy },
+];
+
+export function MobileTabBar({ hiddenHrefs = [] }: { hiddenHrefs?: string[] }) {
   const pathname = usePathname();
+  const visible = TABS.filter((t) => !hiddenHrefs.includes(t.href));
+  const tabs = [...visible, ...FALLBACK_TABS].slice(0, TABS.length);
 
   function isActive(href: string): boolean {
     if (href === "/") return pathname === "/";
@@ -42,7 +51,7 @@ export function MobileTabBar() {
       aria-label="Primary"
     >
       <div className="flex items-stretch">
-        {TABS.map((t) => {
+        {tabs.map((t) => {
           const active = isActive(t.href);
           return (
             <Link

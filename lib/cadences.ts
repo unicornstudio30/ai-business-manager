@@ -6,7 +6,7 @@
 // from contact.engageTouch + contact.lastTouchAt + sequence definitions.
 
 import { getSequence, nextStep, trackForPlatform, type SequenceStep, type SequenceTrack } from "./sequences";
-import { isExcludedFromFollowUp, isTerminal } from "./stages";
+import { isExcludedFromFollowUp, isTerminal, isWon } from "./stages";
 import type { Contact } from "./db/schema";
 
 export type CadenceItem = {
@@ -22,7 +22,7 @@ export type CadenceItem = {
 export function computeCadence(contact: Contact, now: Date = new Date()): CadenceItem | null {
   if (isTerminal(contact.status)) return null;
   if (isExcludedFromFollowUp(contact.status)) return null; // e.g. Inmail — no auto follow-up
-  if (contact.status === "Partnership") return null; // active client, different rhythm
+  if (isWon(contact.status)) return null; // active client, different rhythm
 
   const track = (contact.sequenceTrack as SequenceTrack) ?? trackForPlatform(contact.platform);
   const currentStep = contact.engageTouch ?? 0;

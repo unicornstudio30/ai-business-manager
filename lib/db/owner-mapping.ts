@@ -10,7 +10,7 @@
 import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
 import { db, schema } from "./client";
 import { resolveOwnerName, type NameMatchTier } from "../name-matcher";
-import { HOT_LEAD_STAGES, STAGE_GROUPS, isActiveClient, isTerminal, type Stage } from "../stages";
+import { HOT_LEAD_STAGES, STAGE_GROUPS, isActiveClient, isTerminal, stageGroup } from "../stages";
 
 // Split contacts by CRM Status into meaningful buckets. Everything is
 // driven by the actual Status field in Notion — no arbitrary counts.
@@ -36,7 +36,7 @@ function bucketStatus(status: string | null): keyof StatusBreakdown | null {
   if (LEAD_STAGES.has(status)) return "leads";
   if (COLD_STAGES.has(status)) return "cold";
   if (isActiveClient(status)) return "clients";
-  if (isTerminal(status) || status === "Follow up later") return "archived";
+  if (isTerminal(status) || stageGroup(status) === "Archive") return "archived";
   return null;
 }
 

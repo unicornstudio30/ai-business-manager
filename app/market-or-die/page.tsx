@@ -11,6 +11,8 @@ import { db, schema } from "@/lib/db/client";
 import { addWeeks, fmtWeekLabel, weekStartFor } from "@/lib/marketing/points";
 import { LeaderboardView } from "@/components/leaderboards/leaderboard-view";
 import { LeaderboardTrend } from "@/components/leaderboards/leaderboard-trend";
+import { SeatFilter } from "@/components/seat-filter";
+import { filterLeaderboardBySeat, getSeat, listSeats } from "@/lib/db/seats";
 import { LogActivityButton } from "@/components/marketing/log-activity-button";
 import { AutoSyncButton } from "@/components/marketing/auto-sync-button";
 
@@ -19,16 +21,22 @@ export const dynamic = "force-dynamic";
 export default async function MarketOrDiePage({
   searchParams,
 }: {
-  searchParams: Promise<{ week?: string }>;
+  searchParams: Promise<{ week?: string; seat?: string }>;
 }) {
   const params = await searchParams;
   const me = await getCurrentUser();
   const thisWeek = weekStartFor();
   const ws = params.week || thisWeek;
-  const [{ weekStart, rows }, trend] = await Promise.all([
+  // Per-seat view: ?seat=<Notion Person>. Leaderboards are keyed by app user,
+  // so the seat is mapped to its user (lib/db/seats.ts).
+  const [seats, seat] = await Promise.all([listSeats(), getSeat(params.seat)]);
+  const seatUserIds = seat ? (seat.user ? [seat.user.id] : []) : undefined;
+  const [board, trend] = await Promise.all([
     getLeaderboard(ws),
-    computeLeaderboardTrend({ activityTable: schema.marketingActivities as any, days: 14 }),
+    computeLeaderboardTrend({ activityTable: schema.marketingActivities as any, days: 14, userIds: seatUserIds }),
   ]);
+  const { weekStart, rows } = filterLeaderboardBySeat(board, seat);
+  const seatQs = seat ? `&seat=${encodeURIComponent(seat.name)}` : "";
 
   const canSetTarget = me?.role === "owner" || me?.role === "admin";
   const prevWeek = addWeeks(weekStart, -1);
@@ -61,6 +69,33 @@ export default async function MarketOrDiePage({
         </div>
       </div>
 
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+
+        <div className="text-xs text-stone-500">
+
+          {seat
+
+            ? seat.user
+
+              ? `Showing seat ${seat.name} → ${seat.user.name}`
+
+              : `Seat ${seat.name} has no matching app user — map it in Users & roles to see its leaderboard.`
+
+            : "Showing all seats"}
+
+        </div>
+
+        <SeatFilter
+
+          seats={seats.map((x) => ({ name: x.name, contactCount: x.contactCount, mapped: !!x.user }))}
+
+          current={seat?.name ?? null}
+
+        />
+
+      </div>
+
+
       <LeaderboardTrend data={trend} tone="amber" title="Team marketing points — last 14 days" />
 
       <LeaderboardView
@@ -68,9 +103,9 @@ export default async function MarketOrDiePage({
         weekStart={weekStart}
         weekLabel={fmtWeekLabel(weekStart)}
         isCurrentWeek={isCurrentWeek}
-        prevWeekHref={`/market-or-die?week=${prevWeek}`}
-        nextWeekHref={`/market-or-die?week=${nextWeek}`}
-        currentWeekHref="/market-or-die"
+        prevWeekHref={`/market-or-die?week=${prevWeek}${seatQs}`}
+        nextWeekHref={`/market-or-die?week=${nextWeek}${seatQs}`}
+        currentWeekHref={seat ? `/market-or-die?seat=${encodeURIComponent(seat.name)}` : "/market-or-die"}
         meId={me?.id ?? null}
         canSetTarget={canSetTarget}
         setTargetApiPath="/api/marketing/target"

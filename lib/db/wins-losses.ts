@@ -5,10 +5,13 @@
 import { db, schema } from "./client";
 import { eq, inArray, desc } from "drizzle-orm";
 import type { Contact, Activity } from "./schema";
+import { STAGE_ROLES } from "../stage-config";
+import { WIN_STAGES as WON } from "../stages";
 
-export const WIN_STAGES = ["Partnership"] as const;
-export const LOSS_STAGES = ["Lost", "Closed without Partnership"] as const;
-export const DISQUAL_STAGES = ["Not qualified"] as const;
+// Wins = Won group; losses / disqualified = roles in lib/stage-config.ts.
+export const WIN_STAGES: readonly string[] = WON;
+export const LOSS_STAGES: readonly string[] = STAGE_ROLES.loss;
+export const DISQUAL_STAGES: readonly string[] = STAGE_ROLES.disqualified;
 const TERMINAL_STAGES = [...WIN_STAGES, ...LOSS_STAGES, ...DISQUAL_STAGES];
 
 export type WinLossOutcome = "win" | "loss" | "disqualified";

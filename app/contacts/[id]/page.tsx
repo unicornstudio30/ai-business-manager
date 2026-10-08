@@ -10,6 +10,8 @@ import { SourceAttribution } from "@/components/contacts/source-attribution";
 import { computeStageSuggestions } from "@/lib/stage-suggestions";
 import { fmtDate, daysAgo, parseJson } from "@/lib/utils";
 import { ExternalLink, Mail, MapPin, ArrowLeft, Globe } from "lucide-react";
+import { getStages } from "@/lib/notion/stage-source";
+import { isEnabled } from "@/lib/feature-flags";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +25,10 @@ export default async function ContactDetail({ params }: { params: Promise<{ id: 
   const professions = parseJson<string[]>(contact.profession, []);
   const categories = parseJson<string[]>(contact.category, []);
   const followUpAge = daysAgo(contact.followUpDate);
-  const stageSuggestions = computeStageSuggestions(contact, activities);
+  // Next action, stage suggestions and the DM sequence moved to the Pipeline app.
+  const drafting = isEnabled("DRAFTING");
+  const stageSuggestions = drafting ? computeStageSuggestions(contact, activities) : [];
+  const stages = await getStages();
 
   return (
     <div className="flex flex-col gap-6">
@@ -61,13 +66,15 @@ export default async function ContactDetail({ params }: { params: Promise<{ id: 
         </div>
       </div>
 
-      <NextAction contactId={contact.id} />
+      {drafting && <NextAction contactId={contact.id} />}
 
-      <StageSuggestionsBanner
-        currentStage={contact.status}
-        suggestions={stageSuggestions}
-        notionPageId={contact.notionPageId}
-      />
+      {drafting && (
+        <StageSuggestionsBanner
+          currentStage={contact.status}
+          suggestions={stageSuggestions}
+          notionPageId={contact.notionPageId}
+        />
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.5fr] gap-6 items-start">
         {/* Left: profile + sequence */}
@@ -76,7 +83,7 @@ export default async function ContactDetail({ params }: { params: Promise<{ id: 
             <SourceAttribution contactId={contact.id} currentSourceId={contact.sourceContentId} />
           </div>
           <div className="rounded-2xl border border-stone-200 bg-white p-6 flex flex-col gap-5">
-            <StageStepper status={contact.status} />
+            <StageStepper status={contact.status} stages={stages} />
 
             <div className="border-t border-stone-100 pt-4 flex flex-col gap-3 text-sm">
               {contact.email && (
@@ -162,11 +169,13 @@ export default async function ContactDetail({ params }: { params: Promise<{ id: 
             )}
           </div>
 
-          <SequenceWidget
-            platform={contact.platform}
-            engageTouch={contact.engageTouch}
-            lastTouchAt={contact.lastTouchAt}
-          />
+          {isEnabled("NEXT_MESSAGE") && (
+            <SequenceWidget
+              platform={contact.platform}
+              engageTouch={contact.engageTouch}
+              lastTouchAt={contact.lastTouchAt}
+            />
+          )}
 
           {contact.notionPageId && (
             <div className="text-xs text-stone-400 px-2">
