@@ -10,6 +10,7 @@ import { and, eq, gte, sql } from "drizzle-orm";
 import { FUNNEL_GROUPS, type StageGroup } from "../stage-config";
 import { stageGroup } from "../stages";
 
+import { IN_NOTION } from "./active-contacts";
 export type SeatFilter = { seat?: string | null };
 
 // Funnel: count per dashboard-group, in order (Cold → Engaged → ... → Won).
@@ -20,7 +21,7 @@ export async function funnelCounts(opts: SeatFilter = {}): Promise<{ group: Stag
       count: sql<number>`count(*)`,
     })
     .from(schema.contacts)
-    .where(opts.seat ? eq(schema.contacts.ownerName, opts.seat) : undefined)
+    .where(opts.seat ? and(IN_NOTION, eq(schema.contacts.ownerName, opts.seat)) : IN_NOTION)
     .groupBy(schema.contacts.status);
   const byGroup = new Map<StageGroup, number>();
   for (const r of rows) {

@@ -179,7 +179,8 @@ export default async function ContactDetail({ params }: { params: Promise<{ id: 
 
           {contact.notionPageId && (
             <div className="text-xs text-stone-400 px-2">
-              Synced from Notion · last edit {fmtDate(contact.notionLastEditedAt)}
+              Read-only · synced from Notion · last edit {fmtDate(contact.notionLastEditedAt)}. Edit in Notion or the
+              Pipeline app.
             </div>
           )}
         </div>

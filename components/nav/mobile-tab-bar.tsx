@@ -13,7 +13,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Users, UserPlus, Flame, MessageSquare, AlertTriangle, DollarSign, Trophy, type LucideIcon } from "lucide-react";
+import { Home, Users, UserPlus, Flame, MessageSquare, AlertTriangle, GitBranch, UsersRound, type LucideIcon } from "lucide-react";
 
 type Tab = { href: string; label: string; icon: LucideIcon };
 
@@ -29,9 +29,9 @@ const TABS: Tab[] = [
 
 // Reporting tabs that fill the slots of any hidden (feature-flagged) tabs.
 const FALLBACK_TABS: Tab[] = [
-  { href: "/stuck",       label: "Stuck", icon: AlertTriangle },
-  { href: "/sell-or-die", label: "Sell",  icon: DollarSign },
-  { href: "/wins-losses", label: "Wins",  icon: Trophy },
+  { href: "/funnel",      label: "Funnel", icon: GitBranch },
+  { href: "/seats",       label: "Seats",  icon: UsersRound },
+  { href: "/stuck",       label: "Stuck",  icon: AlertTriangle },
 ];
 
 export function MobileTabBar({ hiddenHrefs = [] }: { hiddenHrefs?: string[] }) {

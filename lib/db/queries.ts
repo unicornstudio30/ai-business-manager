@@ -1,7 +1,8 @@
 // Reusable read queries used across API routes and pages.
 
 import { db, schema } from "./client";
-import { and, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lt, or, sql, type SQL } from "drizzle-orm";
+import { IN_NOTION } from "./active-contacts";
 import {
   HOT_LEAD_STAGES,
   ACTIVE_CLIENT_STAGES,
@@ -15,7 +16,8 @@ const EXCLUDED_FROM_FOLLOW_UP = [...TERMINAL_STAGES, ...NO_FOLLOW_UP_STAGES];
 export async function getDashboardStats() {
   const [totals] = await db
     .select({ count: sql<number>`count(*)` })
-    .from(schema.contacts);
+    .from(schema.contacts)
+    .where(IN_NOTION);
 
   const stageCounts = await db
     .select({
@@ -23,6 +25,7 @@ export async function getDashboardStats() {
       count: sql<number>`count(*)`,
     })
     .from(schema.contacts)
+    .where(IN_NOTION)
     .groupBy(schema.contacts.status);
 
   const map = new Map(stageCounts.map((r) => [r.status ?? "", Number(r.count)]));
@@ -38,6 +41,7 @@ export async function getDashboardStats() {
     .from(schema.contacts)
     .where(
       and(
+        IN_NOTION,
         sql`(${schema.contacts.status} NOT IN (${sql.join(
           EXCLUDED_FROM_FOLLOW_UP.map((s) => sql`${s}`),
           sql`, `
@@ -68,7 +72,7 @@ export async function getHotLeads(limit = 20) {
   return db
     .select()
     .from(schema.contacts)
-    .where(inArray(schema.contacts.status, [...HOT_LEAD_STAGES]))
+    .where(and(IN_NOTION, inArray(schema.contacts.status, [...HOT_LEAD_STAGES])))
     .orderBy(desc(schema.contacts.statusDate))
     .limit(limit);
 }
@@ -81,6 +85,7 @@ export async function getNeedsFollowUp(days = 11, limit = 20) {
     .from(schema.contacts)
     .where(
       and(
+        IN_NOTION,
         sql`(${schema.contacts.status} NOT IN (${sql.join(
           EXCLUDED_FROM_FOLLOW_UP.map((s) => sql`${s}`),
           sql`, `
@@ -108,6 +113,7 @@ export async function getStageGroupCounts() {
       count: sql<number>`count(*)`,
     })
     .from(schema.contacts)
+    .where(IN_NOTION)
     .groupBy(schema.contacts.status);
   const map = new Map(stageCounts.map((r) => [r.status ?? "", Number(r.count)]));
   const groups: Record<string, { count: number; stages: { name: string; count: number }[] }> = {};
@@ -147,7 +153,7 @@ export async function listContacts(opts: {
   limit?: number;
   offset?: number;
 }) {
-  const conditions = [];
+  const conditions: (SQL | undefined)[] = [IN_NOTION];
   if (opts.status) conditions.push(eq(schema.contacts.status, opts.status));
   if (opts.country) conditions.push(eq(schema.contacts.country, opts.country));
   if (opts.platform) conditions.push(eq(schema.contacts.platform, opts.platform));

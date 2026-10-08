@@ -17,7 +17,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Fragment } from "react";
 import { Menu, X } from "lucide-react";
 import { visibleNavItems } from "@/lib/nav-items";
 import type { UserRole } from "@/lib/db/schema";
@@ -118,9 +118,16 @@ export function MobileNav({ role, hiddenHrefs = [] }: { role?: UserRole; hiddenH
           style={{ WebkitOverflowScrolling: "touch" }}
           aria-label="Full navigation"
         >
-          {visibleNavItems(role, hiddenHrefs).map((item) => {
+          {visibleNavItems(role, hiddenHrefs).map((item, i, items) => {
             const active = isActive(item.href);
+            const header = i === 0 || items[i - 1].section !== item.section;
             return (
+              <Fragment key={item.href}>
+              {header && item.section !== "Overview" && (
+                <div className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-stone-400">
+                  {item.section}
+                </div>
+              )}
               <Link
                 key={item.href}
                 href={item.href}
@@ -135,6 +142,7 @@ export function MobileNav({ role, hiddenHrefs = [] }: { role?: UserRole; hiddenH
                 <item.icon className={`size-5 flex-shrink-0 ${active ? "" : "text-stone-500"}`} />
                 <span>{item.label}</span>
               </Link>
+              </Fragment>
             );
           })}
           {/* Spacer so the last item clears the iOS home indicator + tab bar */}

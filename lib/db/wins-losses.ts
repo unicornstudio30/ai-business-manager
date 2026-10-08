@@ -3,11 +3,12 @@
 // type='closed_reason' on the contact.
 
 import { db, schema } from "./client";
-import { eq, inArray, desc } from "drizzle-orm";
+import { and, eq, inArray, desc } from "drizzle-orm";
 import type { Contact, Activity } from "./schema";
 import { STAGE_ROLES } from "../stage-config";
 import { WIN_STAGES as WON } from "../stages";
 
+import { IN_NOTION } from "./active-contacts";
 // Wins = Won group; losses / disqualified = roles in lib/stage-config.ts.
 export const WIN_STAGES: readonly string[] = WON;
 export const LOSS_STAGES: readonly string[] = STAGE_ROLES.loss;
@@ -35,7 +36,7 @@ export async function listClosedDeals(opts: { limit?: number } = {}): Promise<Cl
   const contacts = await db
     .select()
     .from(schema.contacts)
-    .where(inArray(schema.contacts.status, [...TERMINAL_STAGES]));
+    .where(and(IN_NOTION, inArray(schema.contacts.status, [...TERMINAL_STAGES])));
 
   if (contacts.length === 0) return [];
 

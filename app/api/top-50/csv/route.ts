@@ -16,6 +16,7 @@ import { eq, and, desc } from "drizzle-orm";
 import { computeIcpScore } from "@/lib/icp-scoring";
 import { parseJson } from "@/lib/utils";
 
+import { IN_NOTION } from "@/lib/db/active-contacts";
 function csvEscape(v: unknown): string {
   if (v === null || v === undefined) return "";
   const s = String(v);
@@ -38,8 +39,8 @@ export async function GET(req: NextRequest) {
   const platform = req.nextUrl.searchParams.get("platform");
 
   const where = platform
-    ? and(eq(schema.contacts.top50, 1), eq(schema.contacts.platform, platform))
-    : eq(schema.contacts.top50, 1);
+    ? and(IN_NOTION, eq(schema.contacts.top50, 1), eq(schema.contacts.platform, platform))
+    : and(IN_NOTION, eq(schema.contacts.top50, 1));
 
   const rows = await db
     .select()

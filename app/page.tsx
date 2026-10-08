@@ -31,6 +31,10 @@ import { PLATFORM_LIMITS, PLATFORMS_ORDER, target, type PlatformKey } from "@/li
 import { isEnabled } from "@/lib/feature-flags";
 import { listSeats } from "@/lib/db/seats";
 import { SeatFilter } from "@/components/seat-filter";
+import { pipelineSummary, sumPrefix, latestPipelinePush } from "@/lib/db/pipeline";
+import { dataHealth } from "@/lib/db/data-health";
+import { getCurrentUser } from "@/lib/auth/server";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +66,21 @@ export default async function Home({
     getEffectiveOutreachLimits(),
     listSeats(),
   ]);
+  const [pipeline7d, lastPush, me] = await Promise.all([
+    pipelineSummary({ seat, days: 7 }),
+    latestPipelinePush(),
+    getCurrentUser(),
+  ]);
+  const isAdmin = me?.role === "owner" || me?.role === "admin";
+  const health = isAdmin ? await dataHealth() : null;
+  const healthIssues = health ? health.checks.filter((c) => c.level !== "ok") : [];
+  const p = (fn: (x: (typeof pipeline7d)[number]) => number) => pipeline7d.reduce((acc, x) => acc + fn(x), 0);
+  const pipe = {
+    awaiting: p((x) => x.gauges["conversations.awaiting_reply"] ?? 0),
+    overdue: p((x) => x.gauges["followups.overdue"] ?? 0),
+    sent7d: p((x) => sumPrefix(x.totals, "messages.sent")),
+    received7d: p((x) => sumPrefix(x.totals, "messages.received")),
+  };
 
   const notConfigured = !sync.configured;
 
@@ -108,11 +127,37 @@ export default async function Home({
         )}
       </div>
 
+      {healthIssues.length > 0 && (
+        <Link
+          href="/admin/data-health"
+          className="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900 hover:bg-amber-50"
+        >
+          <span className="font-medium">Data health:</span>{" "}
+          {healthIssues.map((c) => c.label).join(" · ")} — check before trusting the numbers →
+        </Link>
+      )}
+
       <DailySummary />
 
       <StreakHero streak={streak} />
 
       {showQueues && <TodayQueue />}
+
+      {/* Pipeline app — per-seat totals pushed on Sync */}
+      <div className="flex flex-col gap-2">
+        <div className="text-xs text-stone-500">
+          Pipeline app{seat ? ` · ${seat}` : ""} —{" "}
+          {lastPush
+            ? `as of ${lastPush.receivedAt.toISOString().replace("T", " ").slice(0, 16)} UTC`
+            : "no data yet (open the Pipeline app on your Mac, then click Sync)"}
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <StatCard label="Awaiting your reply" value={pipe.awaiting} tone="red" />
+          <StatCard label="Overdue follow-ups" value={pipe.overdue} tone="amber" />
+          <StatCard label="Messages sent · 7d" value={pipe.sent7d} />
+          <StatCard label="Messages received · 7d" value={pipe.received7d} tone="green" />
+        </div>
+      </div>
 
       {/* Row 1 — pipeline + commitments at a glance */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

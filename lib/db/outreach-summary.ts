@@ -6,6 +6,7 @@ import { isWon } from "../stages";
 import { db, schema } from "./client";
 import { and, gte, lte, isNotNull, inArray } from "drizzle-orm";
 
+import { IN_NOTION } from "./active-contacts";
 export type OutreachSummary = {
   input: {
     dmsSent: number;
@@ -58,6 +59,7 @@ export async function getOutreachSummary(opts: { since: Date; until?: Date }): P
     db.select({ status: schema.contacts.status })
       .from(schema.contacts)
       .where(and(
+        IN_NOTION,
         isNotNull(schema.contacts.closedDate),
         gte(schema.contacts.closedDate, since),
         lte(schema.contacts.closedDate, until)

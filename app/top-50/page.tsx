@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { db, schema } from "@/lib/db/client";
-import { eq, desc } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 import { computeIcpScore, icpColor } from "@/lib/icp-scoring";
 import { stageColor, type Stage } from "@/lib/stages";
 import { fmtDate, parseJson } from "@/lib/utils";
 import { Star, Download, ExternalLink, AlertCircle } from "lucide-react";
 
+import { IN_NOTION } from "@/lib/db/active-contacts";
 export const dynamic = "force-dynamic";
 
 const NOTION_CRM_URL = "https://www.notion.so/35d0b601369a80519256ec4232d5f6a8";
@@ -14,7 +15,7 @@ export default async function Top50Page() {
   const rows = await db
     .select()
     .from(schema.contacts)
-    .where(eq(schema.contacts.top50, 1))
+    .where(and(IN_NOTION, eq(schema.contacts.top50, 1)))
     .orderBy(desc(schema.contacts.statusDate));
 
   // Group by platform for the per-platform CSV buttons

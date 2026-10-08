@@ -11,6 +11,7 @@ import { getCurrentUser } from "@/lib/auth/server";
 import { db, schema } from "@/lib/db/client";
 import { resolveOwnerName } from "@/lib/name-matcher";
 
+import { IN_NOTION } from "@/lib/db/active-contacts";
 export async function GET() {
   const me = await getCurrentUser();
   if (!me) return NextResponse.json({ error: "Auth required" }, { status: 401 });
@@ -36,7 +37,7 @@ export async function GET() {
       updatedAt: schema.contacts.updatedAt,
     })
     .from(schema.contacts)
-    .where(and(isNotNull(schema.contacts.ownerName), ne(schema.contacts.ownerName, "")))
+    .where(and(IN_NOTION, isNotNull(schema.contacts.ownerName), ne(schema.contacts.ownerName, "")))
     .orderBy(desc(schema.contacts.updatedAt))
     .limit(500);
 

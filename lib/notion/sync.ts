@@ -12,6 +12,7 @@ import { notionToContentItem, contentToNotionProperties } from "./content-mapper
 import { notionToTrackerEntry } from "./tracker-mapper";
 import { emitInferredActivities } from "./inferred-activities";
 import { getStages } from "./stage-source";
+import { markMissingFromNotion, recordStageChange, seedMissingStageEvents } from "./stage-history";
 import { isEnabled } from "../feature-flags";
 import type { PageObjectResponse } from "@notionhq/client";
 
@@ -43,7 +44,14 @@ async function logRun(
   return { rows, error: errorMsg };
 }
 
-async function* paginatedQuery(dataSourceId: string, pageSize = 100, deadlineMs?: number) {
+// `state.complete` is set once every page has been read (not cut short by the
+// deadline) — only then is it safe to treat a missing page as removed.
+async function* paginatedQuery(
+  dataSourceId: string,
+  pageSize = 100,
+  deadlineMs?: number,
+  state?: { complete: boolean }
+) {
   const n = notion();
   let cursor: string | undefined = undefined;
   do {
@@ -61,6 +69,7 @@ async function* paginatedQuery(dataSourceId: string, pageSize = 100, deadlineMs?
     }
     cursor = res.has_more ? res.next_cursor : undefined;
   } while (cursor);
+  if (state) state.complete = true;
 }
 
 // Single function deadline — Vercel Hobby tier = 10s function timeout.
@@ -75,8 +84,12 @@ function getDeadline(): number {
 async function pullContacts(deadlineMs?: number): Promise<number> {
   let count = 0;
   const stageOrder = await getStages();
-  for await (const page of paginatedQuery(NOTION_DATA_SOURCES.contacts, 100, deadlineMs)) {
-    const row = notionToContact(page, stageOrder);
+  const state = { complete: false };
+  const seen = new Set<string>();
+  for await (const page of paginatedQuery(NOTION_DATA_SOURCES.contacts, 100, deadlineMs, state)) {
+    seen.add(page.id);
+    const row = { ...notionToContact(page, stageOrder), inNotion: 1 };
+    const changedAt = row.notionLastEditedAt ?? new Date();
     // Fetch the FULL existing row so we can diff fields (engageTouch, status)
     // and emit inferred activities when CRM updates happen in Notion.
     const existing = await db
@@ -86,7 +99,16 @@ async function pullContacts(deadlineMs?: number): Promise<number> {
       .limit(1);
 
     if (existing.length === 0) {
-      await db.insert(schema.contacts).values(row);
+      const [inserted] = await db.insert(schema.contacts).values(row).returning({ id: schema.contacts.id });
+      if (inserted && row.status) {
+        await recordStageChange({
+          contactId: inserted.id,
+          fromStage: null,
+          toStage: row.status,
+          seat: row.ownerName ?? null,
+          at: row.statusDate ?? changedAt,
+        });
+      }
       count++;
     } else {
       const prev = existing[0];
@@ -107,18 +129,29 @@ async function pullContacts(deadlineMs?: number): Promise<number> {
           .update(schema.contacts)
           .set({ ...row, dirty: 0 })
           .where(eq(schema.contacts.id, prev.id));
+        await recordStageChange({
+          contactId: prev.id,
+          fromStage: prev.status,
+          toStage: row.status ?? null,
+          seat: row.ownerName ?? null,
+          at: row.statusDate && row.statusDate > (prev.statusDate ?? new Date(0)) ? row.statusDate : changedAt,
+        });
         count++;
-      } else if (row.status !== prev.status || row.ownerName !== prev.ownerName) {
+      } else if (row.status !== prev.status || row.ownerName !== prev.ownerName || prev.inNotion !== 1) {
         // Notion unchanged, but the mapping changed (e.g. stage names now read
-        // straight from Notion). Correct the mirror without inferring activity.
+        // straight from Notion, seat now read from "Seat"), or the page is back
+        // in Notion. Correct the mirror without inferring activity or history.
         await db
           .update(schema.contacts)
-          .set({ status: row.status, ownerName: row.ownerName })
+          .set({ status: row.status, ownerName: row.ownerName, inNotion: 1 })
           .where(eq(schema.contacts.id, prev.id));
         count++;
       }
     }
   }
+  // Only a complete pass can tell us a page is gone from Notion.
+  if (state.complete) count += await markMissingFromNotion(seen);
+  await seedMissingStageEvents();
   return count;
 }
 

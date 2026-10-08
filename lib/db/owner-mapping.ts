@@ -12,6 +12,7 @@ import { db, schema } from "./client";
 import { resolveOwnerName, type NameMatchTier } from "../name-matcher";
 import { HOT_LEAD_STAGES, STAGE_GROUPS, isActiveClient, isTerminal, stageGroup } from "../stages";
 
+import { IN_NOTION } from "./active-contacts";
 // Split contacts by CRM Status into meaningful buckets. Everything is
 // driven by the actual Status field in Notion — no arbitrary counts.
 //   cold   — top-of-funnel (Prospect / Connection / 1st message / Inmail /
@@ -113,14 +114,14 @@ export async function getOwnerMappingReport(): Promise<OwnerMappingReport> {
       cnt: sql<number>`count(*)`,
     })
     .from(schema.contacts)
-    .where(and(isNotNull(schema.contacts.ownerName), ne(schema.contacts.ownerName, "")))
+    .where(and(IN_NOTION, isNotNull(schema.contacts.ownerName), ne(schema.contacts.ownerName, "")))
     .groupBy(schema.contacts.ownerName, schema.contacts.status);
 
   // Also: number of contacts with no owner_name at all
   const [{ n: totalUnowned = 0 } = { n: 0 }] = (await db
     .select({ n: sql<number>`count(*)` })
     .from(schema.contacts)
-    .where(sql`${schema.contacts.ownerName} is null or ${schema.contacts.ownerName} = ''`)) as { n: number }[];
+    .where(and(IN_NOTION, sql`(${schema.contacts.ownerName} is null or ${schema.contacts.ownerName} = '')`))) as { n: number }[];
 
   // Recent activity count per owner — cheap health metric
   const cutoff = new Date();
@@ -213,7 +214,7 @@ export async function getUserOwnedCounts(): Promise<Map<string, StatusBreakdown>
       cnt: sql<number>`count(*)`,
     })
     .from(schema.contacts)
-    .where(and(isNotNull(schema.contacts.ownerName), ne(schema.contacts.ownerName, "")))
+    .where(and(IN_NOTION, isNotNull(schema.contacts.ownerName), ne(schema.contacts.ownerName, "")))
     .groupBy(schema.contacts.ownerName, schema.contacts.status);
 
   const byUser = new Map<string, StatusBreakdown>();

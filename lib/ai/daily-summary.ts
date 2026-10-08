@@ -14,6 +14,7 @@ import { cachedChat } from "../ai-cache";
 import { MODELS, isOpenRouterConfigured } from "../openrouter";
 import { HOT_LEAD_STAGES, ACTIVE_CLIENT_STAGES, TERMINAL_STAGES } from "../stages";
 
+import { IN_NOTION } from "../db/active-contacts";
 const DAY = 86_400_000;
 
 const SYSTEM = `You are a no-fluff sales coach for Saidur Rahaman, founder of Unicorn Studio (custom AI automation for AI SaaS founders).
@@ -59,7 +60,7 @@ async function gatherSignals() {
       platform: schema.contacts.platform,
     })
     .from(schema.contacts)
-    .where(inArray(schema.contacts.status, [...HOT_LEAD_STAGES]))
+    .where(and(IN_NOTION, inArray(schema.contacts.status, [...HOT_LEAD_STAGES])))
     .orderBy(schema.contacts.statusDate)
     .limit(8);
 
@@ -73,6 +74,7 @@ async function gatherSignals() {
     })
     .from(schema.contacts)
     .where(and(
+      IN_NOTION,
       isNotNull(schema.contacts.followUpDate),
       lt(schema.contacts.followUpDate, today),
       sql`(${schema.contacts.status} NOT IN (${sql.join(TERMINAL_STAGES.map((s) => sql`${s}`), sql`, `)}))`
@@ -89,6 +91,7 @@ async function gatherSignals() {
     })
     .from(schema.contacts)
     .where(and(
+      IN_NOTION,
       inArray(schema.contacts.status, [...ACTIVE_CLIENT_STAGES]),
       lt(schema.contacts.lastTouchAt, d30Ago)
     ))

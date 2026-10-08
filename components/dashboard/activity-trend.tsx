@@ -4,12 +4,12 @@ import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianG
 
 type Datum = { date: string; fullDate: string; count: number };
 
-export function ActivityTrend({ data }: { data: Datum[] }) {
+export function ActivityTrend({ data, title = "Activity — last 30 days" }: { data: Datum[]; title?: string }) {
   const total = data.reduce((s, d) => s + d.count, 0);
   return (
     <div className="rounded-2xl border border-stone-200 bg-white p-6">
       <div className="flex items-baseline justify-between mb-4">
-        <div className="text-sm font-semibold text-stone-900">Activity — last 30 days</div>
+        <div className="text-sm font-semibold text-stone-900">{title}</div>
         <div className="text-xs text-stone-500">{total} total</div>
       </div>
       <div className="h-48">

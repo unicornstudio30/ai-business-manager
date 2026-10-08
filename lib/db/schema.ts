@@ -30,7 +30,7 @@ export const contacts = sqliteTable(
     position: text("position"),       // multi
     profession: text("profession"),   // multi
 
-    status: text("status"),           // 18-stage enum (see lib/stages.ts)
+    status: text("status"),           // Notion CRM stage (list read live from Notion; groups in lib/stage-config.ts)
     statusDate: ts("status_date"),
     followUpDate: ts("follow_up_date"),
     closedDate: ts("closed_date"),
@@ -65,9 +65,15 @@ export const contacts = sqliteTable(
     // auto-promotes status to "Lead" if currently below.
     relation: text("relation"),
 
-    // Lead owner — pulled from the Notion "Person" column. Matches by name
-    // (case-insensitive) against the local users table to compute "my leads".
+    // Seat (lead owner) — the Notion "Seat" select written by the Pipeline app,
+    // falling back to the older "Person" column. Matched to app users by name
+    // (lib/db/seats.ts) for "my leads" and leaderboard attribution.
     ownerName: text("owner_name"),
+
+    // 1 while the page still exists in the Notion CRM. A complete pull sets it
+    // to 0 for pages Notion no longer returns; reports skip those rows. Rows
+    // are never deleted.
+    inNotion: integer("in_notion").notNull().default(1),
 
     // Top 50 long-term relationship list — checkbox from Notion CRM.
     // /top-50 page surfaces these for CSV download (all + per platform).
@@ -338,6 +344,58 @@ export const leadScores = sqliteTable("lead_scores", {
   engagementScore: integer("engagement_score").notNull().default(0),
   replyScore: integer("reply_score").notNull().default(0),
   updatedAt: ts("updated_at").notNull().$defaultFn(() => new Date()),
+});
+
+// Stage history captured by PBM on every Notion pull (Notion only keeps the
+// current Status). from_stage is null for a contact's first recorded stage.
+// source: "pull" = seen changing during a sync; "seed" = starting point taken
+// from the contact's Status Date when history began.
+export const stageEvents = sqliteTable(
+  "stage_events",
+  {
+    id: id(),
+    contactId: text("contact_id").notNull(),
+    fromStage: text("from_stage"),
+    toStage: text("to_stage"),
+    seat: text("seat"),
+    at: ts("at").notNull(),
+    source: text("source").notNull().default("pull"),
+    createdAt: now(),
+  },
+  (t) => ({
+    contactIdx: index("stage_events_contact_idx").on(t.contactId, t.at),
+    atIdx: index("stage_events_at_idx").on(t.at),
+  })
+);
+
+// Per-seat totals pushed by the Pipeline app when Sync is clicked (numbers
+// only). kind "gauge" = state on that date (latest push wins); kind "count" =
+// events that happened that day.
+export const pipelineMetrics = sqliteTable(
+  "pipeline_metrics",
+  {
+    date: text("date").notNull(),          // YYYY-MM-DD (UTC)
+    seat: text("seat").notNull(),
+    metric: text("metric").notNull(),      // e.g. leads.stage.replied, messages.sent.linkedin
+    kind: text("kind").notNull(),          // gauge | count
+    value: integer("value").notNull().default(0),
+    updatedAt: ts("updated_at").notNull().$defaultFn(() => new Date()),
+  },
+  (t) => ({
+    pk: uniqueIndex("pipeline_metrics_pk").on(t.date, t.seat, t.metric),
+    seatIdx: index("pipeline_metrics_seat_idx").on(t.seat, t.metric),
+  })
+);
+
+// One row per Pipeline push received.
+export const pipelinePushes = sqliteTable("pipeline_pushes", {
+  id: id(),
+  receivedAt: ts("received_at").notNull().$defaultFn(() => new Date()),
+  generatedAt: ts("generated_at"),
+  ownSeat: text("own_seat"),
+  seats: text("seats"),          // JSON [{name, source}]
+  freshness: text("freshness"),  // JSON {beeper, email, granola, unclassified}
+  metricCount: integer("metric_count").notNull().default(0),
 });
 
 export const syncLog = sqliteTable("sync_log", {
@@ -643,3 +701,6 @@ export type TrackerEntry = typeof trackerEntries.$inferSelect;
 export type DailySalesKpi = typeof dailySalesKpis.$inferSelect;
 export type ClaudeRun = typeof claudeRuns.$inferSelect;
 export type SyncLog = typeof syncLog.$inferSelect;
+export type StageEvent = typeof stageEvents.$inferSelect;
+export type PipelineMetric = typeof pipelineMetrics.$inferSelect;
+export type PipelinePush = typeof pipelinePushes.$inferSelect;

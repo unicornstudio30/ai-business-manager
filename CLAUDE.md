@@ -7,7 +7,9 @@ This is Saidur's unified business OS for Unicorn Studio (AI automation, integrat
 - **Web app**: Next.js 15. Base URL comes from the `APP_URL` env var in `.env.local`. Default is `http://localhost:3000` for local dev; in production it's the Vercel URL (e.g. `https://unicorn-manager.vercel.app`).
 - **Database**: libsql (Turso in prod, local file in dev). Schema in `lib/db/schema.ts`. 14 tables.
 - **Notion mirror**: 3 of the 14 tables (`contacts`, `tracker_entries`, `content_items`) mirror Notion. Notion is canonical for these.
-- **Read-only reporting layer**: PBM never writes to Notion. The Pipeline app (separate project) is the only automated writer of Stage (the Notion `Status` column) and owns the inbox, next action and drafts. Overlapping PBM features are switched off with flags in `lib/feature-flags.ts` (env `PBM_FLAG_<NAME>=on|off`), not deleted. Activity and leaderboard data in PBM's own DB is still written.
+- **Analytics & reporting layer** over the **Unicorn Studio Pipeline** app (`~/crm`, local on the Mac, SQLite, `localhost:4321`) and the **Notion CRM**. Menu sections: Overview · Pipeline analytics (Funnel & conversion, Seats, Stuck, Wins & Losses, Clients, Daily KPIs, History) · Leaderboards · CRM (read-only) · Business · Admin (Data health).
+- **Sync is manual only.** The Sync button pulls Notion, then the browser asks the local Pipeline server (`POST localhost:4321/api/pbm/push`) to push per-seat totals (numbers only) to `POST /api/pipeline/ingest`. Nothing runs on a schedule. Terminal equivalent in ~/crm: `npm run pbm-push`.
+- **Read-only toward Notion**: PBM never writes to Notion. The Pipeline app (separate project) is the only automated writer of Stage (the Notion `Status` column) and owns the inbox, next action and drafts. Overlapping PBM features are switched off with flags in `lib/feature-flags.ts` (env `PBM_FLAG_<NAME>=on|off`), not deleted. Activity and leaderboard data in PBM's own DB is still written.
 - **AI commands**: This Claude Code window is the cockpit. Slash commands live in `.claude/commands/*.md`.
 
 ## API auth (production only)
@@ -27,7 +29,9 @@ If `APP_URL` or `CLAUDE_API_KEY` are unset, default to `http://localhost:3000` a
 3. **Use strategy docs as voice/framework reference.** Read `/strategy/unicorn-*.md` FIRST for tone & targeting, then `/strategy/appsmove-*.md` for mechanism (ACA, hook system, 5-part story).
 4. **Never write Stage.** Don't change a contact's Status from PBM, a slash command or an MCP tool. Contact create/edit/delete routes return 403 while PBM is read-only.
 5. **Stages come from Notion.** `lib/notion/stage-source.ts` reads the CRM `Status` options at runtime (5-min cache); `stage_definitions` returns them. Group mapping (Cold/Engaged/Qualified/Proposal/Call/Won/Archive), reporting roles, points and stuck thresholds live in `lib/stage-config.ts` — the only file that names stages. A Notion stage with no group logs a warning; add it there.
-6. **Per-seat reporting.** A seat is each distinct Notion `Person` value (`contacts.owner_name`). `lib/db/seats.ts` maps seats to users (exact, then fuzzy). Analytics, funnel, stuck deals and leaderboards take `?seat=` / `seat`.
+6. **Per-seat reporting.** A seat is each distinct Notion `Seat` select value (written by the Pipeline app; mirrored as `contacts.owner_name`, falling back to `Person`) plus the Pipeline app's seat roster. `lib/db/seats.ts` maps seats to users (exact, then fuzzy). Analytics, funnel, seats, stuck deals and leaderboards take `?seat=` / `seat`.
+7. **Reports only count contacts still in Notion** (`contacts.in_notion = 1`, filter `IN_NOTION` in `lib/db/active-contacts.ts`). A complete pull flags removed pages as 0; rows are never deleted.
+8. **Stage history** (`stage_events`) is recorded on every pull; conversion and time-in-stage come from it (`lib/db/funnel-analytics.ts`).
 
 ## Key files
 
@@ -36,7 +40,10 @@ If `APP_URL` or `CLAUDE_API_KEY` are unset, default to `http://localhost:3000` a
 - `lib/notion/stage-source.ts` — live stage list from Notion
 - `lib/stages.ts` — stage helpers derived from the config
 - `lib/feature-flags.ts` — read-only mode flags
-- `lib/db/seats.ts` — seats (Notion Person values) and seat → user mapping
+- `lib/db/seats.ts` — seats and seat → user mapping
+- `lib/db/pipeline.ts` — Pipeline app metrics (ingest + queries); `app/api/pipeline/ingest`
+- `lib/db/funnel-analytics.ts`, `lib/db/seat-report.ts`, `lib/db/data-health.ts` — analytics behind /funnel, /seats, /admin/data-health
+- `lib/notion/stage-history.ts` — stage events, removed-from-Notion flagging
 - `lib/sequences.ts` — DM sequence templates (used only when NEXT_MESSAGE is on)
 - `lib/positioning.ts` — Unicorn Studio offer summary
 - `lib/notion/sync.ts` — sync engine (pull; push only when PBM_FLAG_NOTION_WRITES=on)
@@ -54,6 +61,7 @@ If `APP_URL` or `CLAUDE_API_KEY` are unset, default to `http://localhost:3000` a
 - `POST /api/contacts`, `PATCH|DELETE /api/contacts/[id]` — 403 while PBM is read-only
 - `POST /api/activities` — write a draft for a contact (this is the main write path for slash commands)
 - `POST /api/sync` — pull from Notion (read-only)
+- `POST /api/pipeline/ingest` — per-seat totals from the Pipeline app (requires `x-claude-api-key`)
 
 ## Voice for drafts
 

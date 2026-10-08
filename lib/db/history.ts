@@ -11,6 +11,7 @@ import { db, schema } from "./client";
 import { gte, lte, desc, eq, and, isNotNull } from "drizzle-orm";
 import { platformToChannel, type InboxChannel } from "../inbox";
 
+import { IN_NOTION } from "./active-contacts";
 export type HistoryEventType =
   // sales
   | "activity"
@@ -176,6 +177,7 @@ export async function getHistory(filters: HistoryFilters = {}): Promise<HistoryE
   // 2) Deal closed — contacts.closedDate in range (Partnership / Lost / etc.)
   if (types.includes("deal_closed")) {
     const where = and(
+      IN_NOTION,
       isNotNull(schema.contacts.closedDate),
       gte(schema.contacts.closedDate, since),
       lte(schema.contacts.closedDate, until),

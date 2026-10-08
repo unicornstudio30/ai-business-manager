@@ -20,6 +20,7 @@ import { db, schema } from "./client";
 import { and, gte, lt, eq, inArray, sql } from "drizzle-orm";
 import { platformToChannel, type InboxChannel } from "../inbox";
 
+import { IN_NOTION } from "./active-contacts";
 function startOfDay(d: Date): Date {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
@@ -118,7 +119,7 @@ export async function getNotionDerivedKpis(forDate: Date): Promise<DerivedKpis> 
 
   // Pull all contacts once — we'll filter in memory by date conditions.
   // For a single-user CRM this is fine (few hundred to few thousand rows).
-  const contacts = await db.select().from(schema.contacts);
+  const contacts = await db.select().from(schema.contacts).where(IN_NOTION);
 
   // ─── Outreach actions today (derived from statusDate + current status) ───
 

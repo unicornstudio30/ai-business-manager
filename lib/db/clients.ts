@@ -6,6 +6,7 @@ import { db, schema } from "./client";
 import type { Contact } from "./schema";
 import { ACTIVE_CLIENT_STAGES } from "../stages";
 
+import { IN_NOTION } from "./active-contacts";
 const DAY = 86_400_000;
 
 export type ClientHealth = "fresh" | "warm" | "cooling" | "cold" | "unknown";
@@ -40,6 +41,7 @@ function healthFor(daysSinceTouch: number | null): ClientHealth {
 export async function getClientsView(search?: string): Promise<ClientsView> {
   const conds: any[] = [
     inArray(schema.contacts.status, ACTIVE_CLIENT_STAGES),
+    IN_NOTION,
   ];
   if (search) {
     const q = `%${search.toLowerCase()}%`;

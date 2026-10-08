@@ -5,7 +5,7 @@ import type { PageObjectResponse } from "@notionhq/client";
 import type { NewContact } from "../db/schema";
 import { trackForPlatform } from "../sequences";
 import { canonicalStage } from "../stages";
-import { STAGE_PROPERTY } from "../stage-config";
+import { SEAT_PROPERTY, STAGE_PROPERTY } from "../stage-config";
 
 type Props = PageObjectResponse["properties"];
 
@@ -134,9 +134,9 @@ export function notionToContact(page: PageObjectResponse, stageOrder: readonly s
     // Sales action items ticked on this contact in Notion's "Actions"
     // multi_select. Auto-sync turns each into a sales_activities row.
     actionsDone: JSON.stringify(multiSelect(props["Actions"])),
-    // Lead owner from Notion "Person" column. Tries the People property type
-    // first; falls back to rich-text / select if you stored it as a string.
-    ownerName: people(props["Person"]) || people(props["Owner"]) || null,
+    // Seat (lead owner). The Pipeline app writes the "Seat" select; older rows
+    // may only have the "Person" people column.
+    ownerName: select(props[SEAT_PROPERTY]) || people(props["Person"]) || people(props["Owner"]) || null,
     sequenceTrack: trackForPlatform(platform),
     lastTouchAt: date(props["Status Date"]) || new Date(page.last_edited_time),
     updatedAt: new Date(page.last_edited_time),

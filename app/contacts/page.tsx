@@ -7,6 +7,7 @@ import { fmtDate, daysAgo, parseJson } from "@/lib/utils";
 import { db, schema } from "@/lib/db/client";
 import { getCurrentUser } from "@/lib/auth/server";
 
+import { IN_NOTION } from "@/lib/db/active-contacts";
 export const dynamic = "force-dynamic";
 
 export default async function ContactsPage({
@@ -29,7 +30,8 @@ export default async function ContactsPage({
   // Aggregate in JS — Drizzle's sql<count>`count(*)` aliasing varies by driver.
   const allStatusRows = await db
     .select({ status: schema.contacts.status })
-    .from(schema.contacts);
+    .from(schema.contacts)
+    .where(IN_NOTION);
   const statusCounts = new Map<string, number>();
   for (const r of allStatusRows) {
     if (!r.status) continue;

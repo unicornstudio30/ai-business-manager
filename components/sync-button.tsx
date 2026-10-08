@@ -6,9 +6,10 @@ import { RefreshCw, Check } from "lucide-react";
 
 const ENTITIES = ["contacts", "content_items", "tracker_entries"] as const;
 
-// Auto-sync interval. Ticks only while tab is visible.
-// Set NEXT_PUBLIC_AUTO_SYNC_MINUTES=0 to disable auto-sync entirely.
-const AUTO_SYNC_MINUTES = Number(process.env.NEXT_PUBLIC_AUTO_SYNC_MINUTES ?? 5);
+// The Unicorn Studio Pipeline app runs on your Mac. Vercel can't reach it, but
+// your browser can: after the Notion pull, Sync asks the local Pipeline server
+// to push its per-seat totals to PBM. Sync only ever runs when clicked.
+const PIPELINE_URL = (process.env.NEXT_PUBLIC_PIPELINE_URL ?? "http://localhost:4321").replace(/\/$/, "");
 
 function relTime(ts: number | null): string {
   if (!ts) return "never";
@@ -20,12 +21,16 @@ function relTime(ts: number | null): string {
   return `${Math.floor(sec / 3600)} hours ago`;
 }
 
+type StepState = "idle" | "ok" | "failed";
+
 export function SyncButton() {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [running, setRunning] = useState(false);
   const [lastSynced, setLastSynced] = useState<number | null>(null);
-  const [autoSync, setAutoSync] = useState(true);
+  const [notionState, setNotionState] = useState<StepState>("idle");
+  const [pipelineState, setPipelineState] = useState<StepState>("idle");
+  const [pipelineNote, setPipelineNote] = useState<string>("");
   const [, setTick] = useState(0); // force rerender every minute for relative time
   const inFlight = useRef(false);
 
@@ -33,17 +38,39 @@ export function SyncButton() {
     if (inFlight.current) return;
     inFlight.current = true;
     setRunning(true);
+    setNotionState("idle");
+    setPipelineState("idle");
+    setPipelineNote("");
     try {
+      // 1) Notion → PBM (read-only pull)
+      let notionOk = true;
       for (const entity of ENTITIES) {
         try {
-          await fetch(`/api/sync?entity=${entity}`, { method: "POST" });
+          const r = await fetch(`/api/sync?entity=${entity}`, { method: "POST" });
+          if (!r.ok) notionOk = false;
         } catch {
-          // continue with other entities
+          notionOk = false; // continue with other entities
         }
       }
-      // GCal best-effort
-      try { await fetch("/api/gcal/sync", { method: "POST" }); } catch {}
-      // ICP classify pending contacts best-effort (~10/sync, rate-limit aware)
+      setNotionState(notionOk ? "ok" : "failed");
+
+      // 2) Pipeline → PBM, via the local Pipeline server (numbers only)
+      try {
+        const r = await fetch(`${PIPELINE_URL}/api/pbm/push`, { method: "POST" });
+        const j = await r.json().catch(() => ({}));
+        if (r.ok && j.ok) {
+          setPipelineState("ok");
+          setPipelineNote(`${j.metrics} metrics`);
+        } else {
+          setPipelineState("failed");
+          setPipelineNote(j.error ? String(j.error).slice(0, 120) : `HTTP ${r.status}`);
+        }
+      } catch {
+        setPipelineState("failed");
+        setPipelineNote("Pipeline app not reachable — open it on this Mac, or run npm run pbm-push in ~/crm");
+      }
+
+      // ICP classify pending contacts best-effort (~10/sync, PBM's own DB)
       try { await fetch("/api/ai/classify-pending?limit=10", { method: "POST" }); } catch {}
       setLastSynced(Date.now());
       startTransition(() => router.refresh());
@@ -52,16 +79,6 @@ export function SyncButton() {
       setRunning(false);
     }
   }, [router]);
-
-  // Auto-sync tick — only when tab is visible
-  useEffect(() => {
-    if (!autoSync || AUTO_SYNC_MINUTES <= 0) return;
-    const intervalMs = AUTO_SYNC_MINUTES * 60 * 1000;
-    const handle = setInterval(() => {
-      if (document.visibilityState === "visible") doSync();
-    }, intervalMs);
-    return () => clearInterval(handle);
-  }, [autoSync, doSync]);
 
   // Refresh the relative-time label every 30s
   useEffect(() => {
@@ -84,24 +101,29 @@ export function SyncButton() {
       .catch(() => {});
   }, []);
 
+  const dot = (st: StepState) =>
+    st === "ok" ? "bg-green-500" : st === "failed" ? "bg-amber-500" : "bg-stone-300";
+
   return (
     <div className="flex items-center gap-3">
       <span className="text-xs text-stone-500 hidden sm:inline">
         Synced {relTime(lastSynced)}
       </span>
-      <label className="flex items-center gap-1 text-xs text-stone-500 cursor-pointer select-none">
-        <input
-          type="checkbox"
-          checked={autoSync}
-          onChange={(e) => setAutoSync(e.target.checked)}
-          className="size-3.5 rounded"
-        />
-        Auto
-      </label>
+      {(notionState !== "idle" || pipelineState !== "idle") && (
+        <span className="hidden md:inline-flex items-center gap-2 text-[11px] text-stone-500">
+          <span className="inline-flex items-center gap-1" title="Notion CRM pull">
+            <span className={`size-1.5 rounded-full ${dot(notionState)}`} /> Notion
+          </span>
+          <span className="inline-flex items-center gap-1" title={pipelineNote || "Pipeline app push"}>
+            <span className={`size-1.5 rounded-full ${dot(pipelineState)}`} /> Pipeline
+          </span>
+        </span>
+      )}
       <button
         onClick={doSync}
         disabled={running}
         className="btn-secondary"
+        title="Pull Notion and the Pipeline app into PBM. Runs only when clicked."
       >
         {running ? (
           <>

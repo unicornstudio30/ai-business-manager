@@ -1,7 +1,8 @@
 // MCP server definition — exposes Unicorn Studio's web app as tools for Claude.
 // Reuses all existing query/mutation code; doesn't duplicate logic.
 //
-// PBM is a READ-ONLY reporting layer over the Notion CRM. Notion is the
+// PBM is the analytics and reporting layer over the Unicorn Studio Pipeline
+// app and the Notion CRM — READ-ONLY toward Notion. Notion is the
 // system of record and the Pipeline app is the only automated writer of
 // Stage; it also owns the inbox, next action and drafts. Overlapping tools
 // keep their names and response shapes but return empty data plus
@@ -10,7 +11,8 @@
 //
 //   READ: briefing, list_contacts, get_contact, hot_leads, icp_score,
 //         analytics (seat), stuck_deals (seat), wins_losses, stage_definitions,
-//         list_seats, *_leaderboard (seat)
+//         list_seats, *_leaderboard (seat), seat_report, funnel_conversion,
+//         stage_history, pipeline_metrics, data_health
 //   OFF by default: inbox, needs_follow_up, engagement_queue, cadences_due,
 //         next_message, stuck_suggestion, comment_draft
 //   WRITE (PBM's own DB only): create_activity, sync_notion (pull-only),
@@ -45,6 +47,10 @@ import { syncNotion, syncStatus } from "@/lib/notion/sync";
 import { getStageDefinitions } from "@/lib/notion/stage-source";
 import { isEnabled, disabledFields } from "@/lib/feature-flags";
 import { filterLeaderboardBySeat, getSeat, listSeats } from "@/lib/db/seats";
+import { seatReport } from "@/lib/db/seat-report";
+import { funnelConversion, timeInStage, weeklyStageMoves, stageHistory } from "@/lib/db/funnel-analytics";
+import { latestPipelinePush, pipelineDaily, pipelineSummary } from "@/lib/db/pipeline";
+import { dataHealth } from "@/lib/db/data-health";
 import { generateNextMessage } from "@/lib/ai/next-message";
 import { getStuckSuggestion } from "@/lib/ai/stuck-suggestion";
 import { getDailySummary } from "@/lib/ai/daily-summary";
@@ -1263,6 +1269,112 @@ export function buildMcpServer(): McpServer {
         })),
       });
     }
+  );
+
+  // ────────────────────────────────────────────────────────────────────────
+  // ANALYTICS — mirrors /seats, /funnel and /admin/data-health
+  // ────────────────────────────────────────────────────────────────────────
+
+  server.registerTool(
+    "seat_report",
+    {
+      title: "Seats · Side-by-side Report",
+      description:
+        "One row per LinkedIn seat: Notion CRM results (contacts, funnel reached per group, reply rate, win rate, " +
+        "won/lost, stuck) and Pipeline app activity from its last push (real leads, awaiting reply, open/overdue " +
+        "follow-ups, messages sent/received in the window, stage changes, meetings, Flow invited/connected/replied). " +
+        "Seats = Notion 'Seat' values plus the Pipeline app's seat roster.",
+      inputSchema: {
+        days: z.number().int().min(1).max(90).optional().default(30).describe("Window for Pipeline event totals"),
+      },
+    },
+    async ({ days }) => {
+      const r = await seatReport({ days: days ?? 30 });
+      return ok({ pipeline_pushed_at: r.pipelinePushedAt, seats: r.rows });
+    }
+  );
+
+  server.registerTool(
+    "funnel_conversion",
+    {
+      title: "Funnel · Conversion, Time in Stage, Weekly Moves",
+      description:
+        "Stage-to-stage conversion (contacts that ever reached each group Cold→Won, from PBM's stage history), " +
+        "reply rate, win rate, median days in each stage (finished stays and current age), and stage moves per " +
+        "week (forward/back/won/lost). Optional seat filter (see list_seats).",
+      inputSchema: {
+        seat: z.string().optional().describe("Notion Seat value. Omit for all seats."),
+        weeks: z.number().int().min(1).max(52).optional().default(12),
+      },
+    },
+    async ({ seat, weeks }) => {
+      const [conversion, time_in_stage, weekly_moves] = await Promise.all([
+        funnelConversion({ seat }),
+        timeInStage({ seat }),
+        weeklyStageMoves({ seat, weeks: weeks ?? 12 }),
+      ]);
+      return ok({ conversion, time_in_stage, weekly_moves });
+    }
+  );
+
+  server.registerTool(
+    "stage_history",
+    {
+      title: "Funnel · Stage History",
+      description:
+        "Stage changes PBM recorded on Notion pulls (newest first): contact, from → to, seat, when, and source " +
+        "('pull' = seen changing, 'seed' = starting point when history began). Filter by contact or seat.",
+      inputSchema: {
+        contact_id: z.string().optional(),
+        seat: z.string().optional(),
+        limit: z.number().int().min(1).max(500).optional().default(100),
+      },
+    },
+    async ({ contact_id, seat, limit }) => {
+      const events = await stageHistory({ contactId: contact_id, seat, limit: limit ?? 100 });
+      return ok({ count: events.length, events });
+    }
+  );
+
+  server.registerTool(
+    "pipeline_metrics",
+    {
+      title: "Pipeline App · Per-seat Metrics",
+      description:
+        "Numbers the Unicorn Studio Pipeline app pushed on the last Sync (counts only, no message text): latest " +
+        "gauges per seat (leads by Pipeline stage, real leads, urgency/sentiment, awaiting reply, follow-ups, Flow " +
+        "invited/connected/replied, Notion writes) and event totals over the window (messages sent/received per " +
+        "network, leads created, stage changes, sends, drafts, meetings). Optional daily series for a metric prefix.",
+      inputSchema: {
+        seat: z.string().optional(),
+        days: z.number().int().min(1).max(90).optional().default(30),
+        daily_prefix: z
+          .string()
+          .optional()
+          .describe("e.g. 'messages.sent' or 'stage_changes' — adds a daily series summed over matching metrics"),
+      },
+    },
+    async ({ seat, days, daily_prefix }) => {
+      const [push, summary, daily] = await Promise.all([
+        latestPipelinePush(),
+        pipelineSummary({ seat, days: days ?? 30 }),
+        daily_prefix ? pipelineDaily({ prefix: daily_prefix, seat, days: days ?? 30 }) : Promise.resolve(null),
+      ]);
+      return ok({ last_push: push, seats: summary, daily });
+    }
+  );
+
+  server.registerTool(
+    "data_health",
+    {
+      title: "Admin · Data Health",
+      description:
+        "Can PBM's reports be trusted right now? Checks with ok/warn/error: Notion pull freshness, contacts no " +
+        "longer in Notion, stage mapping (ungrouped stages), seat→user mapping, contacts without a Seat, last " +
+        "Pipeline push, stage-history coverage. Plus details and feature-flag states.",
+      inputSchema: {},
+    },
+    async () => ok(await dataHealth())
   );
 
   return server;

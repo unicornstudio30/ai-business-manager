@@ -1,8 +1,9 @@
 // LinkedIn seats for per-seat reporting.
 //
-// A seat is each distinct value of the Notion CRM "Person" column (mirrored as
-// contacts.owner_name). New Person values show up automatically after the next
-// Notion sync — nothing to configure.
+// A seat is each distinct Notion CRM "Seat" value (mirrored as
+// contacts.owner_name; older rows may use "Person"), plus any seat in the
+// Pipeline app's roster from its last push — so a Flow seat with no Notion
+// contacts yet still shows. New seats appear automatically after a Sync.
 //
 // A seat maps to an app user via lib/name-matcher.ts: exact match first
 // (users.notion_person pin, then display name), then a fuzzy name match that
@@ -10,11 +11,13 @@
 // analytics (those filter contacts by owner directly); leaderboards are keyed
 // by user, so an unmapped seat has an empty leaderboard.
 
-import { eq, isNotNull, sql } from "drizzle-orm";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { db, schema } from "./client";
 import { resolveOwnerName, type NameMatchTier } from "../name-matcher";
 import type { LeaderboardResult } from "./leaderboard-engine";
+import { latestPipelinePush } from "./pipeline";
 
+import { IN_NOTION } from "./active-contacts";
 export type Seat = {
   name: string;
   contactCount: number;
@@ -23,11 +26,11 @@ export type Seat = {
 };
 
 export async function listSeats(): Promise<Seat[]> {
-  const [rows, users] = await Promise.all([
+  const [rows, users, push] = await Promise.all([
     db
       .select({ name: schema.contacts.ownerName, count: sql<number>`count(*)` })
       .from(schema.contacts)
-      .where(isNotNull(schema.contacts.ownerName))
+      .where(and(IN_NOTION, isNotNull(schema.contacts.ownerName)))
       .groupBy(schema.contacts.ownerName),
     db
       .select({
@@ -38,10 +41,16 @@ export async function listSeats(): Promise<Seat[]> {
       })
       .from(schema.users)
       .where(eq(schema.users.active, 1)),
+    latestPipelinePush(),
   ]);
 
-  return rows
-    .filter((r) => (r.name ?? "").trim() !== "")
+  const counted = rows.filter((r) => (r.name ?? "").trim() !== "");
+  const known = new Set(counted.map((r) => r.name!));
+  for (const s of push?.seats ?? []) {
+    if (!known.has(s.name)) counted.push({ name: s.name, count: 0 });
+  }
+
+  return counted
     .map((r) => {
       const match = resolveOwnerName(r.name, users.map((u) => ({ ...u, name: u.name ?? "" })));
       return {

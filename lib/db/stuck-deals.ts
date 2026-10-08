@@ -3,11 +3,12 @@
 // Pure compute over the contacts table; no new state.
 
 import { db, schema } from "./client";
-import { eq, isNotNull } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import type { Contact } from "./schema";
 import { isClosed, stageGroup } from "../stages";
 import { STUCK_GROUP_DEFAULT_DAYS, STUCK_SUGGESTED_ACTIONS, STUCK_THRESHOLDS_DAYS } from "../stage-config";
 
+import { IN_NOTION } from "./active-contacts";
 // Per-stage thresholds live in lib/stage-config.ts.
 export { STUCK_THRESHOLDS_DAYS };
 
@@ -32,7 +33,7 @@ export async function stuckDeals(opts: { seat?: string } = {}): Promise<StuckDea
   const rows = await db
     .select()
     .from(schema.contacts)
-    .where(opts.seat ? eq(schema.contacts.ownerName, opts.seat) : isNotNull(schema.contacts.status));
+    .where(and(IN_NOTION, opts.seat ? eq(schema.contacts.ownerName, opts.seat) : isNotNull(schema.contacts.status)));
 
   const now = Date.now();
   const items: StuckDeal[] = [];

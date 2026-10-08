@@ -14,13 +14,22 @@ import type { ActivityKind as SalesKind } from "./sales/points";
 // Name of the Notion property that holds the stage (users call it "Stage").
 export const STAGE_PROPERTY = "Status";
 
+// Notion select holding the LinkedIn seat, written by the Pipeline app. Seat
+// names are identical in Flow, Notion and Pipeline.
+export const SEAT_PROPERTY = "Seat";
+
 export const STAGE_GROUP_ORDER = ["Cold", "Engaged", "Qualified", "Proposal", "Call", "Won", "Archive"] as const;
 export type StageGroup = (typeof STAGE_GROUP_ORDER)[number];
 
 // Funnel groups shown on the dashboard (Archive is excluded from the funnel).
 export const FUNNEL_GROUPS: StageGroup[] = ["Cold", "Engaged", "Qualified", "Proposal", "Call", "Won"];
 
-// Stage → dashboard group.
+// Stage → dashboard group. Matches the Unicorn Studio Pipeline app's buckets
+// (~/crm/src/notion/map.ts) so both apps report the same numbers:
+//   Pipeline new + contacted → Cold, replied → Engaged, qualified → Qualified + Call,
+//   proposal → Proposal, won → Won, lost → Archive.
+// PBM keeps Booking / First call in their own Call group; add Qualified + Call
+// to compare with Pipeline's "qualified".
 export const STAGE_GROUP_OF: Record<string, StageGroup> = {
   // Cold
   "Prospect": "Cold",
@@ -34,9 +43,10 @@ export const STAGE_GROUP_OF: Record<string, StageGroup> = {
   "Lead": "Engaged",
   "1st Lead Follow up": "Engaged",
   "2nd Lead Follow up": "Engaged",
+  "Nurture": "Engaged",
+  "Follow up later": "Engaged",
   // Qualified
   "Qualified": "Qualified",
-  "Not qualified": "Qualified",
   // Proposal
   "Proposal Sent": "Proposal",
   "Post Proposal Follow-up-1": "Proposal",
@@ -48,11 +58,10 @@ export const STAGE_GROUP_OF: Record<string, StageGroup> = {
   "Close": "Won",
   "White Label Partner": "Won",
   "Sales Partner": "Won",
-  // Archive
+  // Archive (Pipeline's "lost")
+  "Not qualified": "Archive",
   "Closed Lost": "Archive",
   "Lost": "Archive",
-  "Follow up later": "Archive",
-  "Nurture": "Archive",
   // Legacy values that are no longer Notion options. Kept so old rows still
   // land in the right group; they never trigger the "ungrouped" warning.
   "Partnership": "Won",

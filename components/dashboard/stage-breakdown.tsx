@@ -26,7 +26,7 @@ export function StageBreakdown({ groups }: { groups: Groups }) {
       </ul>
       <div className="mt-5 pt-4 border-t border-stone-100 text-xs text-stone-500 leading-relaxed">
         Cold → Engaged → Qualified → Proposal → Call → Won.
-        18 Notion stages collapsed into 7 dashboard groups.
+        Notion stages collapsed into 7 dashboard groups (lib/stage-config.ts), matching the Pipeline app.
       </div>
     </div>
   );

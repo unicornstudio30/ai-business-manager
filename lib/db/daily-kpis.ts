@@ -5,6 +5,7 @@ import { db, schema } from "./client";
 import { and, desc, eq, gte, lt, sql, inArray } from "drizzle-orm";
 import { platformToChannel, INBOX_CHANNELS, CHANNEL_LABELS, type InboxChannel } from "../inbox";
 
+import { IN_NOTION } from "./active-contacts";
 function startOfDay(d: Date): Date {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
@@ -45,7 +46,8 @@ export async function suggestedCountsForDate(date: Date) {
       savedDate: schema.contacts.savedDate,
       statusDate: schema.contacts.statusDate,
     })
-    .from(schema.contacts);
+    .from(schema.contacts)
+    .where(IN_NOTION);
 
   let inboundLeads = 0;
   let newProspects = 0;
