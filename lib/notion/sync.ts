@@ -16,7 +16,11 @@ import { markMissingFromNotion, recordStageChange, seedMissingStageEvents } from
 import { isEnabled } from "../feature-flags";
 import type { PageObjectResponse } from "@notionhq/client";
 
-type SyncResult = { entity: string; pulled: number; pushed: number; error?: string };
+// `complete: false` = the pull stopped at the time limit; call again to continue.
+type SyncResult = { entity: string; pulled: number; pushed: number; error?: string; complete?: boolean };
+
+// Set by pullContacts: whether its last run got through every Notion page.
+let lastContactsPullComplete = true;
 
 // ──────────────────── helpers ────────────────────
 
@@ -86,7 +90,16 @@ async function pullContacts(deadlineMs?: number): Promise<number> {
   const stageOrder = await getStages();
   const state = { complete: false };
   const seen = new Set<string>();
+  // Leave ~2s for the follow-up steps and the response (Vercel Hobby: 10s).
+  const rowDeadline = deadlineMs ? deadlineMs - 2000 : undefined;
+  let stoppedEarly = false;
   for await (const page of paginatedQuery(NOTION_DATA_SOURCES.contacts, 100, deadlineMs, state)) {
+    if (rowDeadline && Date.now() > rowDeadline) {
+      // Out of time mid-page: stop cleanly. Rows already written are kept;
+      // the next call skips them (unchanged) and continues.
+      stoppedEarly = true;
+      break;
+    }
     seen.add(page.id);
     const row = { ...notionToContact(page, stageOrder), inNotion: 1 };
     const changedAt = row.notionLastEditedAt ?? new Date();
@@ -149,9 +162,11 @@ async function pullContacts(deadlineMs?: number): Promise<number> {
       }
     }
   }
+  const complete = state.complete && !stoppedEarly;
+  lastContactsPullComplete = complete;
   // Only a complete pass can tell us a page is gone from Notion.
-  if (state.complete) count += await markMissingFromNotion(seen);
-  await seedMissingStageEvents();
+  if (complete) count += await markMissingFromNotion(seen);
+  if (!deadlineMs || Date.now() < deadlineMs) await seedMissingStageEvents();
   return count;
 }
 
@@ -287,9 +302,16 @@ export async function syncContacts(): Promise<SyncResult> {
     return { entity: "contacts", pulled: 0, pushed: 0, error: "NOTION_TOKEN not set" };
   }
   const deadline = getDeadline();
+  lastContactsPullComplete = false;
   const pull = await logRun("contacts", "pull", () => pullContacts(deadline));
   const push = await logRun("contacts", "push", pushContacts);
-  return { entity: "contacts", pulled: pull.rows, pushed: push.rows, error: pull.error ?? push.error };
+  return {
+    entity: "contacts",
+    pulled: pull.rows,
+    pushed: push.rows,
+    error: pull.error ?? push.error,
+    complete: !pull.error && lastContactsPullComplete,
+  };
 }
 
 export async function syncContentItems(): Promise<SyncResult> {

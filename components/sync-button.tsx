@@ -45,11 +45,21 @@ export function SyncButton() {
       // 1) Notion → PBM (read-only pull)
       let notionOk = true;
       for (const entity of ENTITIES) {
-        try {
-          const r = await fetch(`/api/sync?entity=${entity}`, { method: "POST" });
-          if (!r.ok) notionOk = false;
-        } catch {
-          notionOk = false; // continue with other entities
+        // A large first pull can stop at Vercel's time limit and report
+        // complete: false — keep going (a few rounds) until it finishes.
+        for (let round = 0; round < 4; round++) {
+          try {
+            const r = await fetch(`/api/sync?entity=${entity}`, { method: "POST" });
+            if (!r.ok) { notionOk = false; break; }
+            const j = await r.json().catch(() => ({}));
+            const res = (j.results ?? [])[0];
+            if (res?.error) { notionOk = false; break; }
+            if (res?.complete !== false) break;
+            if (round === 3) notionOk = false;
+          } catch {
+            notionOk = false; // continue with other entities
+            break;
+          }
         }
       }
       setNotionState(notionOk ? "ok" : "failed");

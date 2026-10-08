@@ -17,11 +17,15 @@ export async function POST(req: NextRequest) {
     // Refresh Market or Die from the data we just pulled (content publishes,
     // sent networking msgs, CRM activities). Failures here shouldn't break
     // the main sync response — log + continue.
+    // Skipped while a pull is still partial (it stopped at the time limit);
+    // it runs on the call that completes, which the Sync button makes next.
     let marketingAutoSync: Awaited<ReturnType<typeof runMarketingAutoSync>> | null = null;
-    try {
-      marketingAutoSync = await runMarketingAutoSync();
-    } catch (e: any) {
-      console.error("[sync] marketing auto-sync failed:", e?.message ?? e);
+    if (results.every((r) => r.complete !== false)) {
+      try {
+        marketingAutoSync = await runMarketingAutoSync();
+      } catch (e: any) {
+        console.error("[sync] marketing auto-sync failed:", e?.message ?? e);
+      }
     }
 
     return NextResponse.json({ ok: true, results, marketingAutoSync });
